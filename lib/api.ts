@@ -185,23 +185,50 @@ export interface BackendJob {
 }
 
 // Backend API functions (for library/history)
-const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+// Remove trailing slash if present
+const backendBaseRaw = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+const backendBase = backendBaseRaw.replace(/\/$/, "");
 
 export async function fetchHistory(): Promise<BackendJob[]> {
+  const url = `${backendBase}/api/3d/history`;
+  console.log('Fetching history from:', url);
+  console.log('Backend base URL:', backendBase);
+  console.log('Environment variable:', process.env.NEXT_PUBLIC_BACKEND_URL);
+  
   try {
-    const res = await fetch(`${backendBase}/api/3d/history`);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    console.log('Response status:', res.status, res.statusText);
+    
     if (!res.ok) {
       const errorText = await res.text();
       console.error('Backend API error:', res.status, errorText);
       throw new Error(`Failed to fetch history: ${res.status} ${errorText}`);
     }
+    
     const data = await res.json();
+    console.log('History data received:', data);
     return data.jobs || [];
   } catch (err: any) {
     console.error('fetchHistory error:', err);
+    console.error('Error details:', {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+    });
+    
     // Check if it's a network error
-    if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-      throw new Error(`Cannot connect to backend at ${backendBase}. Please check if the backend is running and NEXT_PUBLIC_BACKEND_URL is set correctly.`);
+    if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.name === 'TypeError') {
+      throw new Error(`Cannot connect to backend at ${backendBase}. Please check:
+1. Backend is deployed and running at https://hydrilla-backend.vercel.app
+2. NEXT_PUBLIC_BACKEND_URL is set to: https://hydrilla-backend.vercel.app (no trailing slash)
+3. Frontend has been redeployed after adding the environment variable
+4. Check browser console for CORS errors`);
     }
     throw err;
   }
