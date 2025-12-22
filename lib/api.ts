@@ -188,9 +188,22 @@ export interface BackendJob {
 const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 export async function fetchHistory(): Promise<BackendJob[]> {
-  const res = await fetch(`${backendBase}/api/3d/history`);
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return data.jobs;
+  try {
+    const res = await fetch(`${backendBase}/api/3d/history`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('Backend API error:', res.status, errorText);
+      throw new Error(`Failed to fetch history: ${res.status} ${errorText}`);
+    }
+    const data = await res.json();
+    return data.jobs || [];
+  } catch (err: any) {
+    console.error('fetchHistory error:', err);
+    // Check if it's a network error
+    if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+      throw new Error(`Cannot connect to backend at ${backendBase}. Please check if the backend is running and NEXT_PUBLIC_BACKEND_URL is set correctly.`);
+    }
+    throw err;
+  }
 }
 
