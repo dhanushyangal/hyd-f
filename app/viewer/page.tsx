@@ -47,7 +47,9 @@ function ViewerContent() {
     return <div className="text-sm text-red-600">jobId is required in query string.</div>;
   }
 
-  const glbUrl = job ? getGlbUrl(job) : null;
+  // Always use jobId if available to get fresh URL from API
+  // This avoids expired presigned URLs from database
+  const glbUrl = jobId ? getGlbUrl(job || {} as Job, jobId) : (job ? getGlbUrl(job) : null);
   const previewUrl = job ? getPreviewImageUrl(job) : null;
 
   return (

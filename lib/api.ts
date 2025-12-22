@@ -144,13 +144,21 @@ export async function fetchStatus(jobId: string): Promise<Job> {
   return res.json();
 }
 
-// Get GLB URL from job result (use proxy for S3 URLs to avoid CORS)
-export function getGlbUrl(job: Job): string | null {
+// Get GLB URL from job result (use proxy with jobId to get fresh URL from API)
+export function getGlbUrl(job: Job, jobId?: string): string | null {
+  // Always prefer jobId if available - this ensures we get fresh URL from API
+  // This avoids expired presigned URLs from the database
+  if (jobId) {
+    return `${backendBase}/api/3d/glb-proxy?jobId=${encodeURIComponent(jobId)}`;
+  }
+  
+  // Fallback: if no jobId, check if job has result with URL
   if (!job.result) return null;
   const url = job.result.mesh_url || job.result.output || null;
   if (!url) return null;
   
-  // If it's an S3 URL or external URL, use backend proxy to avoid CORS
+  // If URL is S3 or external, use proxy (but this will still have expired URL issue)
+  // This is only for backward compatibility - prefer using jobId!
   if (url.includes("s3.amazonaws.com") || url.includes("amazonaws.com") || url.startsWith("http")) {
     return `${backendBase}/api/3d/glb-proxy?url=${encodeURIComponent(url)}`;
   }
