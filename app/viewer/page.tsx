@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { fetchStatus, Job, getGlbUrl, getPreviewImageUrl } from "../../lib/api";
+import { fetchStatus, Job, getGlbUrl, getPreviewImageUrl, cancelJob } from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { JobStatusBadge } from "../../components/JobStatusBadge";
 import { LoadingProgress } from "../../components/LoadingProgress";
@@ -15,6 +15,7 @@ function ViewerContent() {
   const mode = (searchParams.get("mode") || "text-to-3d") as "text-to-3d" | "image-to-3d";
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!jobId) return;
@@ -119,10 +120,39 @@ function ViewerContent() {
       )}
 
       {job && (job.status === "pending" || job.status === "processing") && (
-        <LoadingProgress 
-          job={job} 
-          mode={job.result?.mode || mode}
-        />
+        <div className="space-y-4">
+          <LoadingProgress 
+            job={job} 
+            mode={job.result?.mode || mode}
+          />
+          <div className="rounded-lg border-2 border-red-200 bg-red-50 p-4">
+            <div className="space-y-3">
+              <p className="text-sm text-red-800">
+                ⚠️ Note: 3D generation cannot be interrupted mid-process. Cancellation will stop at the next checkpoint.
+              </p>
+              <button
+                onClick={async () => {
+                  if (!jobId || cancelling) return;
+                  setCancelling(true);
+                  try {
+                    const result = await cancelJob(jobId);
+                    setError(null);
+                    // Update job status immediately
+                    setJob(prev => prev ? { ...prev, status: "cancelled", message: result.message } : null);
+                  } catch (err: any) {
+                    setError(err.message || "Failed to cancel job");
+                  } finally {
+                    setCancelling(false);
+                  }
+                }}
+                disabled={cancelling || job.status === "cancelled"}
+                className="w-full px-4 py-2 rounded bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {cancelling ? "⏹️ Cancelling..." : job.status === "cancelled" ? "⏹️ Cancelled" : "🛑 Cancel 3D Generation"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

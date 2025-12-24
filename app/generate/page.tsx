@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { submitTextTo3D, submitImageTo3D } from "../../lib/api";
+import { useState, useRef, useEffect } from "react";
+import { submitTextToImage, submitTextTo3D, submitImageTo3D, fetchStatus, getPreviewImageUrl, cancelJob } from "../../lib/api";
+import type { Job } from "../../lib/api";
 
 type Mode = "text" | "image";
 
@@ -16,6 +17,41 @@ export default function GeneratePage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // For text-to-image preview workflow
+  const [imageJobId, setImageJobId] = useState<string | null>(null);
+  const [imageJob, setImageJob] = useState<Job | null>(null);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [pollingImage, setPollingImage] = useState(false);
+
+  // Poll for image generation status
+  useEffect(() => {
+    if (!imageJobId || !pollingImage) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const job = await fetchStatus(imageJobId);
+        setImageJob(job);
+
+        if (job.status === "completed" && job.result) {
+          const previewUrl = getPreviewImageUrl(job);
+          if (previewUrl) {
+            setGeneratedImageUrl(previewUrl);
+            setPollingImage(false);
+          }
+        } else if (job.status === "failed" || job.status === "cancelled") {
+          setPollingImage(false);
+          setError(job.error || "Failed to generate image");
+        }
+      } catch (err: any) {
+        console.error("Error polling image status:", err);
+        setPollingImage(false);
+        setError("Failed to check image generation status");
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [imageJobId, pollingImage]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -53,6 +89,110 @@ export default function GeneratePage() {
     }
   };
 
+  // Generate image from text (for preview)
+  const handleGenerateImage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setImageJobId(null);
+    setImageJob(null);
+    setGeneratedImageUrl(null);
+    setPollingImage(false);
+
+    if (!prompt.trim()) {
+      setError("Please enter a prompt");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const result = await submitTextToImage(prompt.trim());
+      setImageJobId(result.job_id);
+      setPollingImage(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to generate image");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Regenerate image (same prompt)
+  const handleRegenerateImage = async () => {
+    if (!prompt.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    setImageJobId(null);
+    setImageJob(null);
+    setGeneratedImageUrl(null);
+    setPollingImage(false);
+
+    try {
+      const result = await submitTextToImage(prompt.trim());
+      setImageJobId(result.job_id);
+      setPollingImage(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to regenerate image");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel image generation
+  const handleCancelImage = async () => {
+    if (!imageJobId) return;
+    
+    try {
+      await cancelJob(imageJobId);
+      setPollingImage(false);
+      setImageJobId(null);
+      setImageJob(null);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to cancel image generation");
+    }
+  };
+
+  // Cancel 3D generation
+  const handleCancel3D = async () => {
+    if (!jobId) return;
+    
+    try {
+      await cancelJob(jobId);
+      setJobId(null);
+      setLoading(false);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to cancel 3D generation");
+    }
+  };
+
+  // Generate 3D model from generated image
+  const handleGenerate3D = async () => {
+    if (!generatedImageUrl) {
+      setError("No image available to generate 3D model");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setJobId(null);
+
+    try {
+      const result = await submitTextTo3D(prompt.trim(), generatedImageUrl);
+      setJobId(result.job_id);
+      // Reset image preview state
+      setImageJobId(null);
+      setImageJob(null);
+      setGeneratedImageUrl(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to generate 3D model");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Direct 3D generation (for image mode or if user skips preview)
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -62,19 +202,20 @@ export default function GeneratePage() {
     try {
       let result;
       if (mode === "text") {
+        // For text mode, generate image first (preview workflow)
         if (!prompt.trim()) {
           setError("Please enter a prompt");
           setLoading(false);
           return;
         }
-        result = await submitTextTo3D(prompt.trim());
+        // This will trigger the preview workflow
+        await handleGenerateImage(e);
+        return; // Don't proceed to 3D generation yet
       } else {
-        // If file is uploaded, send directly to FastAPI (which will upload to S3)
-        // Otherwise, use the provided URL
+        // Image mode: direct to 3D
         if (uploadedFile) {
           setUploading(true);
           try {
-            // Send file directly to FastAPI - it will handle S3 upload
             result = await submitImageTo3D(null, uploadedFile);
           } catch (uploadErr: any) {
             setError(uploadErr.message || "Failed to submit image");
@@ -117,6 +258,10 @@ export default function GeneratePage() {
               setMode("text");
               setImageUrl("");
               setError(null);
+              setImageJobId(null);
+              setImageJob(null);
+              setGeneratedImageUrl(null);
+              setPollingImage(false);
             }}
             className={`flex-1 rounded px-4 py-2 font-medium transition-colors ${
               mode === "text" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -130,6 +275,10 @@ export default function GeneratePage() {
               setMode("image");
               setPrompt("");
               setError(null);
+              setImageJobId(null);
+              setImageJob(null);
+              setGeneratedImageUrl(null);
+              setPollingImage(false);
             }}
             className={`flex-1 rounded px-4 py-2 font-medium transition-colors ${
               mode === "image" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -140,7 +289,7 @@ export default function GeneratePage() {
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-4 rounded-lg border bg-white p-6 shadow-sm">
+      <form onSubmit={mode === "text" ? handleGenerateImage : onSubmit} className="space-y-4 rounded-lg border bg-white p-6 shadow-sm">
         {mode === "text" ? (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Text Prompt</label>
@@ -151,6 +300,7 @@ export default function GeneratePage() {
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="A realistic medieval sword with fine details"
               required
+              disabled={loading || pollingImage}
             />
             <p className="mt-1 text-xs text-slate-500">Describe the 3D model you want to generate</p>
           </div>
@@ -244,13 +394,78 @@ export default function GeneratePage() {
 
         {error && <div className="rounded bg-red-100 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        {/* Loading Overlay */}
-        {(loading || uploading) && (
+        {/* Image Generation Progress (Text Mode) */}
+        {mode === "text" && (loading || pollingImage) && (
+          <div className="rounded-lg border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-lg">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-800">Generating Image...</h3>
+                <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${imageJob?.progress || 0}%` }}
+                ></div>
+              </div>
+              <p className="text-sm text-slate-600">
+                {imageJob?.message || "Generating image from text prompt (estimated time: ~30 seconds)..."}
+              </p>
+              {imageJobId && imageJob && (
+                <button
+                  type="button"
+                  onClick={handleCancelImage}
+                  disabled={imageJob.status === "cancelled" || imageJob.status === "completed" || imageJob.status === "failed"}
+                  className="w-full px-4 py-2 rounded bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {imageJob.status === "cancelled" ? "⏹️ Cancelling..." : "🛑 Cancel Image Generation"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Generated Image Preview (Text Mode) */}
+        {mode === "text" && generatedImageUrl && !loading && !pollingImage && (
+          <div className="rounded-lg border-2 border-green-200 bg-green-50 p-6 shadow-lg">
+            <div className="space-y-4">
+              <div className="font-semibold text-green-900 mb-2">✅ Image Generated Successfully!</div>
+              <div className="flex justify-center">
+                <img
+                  src={generatedImageUrl}
+                  alt="Generated preview"
+                  className="max-w-full max-h-96 rounded-lg border-2 border-green-300 shadow-md"
+                />
+              </div>
+              <div className="flex gap-3 justify-center">
+                <button
+                  type="button"
+                  onClick={handleRegenerateImage}
+                  disabled={loading}
+                  className="px-6 py-2 rounded bg-slate-200 text-slate-700 font-medium hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  🔄 Regenerate
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerate3D}
+                  disabled={loading}
+                  className="px-6 py-2 rounded bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  🎨 Generate 3D Model
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Overlay (Image Mode or 3D Generation) */}
+        {mode === "image" && (loading || uploading) && (
           <div className="rounded-lg border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-lg">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-800">
-                  {uploading ? "Uploading Image..." : "Submitting Job..."}
+                  {uploading ? "Uploading Image..." : "Generating 3D Model..."}
                 </h3>
                 <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
@@ -260,32 +475,83 @@ export default function GeneratePage() {
               <p className="text-sm text-slate-600">
                 {uploading 
                   ? "Uploading your image to cloud storage..." 
-                  : mode === "text"
-                  ? "Creating 3D generation job (estimated time: ~3 minutes)..."
-                  : "Creating 3D generation job (estimated time: ~2.5 minutes)..."}
+                  : "Creating 3D model from image (estimated time: ~2.5 minutes)..."}
               </p>
+              {!uploading && jobId && (
+                <>
+                  <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                    ⚠️ Note: 3D generation cannot be interrupted mid-process. Cancellation will stop at the next checkpoint.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCancel3D}
+                    className="w-full px-4 py-2 rounded bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+                  >
+                    🛑 Cancel 3D Generation
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={loading || uploading}
-          className="w-full rounded bg-blue-600 px-6 py-3 text-white font-medium shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {uploading
-            ? "Uploading image..."
-            : loading
-            ? "Submitting..."
-            : mode === "text"
-            ? "Generate from Text"
-            : "Generate from Image"}
-        </button>
+        {/* 3D Generation Progress (Text Mode - after clicking Generate 3D) */}
+        {mode === "text" && loading && !pollingImage && generatedImageUrl && (
+          <div className="rounded-lg border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white p-6 shadow-lg">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-800">Generating 3D Model...</h3>
+                <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <p className="text-sm text-slate-600">
+                Creating 3D model from generated image (estimated time: ~2.5 minutes)...
+              </p>
+              <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                ⚠️ Note: 3D generation cannot be interrupted mid-process. Cancellation will stop at the next checkpoint.
+              </p>
+              {jobId && (
+                <button
+                  type="button"
+                  onClick={handleCancel3D}
+                  className="w-full px-4 py-2 rounded bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+                >
+                  🛑 Cancel 3D Generation
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        {mode === "text" && !generatedImageUrl && (
+          <button
+            type="submit"
+            disabled={loading || pollingImage}
+            className="w-full rounded bg-blue-600 px-6 py-3 text-white font-medium shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading || pollingImage ? "Generating Image..." : "Generate Image Preview"}
+          </button>
+        )}
+
+        {mode === "image" && (
+          <button
+            type="submit"
+            disabled={loading || uploading}
+            className="w-full rounded bg-blue-600 px-6 py-3 text-white font-medium shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {uploading
+              ? "Uploading image..."
+              : loading
+              ? "Submitting..."
+              : "Generate from Image"}
+          </button>
+        )}
       </form>
 
+      {/* Job Created Success Message */}
       {jobId && (
         <div className="rounded-lg border-2 border-green-200 bg-green-50 p-4">
-          <div className="font-semibold text-green-900 mb-2">✅ Job Created Successfully!</div>
+          <div className="font-semibold text-green-900 mb-2">✅ 3D Generation Job Created Successfully!</div>
           <div className="text-sm text-green-800 mb-3">
             <div>Job ID: <code className="bg-green-100 px-2 py-1 rounded">{jobId}</code></div>
           </div>
@@ -307,6 +573,10 @@ export default function GeneratePage() {
                 setUploadedFile(null);
                 setImagePreview(null);
                 setError(null);
+                setImageJobId(null);
+                setImageJob(null);
+                setGeneratedImageUrl(null);
+                setPollingImage(false);
                 if (fileInputRef.current) {
                   fileInputRef.current.value = "";
                 }

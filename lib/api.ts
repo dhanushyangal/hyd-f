@@ -24,9 +24,50 @@ export interface Job {
   error?: string;
 }
 
-export async function submitTextTo3D(prompt: string): Promise<{ job_id: string }> {
+// Generate image only from text (for preview)
+export async function submitTextToImage(prompt: string): Promise<{ job_id: string }> {
   const formData = new FormData();
   formData.append("prompt", prompt);
+
+  const res = await fetch(`${apiBase}/text-to-image`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    let errorText: string;
+    try {
+      const errorData = await res.json();
+      errorText = errorData.error || "Failed to generate image";
+    } catch {
+      errorText = await res.text() || "Failed to generate image";
+    }
+    throw new Error(errorText);
+  }
+  const result = await res.json();
+  
+  // Also register job in backend/Supabase (fire and forget)
+  try {
+    await fetch(`${backendBase}/api/3d/register-job`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: result.job_id, prompt }),
+    }).catch(() => {
+      // Ignore errors - backend sync will handle it
+    });
+  } catch {
+    // Ignore errors
+  }
+  
+  return result;
+}
+
+// Generate 3D model from text (can use pre-generated image URL)
+export async function submitTextTo3D(prompt: string, imageUrl?: string): Promise<{ job_id: string }> {
+  const formData = new FormData();
+  formData.append("prompt", prompt);
+  if (imageUrl) {
+    formData.append("image_url", imageUrl);
+  }
 
   const res = await fetch(`${apiBase}/text-to-3d`, {
     method: "POST",
@@ -138,6 +179,24 @@ export async function fetchStatus(jobId: string): Promise<Job> {
       errorText = errorData.error || "Failed to fetch status";
     } catch {
       errorText = await res.text() || "Failed to fetch status";
+    }
+    throw new Error(errorText);
+  }
+  return res.json();
+}
+
+// Cancel a running job
+export async function cancelJob(jobId: string): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${apiBase}/cancel/${jobId}`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    let errorText: string;
+    try {
+      const errorData = await res.json();
+      errorText = errorData.error || "Failed to cancel job";
+    } catch {
+      errorText = await res.text() || "Failed to cancel job";
     }
     throw new Error(errorText);
   }
