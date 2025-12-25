@@ -322,45 +322,91 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
 
   try {
     const url = `${backendBase}/api/3d/history`;
-    const res = await fetch(url, { 
-      headers,
-      method: "GET",
-      cache: "no-store",
-    });
     
-    if (!res.ok) {
-      let errorText: string;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || `Failed to fetch history: ${res.status} ${res.statusText}`;
-      } catch {
-        errorText = await res.text() || `Failed to fetch history: ${res.status} ${res.statusText}`;
+    // Add timeout to prevent hanging requests (30 seconds for database queries)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
+    try {
+      const res = await fetch(url, { 
+        headers,
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Check if response is ok
+      if (!res.ok) {
+        let errorText: string;
+        try {
+          const errorData = await res.json();
+          errorText = errorData.error || `Failed to fetch history: ${res.status} ${res.statusText}`;
+        } catch {
+          errorText = await res.text() || `Failed to fetch history: ${res.status} ${res.statusText}`;
+        }
+        throw new Error(errorText);
       }
-      throw new Error(errorText);
+      
+      // Parse response
+      let data: any;
+      try {
+        const text = await res.text();
+        if (!text) {
+          // Empty response, return empty array
+          return [];
+        }
+        data = JSON.parse(text);
+      } catch (parseErr: any) {
+        console.error("Failed to parse response:", parseErr);
+        throw new Error("Invalid response format from backend");
+      }
+      
+      // Handle both { jobs: [...] } and direct array response
+      return Array.isArray(data) ? data : (data.jobs || []);
+    } catch (fetchErr: any) {
+      clearTimeout(timeoutId);
+      
+      // Handle abort (timeout)
+      if (fetchErr.name === "AbortError") {
+        throw new Error("Request timeout: Backend took too long to respond (30s timeout)");
+      }
+      throw fetchErr;
     }
-    
-    const data = await res.json();
-    // Handle both { jobs: [...] } and direct array response
-    return Array.isArray(data) ? data : (data.jobs || []);
   } catch (err: any) {
     // Handle network errors
-    if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
+    const isNetworkError = err.name === "TypeError" && 
+                          (err.message.includes("fetch") || 
+                           err.message.includes("Failed to fetch") ||
+                           err.message.includes("NetworkError") ||
+                           err.message.includes("Network request failed"));
+    
+    if (isNetworkError) {
       const envValue = process.env.NEXT_PUBLIC_BACKEND_URL;
       let errorMsg = `Unable to connect to backend at ${backendBase}. `;
       
-      if (!envValue || envValue === "NEXT_PUBLIC_BACKEND_URL" || envValue.includes("NEXT_PUBLIC_BACKEND_URL")) {
+      // Check if it's a CORS error
+      if (err.message.includes("CORS") || err.message.includes("cross-origin")) {
+        errorMsg += `CORS error detected. Please check backend CORS configuration.`;
+      } else if (!envValue || envValue === "NEXT_PUBLIC_BACKEND_URL" || envValue.includes("NEXT_PUBLIC_BACKEND_URL")) {
         errorMsg += `\n\n⚠️ NEXT_PUBLIC_BACKEND_URL environment variable is missing or invalid in Vercel.\n\nPlease add it in Vercel Project Settings → Environment Variables:\n\nName: NEXT_PUBLIC_BACKEND_URL\nValue: https://hydrilla-backend-4i7t07pv4-dharani-kumar-yenagalas-projects.vercel.app\n\nThen redeploy your frontend.`;
       } else {
-        errorMsg += `Please check that your backend is running and accessible.`;
+        errorMsg += `\n\nPossible causes:\n1. Backend is not accessible at ${backendBase}\n2. CORS configuration issue\n3. Network timeout\n\nPlease check:\n- Backend URL is correct: ${backendBase}\n- Backend is deployed and running\n- CORS is configured correctly\n\nError details: ${err.message}`;
       }
       
       console.error("Backend connection error:", {
         backendBase,
+        url: `${backendBase}/api/3d/history`,
         envValue,
         error: err.message,
+        errorName: err.name,
+        stack: err.stack,
       });
       throw new Error(errorMsg);
     }
+    
+    // Re-throw other errors (API errors, parsing errors, etc.)
     throw err;
   }
 }
