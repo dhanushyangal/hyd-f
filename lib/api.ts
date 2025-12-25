@@ -1,4 +1,6 @@
 const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.co";
+// Backend URL - must be set in Vercel environment variables as NEXT_PUBLIC_BACKEND_URL
+// For Vercel deployments, set this to your backend deployment URL (e.g., https://hydrilla-backend.vercel.app)
 const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
@@ -291,7 +293,10 @@ export function getPreviewImageUrl(job: Job): string | null {
  * Fetch job history from backend (requires auth for user-specific jobs)
  */
 export async function fetchHistory(getToken?: () => Promise<string | null>): Promise<BackendJob[]> {
-  const headers: HeadersInit = {};
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
   if (getToken) {
     const token = await getToken();
     if (token) {
@@ -299,10 +304,37 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
     }
   }
 
-  const res = await fetch(`${backendBase}/api/3d/history`, { headers });
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return data.jobs;
+  try {
+    const url = `${backendBase}/api/3d/history`;
+    const res = await fetch(url, { 
+      headers,
+      method: "GET",
+      cache: "no-store",
+    });
+    
+    if (!res.ok) {
+      let errorText: string;
+      try {
+        const errorData = await res.json();
+        errorText = errorData.error || `Failed to fetch history: ${res.status} ${res.statusText}`;
+      } catch {
+        errorText = await res.text() || `Failed to fetch history: ${res.status} ${res.statusText}`;
+      }
+      throw new Error(errorText);
+    }
+    
+    const data = await res.json();
+    // Handle both { jobs: [...] } and direct array response
+    return Array.isArray(data) ? data : (data.jobs || []);
+  } catch (err: any) {
+    // Handle network errors
+    if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
+      const errorMsg = `Unable to connect to backend. Please ensure NEXT_PUBLIC_BACKEND_URL is set correctly in your Vercel environment variables. Current backend URL: ${backendBase}`;
+      console.error("Backend connection error:", errorMsg, err);
+      throw new Error(errorMsg);
+    }
+    throw err;
+  }
 }
 
 /**
