@@ -1,7 +1,23 @@
 const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.co";
 // Backend URL - must be set in Vercel environment variables as NEXT_PUBLIC_BACKEND_URL
-// For Vercel deployments, set this to your backend deployment URL (e.g., https://hydrilla-backend.vercel.app)
-const backendBase = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+// For Vercel deployments, set this to your backend deployment URL (e.g., https://hydrilla-backend-4i7t07pv4-dharani-kumar-yenagalas-projects.vercel.app)
+const getBackendBase = (): string => {
+  const url = process.env.NEXT_PUBLIC_BACKEND_URL;
+  
+  // Check if URL is invalid or not set
+  if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
+    // Environment variable not set or incorrectly set
+    if (typeof window !== "undefined") {
+      console.warn("NEXT_PUBLIC_BACKEND_URL is not set or invalid. Please set it in Vercel environment variables.");
+    }
+    return "http://localhost:4000"; // Fallback for local dev
+  }
+  
+  // Remove trailing slash if present
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+};
+
+const backendBase = getBackendBase();
 
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
@@ -329,8 +345,20 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
   } catch (err: any) {
     // Handle network errors
     if (err.name === "TypeError" && (err.message.includes("fetch") || err.message.includes("Failed to fetch"))) {
-      const errorMsg = `Unable to connect to backend. Please ensure NEXT_PUBLIC_BACKEND_URL is set correctly in your Vercel environment variables. Current backend URL: ${backendBase}`;
-      console.error("Backend connection error:", errorMsg, err);
+      const envValue = process.env.NEXT_PUBLIC_BACKEND_URL;
+      let errorMsg = `Unable to connect to backend at ${backendBase}. `;
+      
+      if (!envValue || envValue === "NEXT_PUBLIC_BACKEND_URL" || envValue.includes("NEXT_PUBLIC_BACKEND_URL")) {
+        errorMsg += `\n\n⚠️ NEXT_PUBLIC_BACKEND_URL environment variable is missing or invalid in Vercel.\n\nPlease add it in Vercel Project Settings → Environment Variables:\n\nName: NEXT_PUBLIC_BACKEND_URL\nValue: https://hydrilla-backend-4i7t07pv4-dharani-kumar-yenagalas-projects.vercel.app\n\nThen redeploy your frontend.`;
+      } else {
+        errorMsg += `Please check that your backend is running and accessible.`;
+      }
+      
+      console.error("Backend connection error:", {
+        backendBase,
+        envValue,
+        error: err.message,
+      });
       throw new Error(errorMsg);
     }
     throw err;
