@@ -1,19 +1,11 @@
 const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.co";
+
 // Backend URL - must be set in Vercel environment variables as NEXT_PUBLIC_BACKEND_URL
-// For Vercel deployments, set this to your backend deployment URL (e.g., https://hydrilla-backend-4i7t07pv4-dharani-kumar-yenagalas-projects.vercel.app)
 const getBackendBase = (): string => {
   const url = process.env.NEXT_PUBLIC_BACKEND_URL;
-  
-  // Check if URL is invalid or not set
   if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
-    // Environment variable not set or incorrectly set
-    if (typeof window !== "undefined") {
-      console.warn("NEXT_PUBLIC_BACKEND_URL is not set or invalid. Please set it in Vercel environment variables.");
-    }
     return "http://localhost:4000"; // Fallback for local dev
   }
-  
-  // Remove trailing slash if present
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
 
@@ -354,12 +346,10 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
       try {
         const text = await res.text();
         if (!text) {
-          // Empty response, return empty array
           return [];
         }
         data = JSON.parse(text);
-      } catch (parseErr: any) {
-        console.error("Failed to parse response:", parseErr);
+      } catch {
         throw new Error("Invalid response format from backend");
       }
       
@@ -395,14 +385,6 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
         errorMsg += `\n\nPossible causes:\n1. Backend is not accessible at ${backendBase}\n2. CORS configuration issue\n3. Network timeout\n\nPlease check:\n- Backend URL is correct: ${backendBase}\n- Backend is deployed and running\n- CORS is configured correctly\n\nError details: ${err.message}`;
       }
       
-      console.error("Backend connection error:", {
-        backendBase,
-        url: `${backendBase}/api/3d/history`,
-        envValue,
-        error: err.message,
-        errorName: err.name,
-        stack: err.stack,
-      });
       throw new Error(errorMsg);
     }
     
@@ -466,14 +448,12 @@ export async function syncUser(getToken: () => Promise<string | null>): Promise<
     });
 
     if (!res.ok) {
-      console.error("Failed to sync user:", await res.text());
       return { success: false };
     }
 
     const data = await res.json();
     return { success: true, user: data.user };
-  } catch (err) {
-    console.error("Error syncing user:", err);
+  } catch {
     return { success: false };
   }
 }
@@ -499,8 +479,7 @@ export async function getCurrentUser(getToken: () => Promise<string | null>): Pr
     }
 
     return await res.json();
-  } catch (err) {
-    console.error("Error fetching user profile:", err);
+  } catch {
     return null;
   }
 }
