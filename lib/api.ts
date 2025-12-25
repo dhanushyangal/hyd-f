@@ -76,6 +76,39 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 /**
+ * Transform backend job format to frontend Job format
+ */
+function transformBackendJobToJob(backendJob: BackendJob | any): Job {
+  // Map backend status to frontend status
+  const statusMap: Record<BackendJobStatus, JobStatus> = {
+    "WAIT": "pending",
+    "RUN": "processing",
+    "DONE": "completed",
+    "FAIL": "failed"
+  };
+
+  return {
+    job_id: backendJob.id,
+    status: statusMap[backendJob.status as BackendJobStatus] || "pending",
+    progress: backendJob.status === "DONE" ? 100 : backendJob.status === "RUN" ? 50 : 0,
+    message: backendJob.errorMessage || (backendJob.status === "DONE" ? "Completed" : "Processing..."),
+    created_at: backendJob.createdAt ? new Date(backendJob.createdAt).getTime() : undefined,
+    updated_at: backendJob.updatedAt ? new Date(backendJob.updatedAt).getTime() : undefined,
+    result: backendJob.resultGlbUrl ? {
+      job_id: backendJob.id,
+      mode: backendJob.prompt ? "text-to-3d" : "image-to-3d",
+      prompt: backendJob.prompt || undefined,
+      mesh_url: backendJob.resultGlbUrl,
+      processed_image_url: backendJob.previewImageUrl || undefined,
+      generated_image_url: backendJob.previewImageUrl || undefined,
+      output: backendJob.resultGlbUrl,
+      elapsed_seconds: 0
+    } : undefined,
+    error: backendJob.errorMessage || undefined
+  };
+}
+
+/**
  * Generate preview image from text prompt
  */
 export async function generatePreviewImage(prompt: string, getToken?: () => Promise<string | null>): Promise<{ image_url: string; preview_id: string }> {
@@ -254,7 +287,7 @@ export async function submitImageTo3D(
  * Fetch job status from API
  */
 export async function fetchStatus(jobId: string): Promise<Job> {
-  const res = await fetch(`${apiBase}/status/${jobId}`);
+  const res = await fetch(`${backendBase}/api/3d/status/${jobId}`);
   if (!res.ok) {
     let errorText: string;
     try {
@@ -265,7 +298,9 @@ export async function fetchStatus(jobId: string): Promise<Job> {
     }
     throw new Error(errorText);
   }
-  return res.json();
+  // Backend returns { job: BackendJob }, we need to transform it to Job format
+  const data = await res.json();
+  return transformBackendJobToJob(data.job || data);
 }
 
 /**
