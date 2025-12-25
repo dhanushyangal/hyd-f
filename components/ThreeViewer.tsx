@@ -36,8 +36,8 @@ export function ThreeViewer({ glbUrl }: Props) {
     setLoadProgress(0);
 
     const scene = new THREE.Scene();
-    // White background
-    scene.background = new THREE.Color("#ffffff");
+    // Light gray background for premium look
+    scene.background = new THREE.Color("#fafafa");
     sceneRef.current = scene;
 
     const width = containerRef.current.clientWidth || 800;
@@ -177,7 +177,6 @@ export function ThreeViewer({ glbUrl }: Props) {
         } else if (err instanceof ProgressEvent) {
           errorMessage = "Network error: Failed to download model file";
         }
-
         setError(`Failed to load model: ${errorMessage}`);
         setLoading(false);
       }
@@ -239,47 +238,39 @@ export function ThreeViewer({ glbUrl }: Props) {
   }, [glbUrl]);
 
   return (
-    <div className="relative">
-      <div ref={containerRef} className="h-[500px] w-full rounded-xl overflow-hidden" />
+    <div className="relative h-full min-h-[400px]">
+      <div ref={containerRef} className="h-full w-full" />
       
       {/* Controls hint */}
-      <div className="absolute bottom-4 left-4 text-xs text-gray-600 bg-white/90 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-gray-200 shadow-sm">
-        <span className="opacity-70">🖱️ Drag to rotate • Scroll to zoom • Right-click to pan</span>
+      <div className="absolute bottom-4 left-4 text-xs text-neutral-500 bg-white/80 px-3 py-1.5 rounded-lg">
+        Drag to rotate • Scroll to zoom
       </div>
       
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm">
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center">
-              <div className="w-8 h-8 spinner"></div>
+        <div className="absolute inset-0 flex items-center justify-center bg-white">
+          <div className="text-center">
+            <div className="w-10 h-10 mx-auto mb-4">
+              <div className="w-10 h-10 spinner"></div>
             </div>
-            <div className="text-black font-medium">Loading 3D model...</div>
+            <div className="text-black text-sm">Loading model...</div>
             {loadProgress > 0 && (
-              <div className="w-48 mx-auto">
-                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden border border-gray-300">
-                  <div 
-                    className="h-full rounded-full bg-black transition-all duration-300" 
-                    style={{ width: `${loadProgress}%` }}
-                  ></div>
-                </div>
-                <div className="text-sm text-gray-600 mt-1">{loadProgress}%</div>
-              </div>
+              <div className="text-xs text-neutral-400 mt-1">{loadProgress}%</div>
             )}
           </div>
         </div>
       )}
       
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-white">
           <div className="text-center p-6 max-w-md">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-neutral-100 flex items-center justify-center">
+              <svg className="w-6 h-6 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <div className="text-lg font-medium text-black mb-2">Error loading model</div>
-            <div className="text-sm text-red-600">{error}</div>
-            <div className="text-xs text-gray-500 mt-3">Check browser console for details</div>
+            <div className="text-sm text-black mb-2">Unable to load model</div>
+            <div className="text-xs text-neutral-500 mb-2">{error}</div>
+            <div className="text-xs text-neutral-400 break-all mt-2">URL: {glbUrl}</div>
           </div>
         </div>
       )}

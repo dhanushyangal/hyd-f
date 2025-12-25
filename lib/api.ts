@@ -269,17 +269,15 @@ export async function fetchStatus(jobId: string): Promise<Job> {
 }
 
 /**
- * Get GLB URL from job result (use proxy for S3 URLs to avoid CORS)
+ * Get GLB URL from job result (direct S3 access - bucket is public)
  */
 export function getGlbUrl(job: Job): string | null {
   if (!job.result) return null;
   const url = job.result.mesh_url || job.result.output || null;
   if (!url) return null;
 
-  if (url.includes("s3.amazonaws.com") || url.includes("amazonaws.com") || url.startsWith("http")) {
-    return `${backendBase}/api/3d/glb-proxy?url=${encodeURIComponent(url)}`;
-  }
-
+  // S3 bucket is now public with CORS, so use direct URLs
+  // No need for proxy anymore
   return url;
 }
 

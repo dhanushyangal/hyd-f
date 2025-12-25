@@ -17,7 +17,38 @@ function convertBackendStatus(status: BackendJob["status"]): JobStatus {
 }
 
 export default function LibraryPage() {
-  const { isSignedIn, getToken } = useAuth();
+  const { isSignedIn, getToken, isLoaded } = useAuth();
+  
+  // Cache auth state to prevent flashing (initialize as null for SSR)
+  const [cachedAuthState, setCachedAuthState] = useState<boolean | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // Load cached auth state only on client after mount
+  useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("auth_signed_in");
+      if (cached === "true" || cached === "false") {
+        setCachedAuthState(cached === "true");
+      }
+    }
+  }, []);
+  
+  // Update cached auth state when Clerk loads
+  useEffect(() => {
+    if (isLoaded && isSignedIn !== undefined) {
+      const authState = !!isSignedIn;
+      setCachedAuthState(authState);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("auth_signed_in", String(authState));
+      }
+    }
+  }, [isLoaded, isSignedIn]);
+
+  // Use cached state if Clerk is still loading and we have a cached value, otherwise use actual state
+  // Only use cached state after component has mounted to avoid hydration mismatch
+  const userIsSignedIn = isLoaded ? isSignedIn : (isMounted ? cachedAuthState : null);
+  
   const [jobs, setJobs] = useState<BackendJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,7 +58,7 @@ export default function LibraryPage() {
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
 
   const loadJobs = useCallback(async (showLoading = true) => {
-    if (!isSignedIn) {
+    if (!userIsSignedIn) {
       setJobs([]);
       setLoading(false);
       return;
@@ -47,11 +78,11 @@ export default function LibraryPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isSignedIn, getToken]);
+  }, [userIsSignedIn, getToken]);
 
   useEffect(() => {
     loadJobs();
-  }, [isSignedIn]);
+  }, [userIsSignedIn]);
 
   // Auto-refresh if there are any processing jobs
   useEffect(() => {
@@ -92,10 +123,25 @@ export default function LibraryPage() {
     setJobToDelete(null);
   };
 
-  if (!isSignedIn) {
+  // Show loading state while Clerk is checking auth (only show if no cached state and not mounted yet)
+  if (!isLoaded && !isMounted) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center space-y-6 p-8 rounded-2xl bg-white border border-gray-200 shadow-lg max-w-md">
+      <div className="min-h-[60vh] flex items-center justify-center px-6">
+        <div className="text-center">
+          <div className="w-10 h-10 mx-auto mb-4">
+            <div className="w-10 h-10 spinner"></div>
+          </div>
+          <div className="text-black text-sm">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show sign-in prompt if not authenticated (only after Clerk has loaded)
+  if (isLoaded && userIsSignedIn === false) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-6">
+        <div className="text-center space-y-6 p-8 rounded-2xl bg-white border border-neutral-200 max-w-md">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-black/5 flex items-center justify-center">
             <svg className="w-8 h-8 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -116,8 +162,8 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 px-4 lg:px-8 py-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between flex-wrap gap-4">
       <div>
           <h1 className="text-3xl font-bold text-black">My Library</h1>
           <p className="text-gray-600 mt-2">Your generated 3D models and creations.</p>

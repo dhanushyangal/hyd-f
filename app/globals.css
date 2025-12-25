@@ -118,6 +118,30 @@ button:active:not(:disabled) {
   animation: spin 0.8s linear infinite;
 }
 
+/* Dark theme spinner with lime color */
+.spinner.border-lime-400 {
+  border: 3px solid rgba(163, 230, 53, 0.2);
+  border-top-color: #a3e635;
+}
+
+/* Violet/Indigo spinner */
+.spinner.border-violet-500 {
+  border: 3px solid rgba(139, 92, 246, 0.2);
+  border-top-color: #8b5cf6;
+}
+
+/* Black spinner (for light backgrounds) */
+.spinner.border-black {
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #000000;
+}
+
+/* White spinner (for dark backgrounds) */
+.spinner.border-white {
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -183,7 +207,18 @@ button:active:not(:disabled) {
 }
 
 .animate-in {
-  animation: fadeIn 0.2s ease-out;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .fade-in {
