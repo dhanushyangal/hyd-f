@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { fetchStatus, Job, getGlbUrl, getPreviewImageUrl, cancelJob } from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { JobStatusBadge } from "../../components/JobStatusBadge";
 import { useSearchParams } from "next/navigation";
 import { ConfirmModal } from "../../components/ConfirmModal";
 
+// Force dynamic rendering to prevent prerendering errors with useSearchParams
+export const dynamic = 'force-dynamic';
+
 const POLL_INTERVAL = 5000;
 
-export default function ViewerPage() {
+function ViewerContent() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get("jobId") || "";
   const [job, setJob] = useState<Job | null>(null);
@@ -253,5 +256,20 @@ export default function ViewerPage() {
         variant="warning"
       />
     </div>
+  );
+}
+
+export default function ViewerPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-20">
+        <div className="flex items-center gap-3 text-gray-600">
+          <div className="w-6 h-6 spinner"></div>
+          <span>Loading...</span>
+        </div>
+      </div>
+    }>
+      <ViewerContent />
+    </Suspense>
   );
 }
