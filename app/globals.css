@@ -2,11 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  color: #0f172a;
-  background: #f8fafc;
+:root {
+  --color-background: #ffffff;
+  --color-foreground: #000000;
 }
 
+body {
+  color: var(--color-foreground);
+  background: var(--color-background);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Animations */
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
@@ -20,3 +51,162 @@ body {
   animation: shimmer 2s infinite;
 }
 
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 4s ease infinite;
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.1);
+}
+
+/* Input focus styles */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #000000 !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Button active state */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Loading spinner */
+.spinner {
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #000000;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Glow effect */
+.glow {
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1),
+              0 0 40px rgba(0, 0, 0, 0.05);
+}
+
+/* Progress bar animation */
+.progress-bar {
+  background: linear-gradient(90deg, #000000, #333333, #000000);
+  background-size: 200% 100%;
+  animation: progress 2s linear infinite;
+}
+
+@keyframes progress {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-10px);
+    opacity: 0.7;
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
+/* Modal animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.zoom-in {
+  animation: zoomIn 0.2s ease-out;
+}
+
+/* Hide Clerk development mode indicator and footer */
+.cl-footer,
+.cl-footerPages,
+.cl-poweredByClerk,
+.cl-formFooter,
+.cl-footerText,
+[class*="cl-footer"],
+[class*="cl-poweredBy"],
+div[class*="footer"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+}

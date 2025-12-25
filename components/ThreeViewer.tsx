@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-// Removed getProxiedGlbUrl - using direct URLs from S3
 
 type Props = { glbUrl: string };
 
@@ -16,6 +15,7 @@ export function ThreeViewer({ glbUrl }: Props) {
   const animationFrameRef = useRef<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadProgress, setLoadProgress] = useState(0);
 
   useEffect(() => {
     if (!containerRef.current || !glbUrl) return;
@@ -33,9 +33,11 @@ export function ThreeViewer({ glbUrl }: Props) {
 
     setLoading(true);
     setError(null);
+    setLoadProgress(0);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#f8fafc");
+    // White background
+    scene.background = new THREE.Color("#ffffff");
     sceneRef.current = scene;
 
     const width = containerRef.current.clientWidth || 800;
@@ -50,6 +52,8 @@ export function ThreeViewer({ glbUrl }: Props) {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -62,41 +66,43 @@ export function ThreeViewer({ glbUrl }: Props) {
     controls.update();
     controlsRef.current = controls;
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Enhanced lighting for dark theme
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
 
-    const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight1.position.set(5, 10, 5);
-    directionalLight1.castShadow = true;
-    scene.add(directionalLight1);
+    // Key light (main light source)
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    keyLight.position.set(5, 10, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    scene.add(keyLight);
 
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-    directionalLight2.position.set(-5, 5, -5);
-    scene.add(directionalLight2);
+    // Fill light (softer, from opposite side)
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-5, 5, -5);
+    scene.add(fillLight);
 
-    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+    // Rim light (back light for depth)
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
+    rimLight.position.set(0, 3, -8);
+    scene.add(rimLight);
+
+    // Hemisphere light for ambient fill
+    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5);
     hemisphereLight.position.set(0, 20, 0);
     scene.add(hemisphereLight);
 
-    // Grid helper
-    const gridHelper = new THREE.GridHelper(10, 20, 0xcccccc, 0xeeeeee);
+    // Grid helper with light gray colors
+    const gridHelper = new THREE.GridHelper(10, 20, 0xd4d4d4, 0xe5e5e5);
+    gridHelper.position.y = -0.5;
     scene.add(gridHelper);
 
-    // Axes helper (optional, for debugging)
-    // const axesHelper = new THREE.AxesHelper(2);
-    // scene.add(axesHelper);
-
     // Load GLB model
-    // URL may be proxied through backend to avoid CORS issues
     const loader = new GLTFLoader();
-    let modelLoaded = false;
 
     console.log("Loading GLB from:", glbUrl);
 
-    // Configure loader with better error handling
-    loader.setRequestHeader({});
-    
     loader.load(
       glbUrl,
       (gltf) => {
@@ -118,16 +124,28 @@ export function ThreeViewer({ glbUrl }: Props) {
           model.position.y = -center.y * scale;
           model.position.z = -center.z * scale;
 
-          // Enable shadows if available
+          // Enable shadows and enhance materials
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              
+              // Enhance material for better appearance
+              if (child.material) {
+                if (Array.isArray(child.material)) {
+                  child.material.forEach(mat => {
+                    if (mat instanceof THREE.MeshStandardMaterial) {
+                      mat.envMapIntensity = 0.8;
+                    }
+                  });
+                } else if (child.material instanceof THREE.MeshStandardMaterial) {
+                  child.material.envMapIntensity = 0.8;
+                }
+              }
             }
           });
 
           scene.add(model);
-          modelLoaded = true;
           setLoading(false);
 
           // Adjust camera to view the model
@@ -146,26 +164,25 @@ export function ThreeViewer({ glbUrl }: Props) {
         }
       },
       (progress) => {
-        // Loading progress
         if (progress.total > 0) {
-          const percent = (progress.loaded / progress.total) * 100;
-          console.log(`Loading: ${percent.toFixed(1)}%`);
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setLoadProgress(percent);
+          console.log(`Loading: ${percent}%`);
         }
       },
       (err) => {
         console.error("Failed to load GLB:", err);
         let errorMessage = "Unknown error";
-        
+
         if (err instanceof Error) {
           errorMessage = err.message;
-          // Check for CORS or network errors
           if (err.message.includes("CORS") || err.message.includes("Failed to fetch")) {
             errorMessage = "CORS error: Unable to load model. The file may be blocked by browser security.";
           }
         } else if (err instanceof ProgressEvent) {
           errorMessage = "Network error: Failed to download model file";
         }
-        
+
         setError(`Failed to load model: ${errorMessage}`);
         setLoading(false);
       }
@@ -228,25 +245,49 @@ export function ThreeViewer({ glbUrl }: Props) {
 
   return (
     <div className="relative">
-      <div ref={containerRef} className="h-[500px] w-full rounded-lg border bg-white shadow-sm" />
+      <div ref={containerRef} className="h-[500px] w-full rounded-xl overflow-hidden" />
+      
+      {/* Controls hint */}
+      <div className="absolute bottom-4 left-4 text-xs text-gray-600 bg-white/90 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-gray-200 shadow-sm">
+        <span className="opacity-70">🖱️ Drag to rotate • Scroll to zoom • Right-click to pan</span>
+      </div>
+      
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
-          <div className="text-center">
-            <div className="mb-2 text-sm font-medium text-slate-700">Loading 3D model...</div>
-            <div className="h-1 w-32 animate-pulse rounded bg-blue-200"></div>
+        <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center">
+              <div className="w-8 h-8 spinner"></div>
+            </div>
+            <div className="text-black font-medium">Loading 3D model...</div>
+            {loadProgress > 0 && (
+              <div className="w-48 mx-auto">
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden border border-gray-300">
+                  <div 
+                    className="h-full rounded-full bg-black transition-all duration-300" 
+                    style={{ width: `${loadProgress}%` }}
+                  ></div>
+                </div>
+                <div className="text-sm text-gray-600 mt-1">{loadProgress}%</div>
+              </div>
+            )}
           </div>
         </div>
       )}
+      
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
-          <div className="rounded bg-red-50 p-4 text-center">
-            <div className="text-sm font-medium text-red-700">Error loading model</div>
-            <div className="mt-1 text-xs text-red-600">{error}</div>
-            <div className="mt-2 text-xs text-slate-500">Check browser console for details</div>
+        <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm">
+          <div className="text-center p-6 max-w-md">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
+              <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="text-lg font-medium text-black mb-2">Error loading model</div>
+            <div className="text-sm text-red-600">{error}</div>
+            <div className="text-xs text-gray-500 mt-3">Check browser console for details</div>
           </div>
         </div>
       )}
     </div>
   );
 }
-
