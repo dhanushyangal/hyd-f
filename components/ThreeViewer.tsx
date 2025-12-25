@@ -101,8 +101,6 @@ export function ThreeViewer({ glbUrl }: Props) {
     // Load GLB model
     const loader = new GLTFLoader();
 
-    console.log("Loading GLB from:", glbUrl);
-
     loader.load(
       glbUrl,
       (gltf) => {
@@ -158,7 +156,6 @@ export function ThreeViewer({ glbUrl }: Props) {
           controls.target.set(0, 0, 0);
           controls.update();
         } catch (err: any) {
-          console.error("Error processing GLB:", err);
           setError(`Failed to process model: ${err.message}`);
           setLoading(false);
         }
@@ -167,11 +164,9 @@ export function ThreeViewer({ glbUrl }: Props) {
         if (progress.total > 0) {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           setLoadProgress(percent);
-          console.log(`Loading: ${percent}%`);
         }
       },
       (err) => {
-        console.error("Failed to load GLB:", err);
         let errorMessage = "Unknown error";
 
         if (err instanceof Error) {

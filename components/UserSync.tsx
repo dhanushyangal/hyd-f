@@ -25,11 +25,8 @@ export function UserSync() {
         const result = await syncUser(tokenGetter);
         
         if (result.success) {
-          console.log("User synced to database:", result.user?.email);
           hasSynced.current = true;
           lastUserId.current = user.id;
-        } else {
-          console.warn("Failed to sync user to database");
         }
       };
 
