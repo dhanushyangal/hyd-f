@@ -16,7 +16,7 @@ export default async function Home() {
     <>
       <SignedIn>
         {/* Authenticated users see a link to generate page */}
-        <div className="min-h-[80vh] flex flex-col items-center justify-center text-center">
+        <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6">
           <div className="space-y-6 max-w-md">
             <div className="w-20 h-20 mx-auto rounded-2xl bg-black flex items-center justify-center">
               <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -47,7 +47,7 @@ export default async function Home() {
 
       <SignedOut>
         {/* Landing page for non-authenticated users */}
-        <div className="min-h-[80vh] flex flex-col items-center justify-center text-center">
+        <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6 py-12">
           {/* Hero Section */}
           <div className="space-y-8 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 border border-gray-200 text-black text-sm">

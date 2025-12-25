@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useRef } from "react";
 import { fetchStatus, Job, getGlbUrl, getPreviewImageUrl, cancelJob } from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { JobStatusBadge } from "../../components/JobStatusBadge";
@@ -19,6 +19,48 @@ function ViewerContent() {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [modelGenerationProgress, setModelGenerationProgress] = useState(0);
+  const modelProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Start progress simulation when job is pending/processing
+  useEffect(() => {
+    if (job && (job.status === "pending" || job.status === "processing") && modelProgressIntervalRef.current === null) {
+      const modelDuration = 150000; // 2 minutes 30 seconds = 150 seconds
+      const updateInterval = 500; // Update every 500ms
+      const progressStep = (100 / modelDuration) * updateInterval;
+
+      setModelGenerationProgress(0);
+
+      // Start progress simulation - runs for full 2m 30s
+      modelProgressIntervalRef.current = setInterval(() => {
+        setModelGenerationProgress(prev => {
+          if (prev >= 99) {
+            // Stop at 99% - wait for actual completion
+            if (modelProgressIntervalRef.current) {
+              clearInterval(modelProgressIntervalRef.current);
+              modelProgressIntervalRef.current = null;
+            }
+            return 99;
+          }
+          return Math.min(prev + progressStep, 99);
+        });
+      }, updateInterval);
+    } else if (job && (job.status === "completed" || job.status === "failed" || job.status === "cancelled")) {
+      // Clear progress simulation when job completes
+      if (modelProgressIntervalRef.current) {
+        clearInterval(modelProgressIntervalRef.current);
+        modelProgressIntervalRef.current = null;
+      }
+      setModelGenerationProgress(100);
+    }
+
+    return () => {
+      if (modelProgressIntervalRef.current) {
+        clearInterval(modelProgressIntervalRef.current);
+        modelProgressIntervalRef.current = null;
+      }
+    };
+  }, [job]);
 
   useEffect(() => {
     if (!jobId) return;
@@ -89,10 +131,10 @@ function ViewerContent() {
   const previewUrl = job ? getPreviewImageUrl(job) : null;
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 px-4 lg:px-8 py-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-black">3D Model Viewer</h1>
+          <h1 className="text-2xl font-semibold text-black">3D Model Viewer</h1>
           <p className="text-gray-600 mt-1">
             Job ID: <code className="bg-gray-100 px-2 py-1 rounded text-black text-sm">{jobId}</code>
           </p>
@@ -202,34 +244,26 @@ function ViewerContent() {
 
       {job && (job.status === "pending" || job.status === "processing") && (
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8">
-          <div className="space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
-                <div className="w-6 h-6 spinner"></div>
-              </div>
-              <div>
-                <div className="text-lg font-medium text-black">Generating your 3D model...</div>
-                <div className="text-sm text-gray-600">{job.message || "Processing your request"}</div>
-              </div>
+          <div className="w-full max-w-md mx-auto">
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-semibold text-black mb-2">Generating your 3D model...</h3>
+              <p className="text-3xl font-bold text-black mb-1">{Math.round(modelGenerationProgress)}%</p>
+              <p className="text-sm text-neutral-400">Estimated time: ~2m 30s</p>
             </div>
-
-            {job.progress > 0 && (
-              <div className="space-y-2">
-                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden border border-gray-300">
-                  <div
-                    className="h-full rounded-full bg-black transition-all duration-500"
-                    style={{ width: `${job.progress}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Progress</span>
-                  <span>{job.progress}%</span>
-                </div>
-              </div>
-            )}
-
-            <div className="text-xs text-gray-500">
-              This may take a few minutes. The page will automatically update when ready.
+            
+            {/* Linear Progress Bar */}
+            <div className="w-full bg-neutral-200 rounded-full h-3 overflow-hidden mb-4">
+              <div 
+                className="h-full bg-black rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${modelGenerationProgress}%` }}
+              ></div>
+            </div>
+            
+            {/* Progress Steps */}
+            <div className="flex justify-between text-xs text-neutral-400">
+              <span>Processing</span>
+              <span>Rendering</span>
+              <span>Finalizing</span>
             </div>
           </div>
         </div>
