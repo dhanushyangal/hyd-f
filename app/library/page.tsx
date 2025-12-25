@@ -118,7 +118,7 @@ export default function LibraryPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <div>
+      <div>
           <h1 className="text-3xl font-bold text-black">My Library</h1>
           <p className="text-gray-600 mt-2">Your generated 3D models and creations.</p>
         </div>
@@ -179,7 +179,7 @@ export default function LibraryPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {jobs.map((job) => (
+            {jobs.map((job) => (
             <div
               key={job.id}
               className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:border-gray-300 transition-all group shadow-sm hover:shadow-md"

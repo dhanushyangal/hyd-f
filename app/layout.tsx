@@ -25,11 +25,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         },
       }}
     >
-      <html lang="en">
+    <html lang="en">
         <body className="min-h-screen bg-white">
           <ClientProviders>
             <header className="border-b border-gray-200 bg-white/95 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
-              <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
                 <a href="/" className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-lg bg-black flex items-center justify-center">
                     <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,13 +78,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                       </button>
                     </SignUpButton>
                   </SignedOut>
-                </nav>
-              </div>
-            </header>
-            <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+            </nav>
+          </div>
+        </header>
+        <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
           </ClientProviders>
-        </body>
-      </html>
+      </body>
+    </html>
     </ClerkProvider>
   );
 }
