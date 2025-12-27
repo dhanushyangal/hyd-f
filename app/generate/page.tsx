@@ -50,7 +50,6 @@ export default function GeneratePage() {
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
   const [estimatedPreviewSeconds, setEstimatedPreviewSeconds] = useState(20); // Default 20s
-  const [previewStarting, setPreviewStarting] = useState(false); // Track if we're checking/starting
   
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -138,7 +137,7 @@ export default function GeneratePage() {
             setModelGenerationProgress(waitProgress);
           } else if (status.queue.position === 0) {
             // Currently processing - progress between 50-95
-            const processingTime = 140; // ~2m 20s for processing
+            const processingTime = 130; // ~2m 10s for processing
             const elapsed = (Date.now() - (currentGenerating.startTime || Date.now())) / 1000 - (status.queue.estimated_wait_seconds || 0);
             const processingProgress = Math.min(95, 50 + (elapsed / processingTime) * 45);
             setModelGenerationProgress(Math.max(50, processingProgress));
@@ -225,9 +224,7 @@ export default function GeneratePage() {
       return;
     }
 
-    // Step 1: Show starting/checking state
-    setPreviewStarting(true);
-    setGeneratingPreview(false);
+    setGeneratingPreview(true);
     setPreviewProgress(0);
     setError(null);
     setPreviewImageUrl(null);
@@ -251,10 +248,6 @@ export default function GeneratePage() {
     
     // Store estimated time for UI display
     setEstimatedPreviewSeconds(estimatedPreviewTime);
-
-    // Step 2: Start actual generation
-    setPreviewStarting(false);
-    setGeneratingPreview(true);
 
     const previewDuration = estimatedPreviewTime * 1000; // Convert to ms
     const updateInterval = 100; // Update every 100ms
@@ -299,28 +292,17 @@ export default function GeneratePage() {
         }
       }
       
-      // Step 3: Show the generated image
       setPreviewImageUrl(result.image_url);
       setPreviewId(result.preview_id);
       setPreviewProgress(100);
-      setGeneratingPreview(false);
     } catch (err: any) {
-      // Clear loading state immediately
-      setPreviewStarting(false);
-      setGeneratingPreview(false);
-      setPreviewProgress(0);
-      if (previewProgressIntervalRef.current) {
-        clearInterval(previewProgressIntervalRef.current);
-        previewProgressIntervalRef.current = null;
-      }
-      // Show error message
       setError(err.message || "Failed to generate preview image");
+      setPreviewProgress(0);
     } finally {
       if (previewProgressIntervalRef.current) {
         clearInterval(previewProgressIntervalRef.current);
         previewProgressIntervalRef.current = null;
       }
-      setPreviewStarting(false);
       setGeneratingPreview(false);
     }
   };
@@ -342,7 +324,7 @@ export default function GeneratePage() {
     setError(null);
 
     // Fetch queue info to get accurate time estimate
-    let estimatedTotalSeconds = 140; // Default: ~2m 20s
+    let estimatedTotalSeconds = 130; // Default: ~2m 10s
     let queueInfo: QueueInfo | null = null;
     try {
       queueInfo = await fetchQueueInfo();
@@ -398,15 +380,12 @@ export default function GeneratePage() {
       setPrompt("");
       // Keep progress simulation running - don't reset it
     } catch (err: any) {
-      // Clear loading state immediately
-      setLoading(false);
+      setError(err.message || "Failed to generate 3D model");
       setModelGenerationProgress(0);
       if (modelProgressIntervalRef.current) {
         clearInterval(modelProgressIntervalRef.current);
         modelProgressIntervalRef.current = null;
       }
-      // Show error message
-      setError(err.message || "Failed to generate 3D model");
     } finally {
       setLoading(false);
       // Don't clear the interval here - let it run for the full duration
@@ -431,7 +410,7 @@ export default function GeneratePage() {
       setError(null);
 
       // Fetch queue info to get accurate time estimate
-      let estimatedTotalSeconds = 140; // Default: ~2m 20s
+      let estimatedTotalSeconds = 130; // Default: ~2m 10s
       let queueInfo: QueueInfo | null = null;
       try {
         queueInfo = await fetchQueueInfo();
@@ -520,14 +499,6 @@ export default function GeneratePage() {
         }
         // Keep progress simulation running - don't reset it
       } catch (err: any) {
-        // Clear loading state immediately
-        setLoading(false);
-        setModelGenerationProgress(0);
-        if (modelProgressIntervalRef.current) {
-          clearInterval(modelProgressIntervalRef.current);
-          modelProgressIntervalRef.current = null;
-        }
-        // Show error message
         setError(err.message || "Failed to submit job");
         setModelGenerationProgress(0);
         if (modelProgressIntervalRef.current) {
@@ -691,9 +662,6 @@ export default function GeneratePage() {
                 setError(null);
                 setPreviewImageUrl(null);
                 setPreviewId(null);
-                setPreviewStarting(false);
-                setGeneratingPreview(false);
-                setPreviewProgress(0);
                 setUploadedFile(null);
                 setImagePreview(null);
               }}
@@ -716,9 +684,6 @@ export default function GeneratePage() {
                 setError(null);
                 setPreviewImageUrl(null);
                 setPreviewId(null);
-                setPreviewStarting(false);
-                setGeneratingPreview(false);
-                setPreviewProgress(0);
               }}
               className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all text-sm ${
                 mode === "image"
@@ -750,9 +715,6 @@ export default function GeneratePage() {
                         if (previewImageUrl) {
                           setPreviewImageUrl(null);
                           setPreviewId(null);
-                          setPreviewStarting(false);
-                          setGeneratingPreview(false);
-                          setPreviewProgress(0);
                         }
                       }}
                       placeholder="A detailed fantasy sword with glowing runes..."
@@ -764,20 +726,10 @@ export default function GeneratePage() {
                   </div>
                 </div>
 
-                {/* Preview Image Section - Only show when generating or image is ready */}
-                {(previewStarting || generatingPreview || previewImageUrl) && (
+                {/* Preview Image Section */}
+                {(generatingPreview || previewImageUrl) && (
                   <div className="rounded-xl bg-neutral-50 border border-neutral-200 overflow-hidden">
-                    {previewStarting ? (
-                      // Step 1: Checking/Starting state
-                      <div className="aspect-square flex flex-col items-center justify-center p-8">
-                        <div className="w-12 h-12 mb-4">
-                          <div className="w-12 h-12 spinner"></div>
-                        </div>
-                        <p className="text-sm text-black font-medium mb-1">Checking GPU...</p>
-                        <p className="text-xs text-neutral-400 mt-1">Starting preview generation</p>
-                      </div>
-                    ) : generatingPreview && !previewImageUrl ? (
-                      // Step 2: Generating state
+                    {generatingPreview && !previewImageUrl ? (
                       <div className="aspect-square flex flex-col items-center justify-center p-8">
                         <div className="w-12 h-12 mb-4">
                           <div className="w-12 h-12 spinner"></div>
@@ -791,20 +743,24 @@ export default function GeneratePage() {
                         </p>
                       </div>
                     ) : previewImageUrl ? (
-                      // Step 3: Show generated image (only when actually generated)
                       <div>
                         <div className="relative">
                           <img 
                             src={previewImageUrl} 
                             alt="Preview" 
-                            className="w-full aspect-square object-cover"
+                            className={`w-full aspect-square object-cover ${generatingPreview ? 'opacity-30' : ''}`}
                           />
+                          {generatingPreview && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-10 h-10 spinner"></div>
+                            </div>
+                          )}
                         </div>
                         <div className="p-3 bg-white border-t border-neutral-100">
                           <button
                             type="button"
                             onClick={handleRegeneratePreview}
-                            disabled={generatingPreview || previewStarting}
+                            disabled={generatingPreview}
                             className="w-full px-3 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -912,15 +868,10 @@ export default function GeneratePage() {
                 {!previewImageUrl ? (
                   <button
                     type="submit"
-                    disabled={previewStarting || generatingPreview || !prompt.trim()}
+                    disabled={generatingPreview || !prompt.trim()}
                     className="w-full rounded-xl bg-black text-white px-6 py-4 font-medium hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                   >
-                    {previewStarting ? (
-                      <>
-                        <div className="w-5 h-5 spinner border-white"></div>
-                        Starting...
-                      </>
-                    ) : generatingPreview ? (
+                    {generatingPreview ? (
                       <>
                         <div className="w-5 h-5 spinner border-white"></div>
                         Generating Preview...
@@ -950,7 +901,7 @@ export default function GeneratePage() {
                             {currentGenerating?.queueInfo?.jobs_ahead ? (
                               <span className="text-xs opacity-75 ml-2">({currentGenerating.queueInfo.jobs_ahead} in queue)</span>
                             ) : (
-                              <span className="text-xs opacity-75 ml-2">(~{Math.ceil((currentGenerating?.estimatedTotalSeconds || 140) / 60)}m)</span>
+                              <span className="text-xs opacity-75 ml-2">(~{Math.ceil((currentGenerating?.estimatedTotalSeconds || 130) / 60)}m)</span>
                             )}
                           </>
                         ) : (
@@ -1007,6 +958,11 @@ export default function GeneratePage() {
             )}
           </form>
 
+          {/* Generation Info */}
+          <div className="mt-6 flex items-center justify-between text-xs text-neutral-400">
+            <span>⏱️ ~1-2 min</span>
+            <span>🎯 20 credits</span>
+          </div>
         </div>
 
         {/* Center - 3D Viewer Area */}
@@ -1027,7 +983,7 @@ export default function GeneratePage() {
                           <p className="text-3xl font-bold text-black mb-1">{Math.round(modelGenerationProgress)}%</p>
                           <p className="text-sm text-neutral-400">
                             Estimated wait: ~{Math.ceil((currentGenerating.queueInfo.estimated_wait_seconds || 0) / 60)}m
-                            {' + '}~{Math.ceil(140 / 60)}m for generation
+                            {' + '}~{Math.ceil(130 / 60)}m for generation
                           </p>
                         </>
                       ) : (
@@ -1035,7 +991,7 @@ export default function GeneratePage() {
                           <h3 className="text-xl font-semibold text-black mb-2">Generating your 3D model...</h3>
                           <p className="text-3xl font-bold text-black mb-1">{Math.round(modelGenerationProgress)}%</p>
                           <p className="text-sm text-neutral-400">
-                            Estimated time: ~{Math.ceil((currentGenerating.estimatedTotalSeconds || 140) / 60)}m {Math.round((currentGenerating.estimatedTotalSeconds || 140) % 60)}s
+                            Estimated time: ~{Math.ceil((currentGenerating.estimatedTotalSeconds || 130) / 60)}m {Math.round((currentGenerating.estimatedTotalSeconds || 130) % 60)}s
                           </p>
                         </>
                       )}

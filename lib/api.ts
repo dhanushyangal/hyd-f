@@ -68,6 +68,25 @@ export interface BackendJob {
 }
 
 /**
+ * Get authorization header with Clerk token
+ */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  // Check if we're on the client side
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    // Dynamically import to avoid SSR issues
+    const { useAuth } = await import("@clerk/nextjs");
+    // This won't work in regular functions - need to use getToken from Clerk
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Transform backend job format to frontend Job format
  */
 function transformBackendJobToJob(backendJob: BackendJob | any): Job {
@@ -101,47 +120,6 @@ function transformBackendJobToJob(backendJob: BackendJob | any): Job {
 }
 
 /**
- * Check if error is a network/API unavailable error
- */
-function isGpuOfflineError(error: any): boolean {
-  return (
-    error?.name === "TypeError" ||
-    error?.name === "AbortError" ||
-    error?.message?.includes("fetch") ||
-    error?.message?.includes("Failed to fetch") ||
-    error?.message?.includes("NetworkError") ||
-    error?.message?.includes("Network request failed") ||
-    error?.message?.includes("ERR_INTERNET_DISCONNECTED") ||
-    error?.message?.includes("ERR_CONNECTION_REFUSED") ||
-    error?.message?.includes("timeout") ||
-    error?.message?.includes("aborted")
-  );
-}
-
-/**
- * Fetch with timeout - fails fast if API is unavailable
- */
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 5000): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('Request timeout - GPU may be offline');
-    }
-    throw error;
-  }
-}
-
-/**
  * Generate preview image from text prompt
  */
 export async function generatePreviewImage(prompt: string, getToken?: () => Promise<string | null>): Promise<{ 
@@ -160,35 +138,28 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
     }
   }
 
-  try {
-    const res = await fetchWithTimeout(`${apiBase}/text-to-image`, {
-      method: "POST",
-      body: formData,
-    }, 5000); // 5 second timeout
+  const res = await fetch(`${apiBase}/text-to-image`, {
+    method: "POST",
+    body: formData,
+  });
 
-    if (!res.ok) {
-      let errorText: string;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || "Failed to generate preview image";
-      } catch {
-        errorText = (await res.text()) || "Failed to generate preview image";
-      }
-      throw new Error(errorText);
+  if (!res.ok) {
+    let errorText: string;
+    try {
+      const errorData = await res.json();
+      errorText = errorData.error || "Failed to generate preview image";
+    } catch {
+      errorText = (await res.text()) || "Failed to generate preview image";
     }
-
-    const result = await res.json();
-    return {
-      image_url: result.image_url,
-      preview_id: result.preview_id,
-      queue: result.queue,  // Include queue info if available
-    };
-  } catch (error: any) {
-    if (isGpuOfflineError(error)) {
-      throw new Error("GPU is offline. Please try again after some time.");
-    }
-    throw error;
+    throw new Error(errorText);
   }
+
+  const result = await res.json();
+  return {
+    image_url: result.image_url,
+    preview_id: result.preview_id,
+    queue: result.queue,  // Include queue info if available
+  };
 }
 
 /**
@@ -198,49 +169,42 @@ export async function submitTextTo3D(prompt: string, getToken?: () => Promise<st
   const formData = new FormData();
   formData.append("prompt", prompt);
 
-  try {
-    const res = await fetchWithTimeout(`${apiBase}/text-to-3d`, {
-      method: "POST",
-      body: formData,
-    }, 5000); // 5 second timeout
+  const res = await fetch(`${apiBase}/text-to-3d`, {
+    method: "POST",
+    body: formData,
+  });
 
-    if (!res.ok) {
-      let errorText: string;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || "Failed to submit job";
-      } catch {
-        errorText = (await res.text()) || "Failed to submit job";
-      }
-      throw new Error(errorText);
-    }
-
-    const result = await res.json();
-
-    // Register job in backend with auth token
+  if (!res.ok) {
+    let errorText: string;
     try {
-      const headers: HeadersInit = { "Content-Type": "application/json" };
-      if (getToken) {
-        const token = await getToken();
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-      }
-
-      await fetch(`${backendBase}/api/3d/register-job`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ job_id: result.job_id, prompt }),
-      }).catch(() => {});
-    } catch {}
-
-    return result;
-  } catch (error: any) {
-    if (isGpuOfflineError(error)) {
-      throw new Error("GPU is offline. Please try again after some time.");
+      const errorData = await res.json();
+      errorText = errorData.error || "Failed to submit job";
+    } catch {
+      errorText = (await res.text()) || "Failed to submit job";
     }
-    throw error;
+    throw new Error(errorText);
   }
+
+  const result = await res.json();
+
+  // Register job in backend with auth token
+  try {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    await fetch(`${backendBase}/api/3d/register-job`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ job_id: result.job_id, prompt }),
+    }).catch(() => {});
+  } catch {}
+
+  return result;
 }
 
 /**
@@ -297,83 +261,69 @@ export async function submitImageTo3D(
     throw new Error("Either imageUrl or imageFile must be provided");
   }
 
-  try {
-    const res = await fetchWithTimeout(`${apiBase}/image-to-3d`, {
-      method: "POST",
-      body: formData,
-    }, 5000); // 5 second timeout
+  const res = await fetch(`${apiBase}/image-to-3d`, {
+    method: "POST",
+    body: formData,
+  });
 
-    if (!res.ok) {
-      let errorText: string;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || "Failed to submit job";
-      } catch {
-        errorText = (await res.text()) || "Failed to submit job";
-      }
-      throw new Error(errorText);
-    }
-
-    const result = await res.json();
-
-    // Register job in backend with auth token
+  if (!res.ok) {
+    let errorText: string;
     try {
-      const headers: HeadersInit = { "Content-Type": "application/json" };
-      if (getToken) {
-        const token = await getToken();
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-      }
-
-      await fetch(`${backendBase}/api/3d/register-job`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ job_id: result.job_id, imageUrl: imageUrl || "uploaded_file" }),
-      }).catch(() => {});
-    } catch {}
-
-    return result;
-  } catch (error: any) {
-    if (isGpuOfflineError(error)) {
-      throw new Error("GPU is offline. Please try again after some time.");
+      const errorData = await res.json();
+      errorText = errorData.error || "Failed to submit job";
+    } catch {
+      errorText = (await res.text()) || "Failed to submit job";
     }
-    throw error;
+    throw new Error(errorText);
   }
+
+  const result = await res.json();
+
+  // Register job in backend with auth token
+  try {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    await fetch(`${backendBase}/api/3d/register-job`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ job_id: result.job_id, imageUrl: imageUrl || "uploaded_file" }),
+    }).catch(() => {});
+  } catch {}
+
+  return result;
 }
 
 /**
  * Fetch job status from API
  */
 export async function fetchStatus(jobId: string): Promise<Job> {
-  try {
-    const res = await fetchWithTimeout(`${backendBase}/api/3d/status/${jobId}`, {}, 5000);
-    if (!res.ok) {
-      let errorText: string;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || "Failed to fetch status";
-      } catch {
-        errorText = (await res.text()) || "Failed to fetch status";
-      }
-      throw new Error(errorText);
+  const res = await fetch(`${backendBase}/api/3d/status/${jobId}`);
+  if (!res.ok) {
+    let errorText: string;
+    try {
+      const errorData = await res.json();
+      errorText = errorData.error || "Failed to fetch status";
+    } catch {
+      errorText = (await res.text()) || "Failed to fetch status";
     }
-    // Backend returns { job: BackendJob, queue?: QueueInfo }, we need to transform it to Job format
-    const data = await res.json();
-    const job = transformBackendJobToJob(data.job || data);
-    
-    // Include queue info if available
-    if (data.queue) {
-      job.queue = data.queue;
-    }
-    
-    return job;
-  } catch (error: any) {
-    if (isGpuOfflineError(error)) {
-      throw new Error("GPU is offline. Please try again after some time.");
-    }
-    throw error;
+    throw new Error(errorText);
   }
+  // Backend returns { job: BackendJob, queue?: QueueInfo }, we need to transform it to Job format
+  const data = await res.json();
+  const job = transformBackendJobToJob(data.job || data);
+  
+  // Include queue info if available
+  if (data.queue) {
+    job.queue = data.queue;
+  }
+  
+  return job;
 }
 
 /**
@@ -384,7 +334,7 @@ export async function fetchQueueInfo(): Promise<QueueInfo & {
   estimated_preview_time_seconds?: number;
 } | null> {
   try {
-    const res = await fetchWithTimeout(`${backendBase}/api/3d/queue/info`, {}, 5000);
+    const res = await fetch(`${backendBase}/api/3d/queue/info`);
     if (!res.ok) {
       return null;
     }
@@ -393,7 +343,7 @@ export async function fetchQueueInfo(): Promise<QueueInfo & {
       position: 0,
       jobs_ahead: data.queue_length + (data.currently_processing ? 1 : 0),
       estimated_wait_seconds: data.estimated_wait_for_new_job_seconds || 0,
-      estimated_total_seconds: (data.estimated_wait_for_new_job_seconds || 0) + (data.estimated_time_per_job_seconds || 140),
+      estimated_total_seconds: (data.estimated_wait_for_new_job_seconds || 0) + (data.estimated_time_per_job_seconds || 130),
       queue_length: data.queue_length || 0,
       currently_processing: data.currently_processing || false,
       // Preview queue info
@@ -554,20 +504,13 @@ export async function deleteJob(jobId: string, getToken: () => Promise<string | 
  * Cancel a job
  */
 export async function cancelJob(jobId: string): Promise<void> {
-  try {
-    const res = await fetchWithTimeout(`${apiBase}/cancel/${jobId}`, {
-      method: "POST",
-    }, 5000);
+  const res = await fetch(`${apiBase}/cancel/${jobId}`, {
+    method: "POST",
+  });
 
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || "Failed to cancel job");
-    }
-  } catch (error: any) {
-    if (isGpuOfflineError(error)) {
-      throw new Error("GPU is offline. Please try again after some time.");
-    }
-    throw error;
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || "Failed to cancel job");
   }
 }
 
