@@ -4,7 +4,7 @@ const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.co";
 const getBackendBase = (): string => {
   const url = process.env.NEXT_PUBLIC_BACKEND_URL;
   if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
-    return "http://localhost:4000"; // Fallback for local dev
+    return "http://localhost:3000"; // Fallback for local dev
   }
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
@@ -13,6 +13,16 @@ const backendBase = getBackendBase();
 
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
+// Queue information for accurate time estimation
+export interface QueueInfo {
+  position: number;  // 0 = processing, 1+ = waiting
+  jobs_ahead: number;
+  estimated_wait_seconds: number;
+  estimated_total_seconds: number;
+  queue_length: number;
+  currently_processing: boolean;
+}
+
 export interface Job {
   job_id: string;
   status: JobStatus;
@@ -20,6 +30,7 @@ export interface Job {
   message: string;
   created_at?: number;
   updated_at?: number;
+  queue?: QueueInfo;  // Queue position and wait time
   result?: {
     job_id: string;
     mode: "text-to-3d" | "image-to-3d";
@@ -111,7 +122,11 @@ function transformBackendJobToJob(backendJob: BackendJob | any): Job {
 /**
  * Generate preview image from text prompt
  */
-export async function generatePreviewImage(prompt: string, getToken?: () => Promise<string | null>): Promise<{ image_url: string; preview_id: string }> {
+export async function generatePreviewImage(prompt: string, getToken?: () => Promise<string | null>): Promise<{ 
+  image_url: string; 
+  preview_id: string;
+  queue?: QueueInfo;
+}> {
   const formData = new FormData();
   formData.append("prompt", prompt);
 
@@ -143,6 +158,7 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
   return {
     image_url: result.image_url,
     preview_id: result.preview_id,
+    queue: result.queue,  // Include queue info if available
   };
 }
 
@@ -298,9 +314,45 @@ export async function fetchStatus(jobId: string): Promise<Job> {
     }
     throw new Error(errorText);
   }
-  // Backend returns { job: BackendJob }, we need to transform it to Job format
+  // Backend returns { job: BackendJob, queue?: QueueInfo }, we need to transform it to Job format
   const data = await res.json();
-  return transformBackendJobToJob(data.job || data);
+  const job = transformBackendJobToJob(data.job || data);
+  
+  // Include queue info if available
+  if (data.queue) {
+    job.queue = data.queue;
+  }
+  
+  return job;
+}
+
+/**
+ * Fetch queue info for accurate time estimation
+ */
+export async function fetchQueueInfo(): Promise<QueueInfo & { 
+  estimated_wait_for_preview_seconds?: number;
+  estimated_preview_time_seconds?: number;
+} | null> {
+  try {
+    const res = await fetch(`${backendBase}/api/3d/queue/info`);
+    if (!res.ok) {
+      return null;
+    }
+    const data = await res.json();
+    return {
+      position: 0,
+      jobs_ahead: data.queue_length + (data.currently_processing ? 1 : 0),
+      estimated_wait_seconds: data.estimated_wait_for_new_job_seconds || 0,
+      estimated_total_seconds: (data.estimated_wait_for_new_job_seconds || 0) + (data.estimated_time_per_job_seconds || 130),
+      queue_length: data.queue_length || 0,
+      currently_processing: data.currently_processing || false,
+      // Preview queue info
+      estimated_wait_for_preview_seconds: data.estimated_wait_for_preview_seconds || 0,
+      estimated_preview_time_seconds: data.estimated_preview_time_seconds || 20
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

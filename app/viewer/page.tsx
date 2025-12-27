@@ -6,6 +6,7 @@ import { ThreeViewer } from "../../components/ThreeViewer";
 import { JobStatusBadge } from "../../components/JobStatusBadge";
 import { useSearchParams } from "next/navigation";
 import { ConfirmModal } from "../../components/ConfirmModal";
+import { Navigation } from "../../components/Navigation";
 
 // Force dynamic rendering to prevent prerendering errors with useSearchParams
 export const dynamic = 'force-dynamic';
@@ -295,7 +296,9 @@ function ViewerContent() {
 
 export default function ViewerPage() {
   return (
-    <Suspense fallback={
+    <>
+      <Navigation />
+      <Suspense fallback={
       <div className="flex items-center justify-center py-20">
         <div className="flex items-center gap-3 text-gray-600">
           <div className="w-6 h-6 spinner"></div>
@@ -305,5 +308,6 @@ export default function ViewerPage() {
     }>
       <ViewerContent />
     </Suspense>
+    </>
   );
 }

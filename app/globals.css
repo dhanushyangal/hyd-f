@@ -10,7 +10,26 @@
 body {
   color: var(--color-foreground);
   background: var(--color-background);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-dm-sans), 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Typography */
+.font-serif {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+
+/* Clerk overrides for consistent DM Sans usage */
+.cl-internal-b3fm6y,
+.cl-rootBox,
+.cl-card,
+.cl-formFieldLabel,
+.cl-formButtonPrimary,
+.cl-footerActionText,
+.cl-headerTitle,
+.cl-headerSubtitle,
+.cl-socialButtonsBlockButton,
+.cl-formFieldInput {
+  font-family: var(--font-dm-sans), system-ui, -apple-system, sans-serif !important;
 }
 
 /* Smooth scrolling */

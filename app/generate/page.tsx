@@ -2,8 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth, SignInButton } from "@clerk/nextjs";
-import { submitTextTo3D, submitImageTo3D, generatePreviewImage, fetchHistory, fetchStatus, BackendJob, Job, getGlbUrl } from "../../lib/api";
-import { ThreeViewer } from "../../components/ThreeViewer";
+import { submitTextTo3D, submitImageTo3D, generatePreviewImage, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl } from "../../lib/api";
+import { PromptBox } from "../../components/PromptBox";
+import { GenerateNavbar } from "../../components/GenerateNavbar";
+import { TopRightControls } from "../../components/TopRightControls";
+import { ModelCanvas } from "../../components/ModelCanvas";
+import { GenerateSidebar } from "../../components/GenerateSidebar";
+import { Image as ImageIcon, Sparkles, RotateCcw, CheckCircle2 } from "lucide-react";
 
 type Mode = "text" | "image";
 
@@ -14,17 +19,17 @@ interface GeneratingModel {
   status: "generating" | "completed" | "failed";
   progress: number;
   glbUrl?: string;
+  queueInfo?: QueueInfo;  // Queue position and estimated time
+  estimatedTotalSeconds?: number;  // Total estimated time including wait
+  startTime?: number;  // When the job was submitted
 }
-
 
 export default function GeneratePage() {
   const { isSignedIn, getToken, isLoaded } = useAuth();
   
-  // Cache auth state to prevent flashing (initialize as null for SSR)
   const [cachedAuthState, setCachedAuthState] = useState<boolean | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   
-  // Load cached auth state only on client after mount
   useEffect(() => {
     setIsMounted(true);
     if (typeof window !== "undefined") {
@@ -37,27 +42,48 @@ export default function GeneratePage() {
   
   const [mode, setMode] = useState<Mode>("text");
   const [prompt, setPrompt] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   
-  // Text-to-3D preview states
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
   
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelGenerationProgress, setModelGenerationProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Refs for progress intervals
   const previewProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const modelProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Cleanup intervals on unmount
+  const [currentGenerating, setCurrentGenerating] = useState<GeneratingModel | null>(null);
+  const [glbUrl, setGlbUrl] = useState<string | null>(null);
+  const [isPromptAtBottom, setIsPromptAtBottom] = useState(false);
+  const [zoom, setZoom] = useState(100);
+  const [variations, setVariations] = useState<Array<{
+    id: string;
+    imageUrl: string;
+    prompt?: string;
+    createdAt?: Date;
+  }>>([
+    // Example variations - remove these in production or load from API
+    {
+      id: "example-1",
+      imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&h=400&fit=crop",
+      prompt: "Cartoon boy with glasses and backpack",
+      createdAt: new Date(Date.now() - 86400000),
+    },
+    {
+      id: "example-2",
+      imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop",
+      prompt: "3D character design",
+      createdAt: new Date(Date.now() - 172800000),
+    },
+  ]);
+  const [selectedVariationId, setSelectedVariationId] = useState<string | null>(null);
+  
   useEffect(() => {
     return () => {
       if (previewProgressIntervalRef.current) {
@@ -68,16 +94,111 @@ export default function GeneratePage() {
       }
     };
   }, []);
-  
-  // History states
-  const [history, setHistory] = useState<BackendJob[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [currentGenerating, setCurrentGenerating] = useState<GeneratingModel | null>(null);
-  
-  // Mobile history popup
-  const [showHistoryPopup, setShowHistoryPopup] = useState(false);
 
-  // Update cached auth state when Clerk loads
+  // Poll for current generating job status (like viewer page)
+  useEffect(() => {
+    if (!currentGenerating || currentGenerating.status !== "generating") return;
+    
+    let active = true;
+    
+    const fetchAndSchedule = async () => {
+      if (!active) return;
+      
+      try {
+        const status = await fetchStatus(currentGenerating.jobId);
+        if (!active) return;
+        
+        console.log("Polling status:", status.status, "Job ID:", currentGenerating.jobId);
+        
+        if (status.status === "completed") {
+          // Clear progress simulation interval
+          if (modelProgressIntervalRef.current) {
+            clearInterval(modelProgressIntervalRef.current);
+            modelProgressIntervalRef.current = null;
+          }
+          setModelGenerationProgress(100);
+          
+          const url = getGlbUrl(status);
+          console.log("Model completed! GLB URL:", url);
+          console.log("Status result:", status.result);
+          
+          if (url) {
+            setGlbUrl(url);
+            setCurrentGenerating(prev => prev ? {
+              ...prev,
+              status: "completed",
+              progress: 100,
+              glbUrl: url
+            } : null);
+            setLoading(false);
+          } else {
+            console.warn("Model completed but no GLB URL found");
+            setCurrentGenerating(prev => prev ? {
+              ...prev,
+              status: "completed",
+              progress: 100
+            } : null);
+            setLoading(false);
+            setError("Model generation completed but GLB file not available. Please check the job status.");
+          }
+        } else if (status.status === "failed") {
+          // Clear progress simulation interval
+          if (modelProgressIntervalRef.current) {
+            clearInterval(modelProgressIntervalRef.current);
+            modelProgressIntervalRef.current = null;
+          }
+          setError("Model generation failed");
+          setCurrentGenerating(prev => prev ? {
+            ...prev,
+            status: "failed",
+            progress: status.progress
+          } : null);
+          setLoading(false);
+        } else if (status.status === "pending" || status.status === "processing") {
+          // Update queue info from status response
+          if (status.queue) {
+            setCurrentGenerating(prev => prev ? {
+              ...prev,
+              queueInfo: status.queue,
+              estimatedTotalSeconds: status.queue?.estimated_total_seconds
+            } : null);
+            
+            // Update progress based on queue info
+            if (status.queue.position > 0) {
+              // Still waiting in queue
+              const waitProgress = Math.min(45, (Date.now() - (currentGenerating.startTime || Date.now())) / (status.queue.estimated_wait_seconds * 1000) * 45);
+              setModelGenerationProgress(waitProgress);
+            } else if (status.queue.position === 0) {
+              // Currently processing - progress between 50-95
+              const processingTime = 130; // ~2m 10s for processing
+              const elapsed = (Date.now() - (currentGenerating.startTime || Date.now())) / 1000 - (status.queue.estimated_wait_seconds || 0);
+              const processingProgress = Math.min(95, 50 + (elapsed / processingTime) * 45);
+              setModelGenerationProgress(Math.max(50, processingProgress));
+            }
+          } else if (status.progress !== undefined) {
+            // Fallback to status progress if no queue info
+            setModelGenerationProgress(status.progress);
+          }
+          // Schedule next poll
+          setTimeout(fetchAndSchedule, 5000);
+        }
+      } catch (err: any) {
+        if (!active) return;
+        console.error("Failed to poll status:", err);
+        setError(err.message || "Failed to fetch status");
+        // Continue polling even on error (with longer delay)
+        setTimeout(fetchAndSchedule, 10000);
+      }
+    };
+
+    // Start polling
+    fetchAndSchedule();
+    
+    return () => {
+      active = false;
+    };
+  }, [currentGenerating, getToken]);
+
   useEffect(() => {
     if (isLoaded && isSignedIn !== undefined) {
       const authState = !!isSignedIn;
@@ -88,162 +209,100 @@ export default function GeneratePage() {
     }
   }, [isLoaded, isSignedIn]);
 
-  // Use cached state if Clerk is still loading and we have a cached value, otherwise use actual state
-  // Only use cached state after component has mounted to avoid hydration mismatch
   const userIsSignedIn = isLoaded ? isSignedIn : (isMounted ? cachedAuthState : null);
 
-  // Fetch history on mount
-  useEffect(() => {
-    const loadHistory = async () => {
-      if (!userIsSignedIn) return;
-      setHistoryLoading(true);
-      try {
-        const tokenGetter = async () => await getToken();
-        const jobs = await fetchHistory(tokenGetter);
-        setHistory(jobs);
-      } catch (err) {
-        console.error("Failed to load history:", err);
-      } finally {
-        setHistoryLoading(false);
-      }
-    };
-    loadHistory();
-  }, [userIsSignedIn, getToken]);
-
-  // Poll for current generating job
-  useEffect(() => {
-    if (!currentGenerating || currentGenerating.status !== "generating") return;
-    
-    const pollStatus = async () => {
-      try {
-        const status = await fetchStatus(currentGenerating.jobId);
-        if (status.status === "completed") {
-          // Clear progress simulation interval
-          if (modelProgressIntervalRef.current) {
-            clearInterval(modelProgressIntervalRef.current);
-            modelProgressIntervalRef.current = null;
-          }
-          setModelGenerationProgress(100);
-          
-          const glbUrl = getGlbUrl(status);
-          setCurrentGenerating(prev => prev ? {
-            ...prev,
-            status: "completed",
-            progress: 100,
-            glbUrl: glbUrl || undefined
-          } : null);
-          // Refresh history
-          const tokenGetter = async () => await getToken();
-          const jobs = await fetchHistory(tokenGetter);
-          setHistory(jobs);
-        } else if (status.status === "failed") {
-          // Clear progress simulation interval
-          if (modelProgressIntervalRef.current) {
-            clearInterval(modelProgressIntervalRef.current);
-            modelProgressIntervalRef.current = null;
-          }
-          setCurrentGenerating(prev => prev ? {
-            ...prev,
-            status: "failed",
-            progress: status.progress
-          } : null);
-        }
-        // Don't update progress from API - use simulated progress instead
-      } catch (err) {
-        console.error("Failed to poll status:", err);
-      }
-    };
-
-    const interval = setInterval(pollStatus, 3000);
-    return () => clearInterval(interval);
-  }, [currentGenerating, getToken]);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file upload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file");
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      setError("File size must be less than 10MB");
-      return;
-    }
-
-    setUploadedFile(file);
-    setImageUrl("");
-    setError(null);
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const removeUploadedFile = () => {
-    setUploadedFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    if (file) {
+      setUploadedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setMode("image");
+      setError(null);
+      
+      // Add uploaded image to variations
+      const reader2 = new FileReader();
+      reader2.onloadend = () => {
+        const newVariation = {
+          id: `upload-${Date.now()}`,
+          imageUrl: reader2.result as string,
+          prompt: "Image Upload",
+          createdAt: new Date(),
+        };
+        setVariations(prev => [newVariation, ...prev]);
+        setSelectedVariationId(newVariation.id);
+      };
+      reader2.readAsDataURL(file);
     }
   };
 
-  // Generate preview image for text-to-3D
+  // Generate preview for text-to-3D
   const handleGeneratePreview = async () => {
     if (!prompt.trim()) {
-      setError("Please enter a prompt");
+      setError("Please enter a description");
       return;
     }
 
     setGeneratingPreview(true);
-    setPreviewProgress(0);
     setError(null);
+    setPreviewProgress(0);
     setPreviewImageUrl(null);
     setPreviewId(null);
+    
+    // Move prompt box to bottom when starting generation
+    setIsPromptAtBottom(true);
 
-    // Check if there are jobs in queue (WAIT or RUN status)
-    const hasQueue = history.some(job => job.status === "WAIT" || job.status === "RUN");
-    const previewDuration = hasQueue ? 40000 : 20000; // 40s if queue, 20s otherwise
-    const updateInterval = 100; // Update every 100ms
-    const progressStep = (100 / previewDuration) * updateInterval;
-
-    // Clear any existing interval
     if (previewProgressIntervalRef.current) {
       clearInterval(previewProgressIntervalRef.current);
     }
 
-    // Start progress simulation
     previewProgressIntervalRef.current = setInterval(() => {
       setPreviewProgress(prev => {
         if (prev >= 95) {
-          // Stop at 95% until actual completion
           if (previewProgressIntervalRef.current) {
             clearInterval(previewProgressIntervalRef.current);
           }
           return 95;
         }
-        return prev + progressStep;
+        return prev + 2;
       });
-    }, updateInterval);
+    }, 200);
 
     try {
-      const tokenGetter = async () => await getToken();
-      const result = await generatePreviewImage(prompt.trim(), tokenGetter);
-      setPreviewImageUrl(result.image_url);
-      setPreviewId(result.preview_id);
-      setPreviewProgress(100);
-    } catch (err: any) {
-      setError(err.message || "Failed to generate preview image");
-      setPreviewProgress(0);
-    } finally {
+      const token = await getToken();
+      if (!token) throw new Error("Authentication required");
+
+      const result = await generatePreviewImage(prompt.trim(), getToken);
+      
       if (previewProgressIntervalRef.current) {
         clearInterval(previewProgressIntervalRef.current);
-        previewProgressIntervalRef.current = null;
       }
+      
+      setPreviewProgress(100);
+      setPreviewImageUrl(result.image_url);
+      setPreviewId(result.preview_id);
       setGeneratingPreview(false);
+      
+      // Add to variations
+      const newVariation = {
+        id: result.preview_id || `preview-${Date.now()}`,
+        imageUrl: result.image_url,
+        prompt: prompt.trim(),
+        createdAt: new Date(),
+      };
+      setVariations(prev => [newVariation, ...prev]);
+      setSelectedVariationId(newVariation.id);
+    } catch (err: any) {
+      if (previewProgressIntervalRef.current) {
+        clearInterval(previewProgressIntervalRef.current);
+      }
+      setError(err.message || "Failed to generate preview");
+      setGeneratingPreview(false);
+      setPreviewProgress(0);
     }
   };
 
@@ -252,7 +311,7 @@ export default function GeneratePage() {
     await handleGeneratePreview();
   };
 
-  // Generate 3D model from preview image
+  // Generate 3D model from preview image (for text-to-3D flow)
   const handleGenerate3D = async () => {
     if (!previewImageUrl) {
       setError("No preview image available");
@@ -262,19 +321,31 @@ export default function GeneratePage() {
     setLoading(true);
     setModelGenerationProgress(0);
     setError(null);
+    setGlbUrl(null);
 
-    // Check if there are jobs in queue
-    const hasQueue = history.some(job => job.status === "WAIT" || job.status === "RUN");
-    const modelDuration = 150000; // 2 minutes 30 seconds = 150 seconds
+    // Fetch queue info to get accurate time estimate
+    let estimatedTotalSeconds = 130; // Default: ~2m 10s
+    let queueInfo: QueueInfo | null = null;
+    try {
+      queueInfo = await fetchQueueInfo();
+      if (queueInfo) {
+        estimatedTotalSeconds = queueInfo.estimated_total_seconds;
+      }
+    } catch {
+      // Use default if queue info fetch fails
+    }
+
+    const startTime = Date.now();
+    const modelDuration = estimatedTotalSeconds * 1000; // Convert to ms
     const updateInterval = 500; // Update every 500ms
-    const progressStep = (100 / modelDuration) * updateInterval;
+    const progressStep = (99 / modelDuration) * updateInterval;
 
     // Clear any existing interval
     if (modelProgressIntervalRef.current) {
       clearInterval(modelProgressIntervalRef.current);
     }
 
-    // Start progress simulation - runs for full 2m 30s
+    // Start progress simulation based on estimated time
     modelProgressIntervalRef.current = setInterval(() => {
       setModelGenerationProgress(prev => {
         if (prev >= 99) {
@@ -290,756 +361,366 @@ export default function GeneratePage() {
     }, updateInterval);
 
     try {
-      const tokenGetter = async () => await getToken();
-      const result = await submitImageTo3D(previewImageUrl, null, tokenGetter);
+      const token = await getToken();
+      if (!token) throw new Error("Authentication required");
+
+      // Use submitImageTo3D with the preview image URL
+      const result = await submitImageTo3D(previewImageUrl, null, getToken);
       
       setCurrentGenerating({
         jobId: result.job_id,
         prompt: prompt,
+        imageUrl: previewImageUrl,
         status: "generating",
-        progress: 0
+        progress: 0,
+        queueInfo: queueInfo || undefined,
+        estimatedTotalSeconds: estimatedTotalSeconds,
+        startTime: startTime
       });
-      
-      // Clear preview after starting 3D generation
+
+      // Clear preview when 3D generation starts so ModelCanvas shows loading state
       setPreviewImageUrl(null);
       setPreviewId(null);
-      setPrompt("");
-      // Keep progress simulation running - don't reset it
+      
+      // Polling is now handled by useEffect hook above
     } catch (err: any) {
-      setError(err.message || "Failed to generate 3D model");
-      setModelGenerationProgress(0);
       if (modelProgressIntervalRef.current) {
         clearInterval(modelProgressIntervalRef.current);
         modelProgressIntervalRef.current = null;
       }
-    } finally {
+      setError(err.message || "Failed to generate 3D model");
       setLoading(false);
-      // Don't clear the interval here - let it run for the full duration
+      setModelGenerationProgress(0);
     }
+    // Don't set loading to false here - keep it true while job is generating
+    // Loading will be set to false when polling detects completion or failure
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!userIsSignedIn) {
-      setError("Please sign in to generate 3D models");
+  // Create 3D model from image (for image-to-3D flow)
+  const handleCreate3DModel = async () => {
+    if (mode === "image" && !uploadedFile) {
+      setError("Please upload an image");
       return;
     }
 
-    if (mode === "text") {
-      // For text mode, generate preview first
-      await handleGeneratePreview();
-    } else {
-      // For image mode, proceed directly to 3D generation
-      setLoading(true);
-      setModelGenerationProgress(0);
-      setError(null);
+    // Move prompt box to bottom
+    setIsPromptAtBottom(true);
+    
+    setLoading(true);
+    setError(null);
+    setModelGenerationProgress(0);
+    setGlbUrl(null);
 
-      // Check if there are jobs in queue
-      const hasQueue = history.some(job => job.status === "WAIT" || job.status === "RUN");
-      const modelDuration = 140000; // 2 minutes 20 seconds = 140 seconds
-      const updateInterval = 500; // Update every 500ms
-      const progressStep = (100 / modelDuration) * updateInterval;
-
-      // Clear any existing interval
-      if (modelProgressIntervalRef.current) {
-        clearInterval(modelProgressIntervalRef.current);
+    // Fetch queue info to get accurate time estimate
+    let estimatedTotalSeconds = 130; // Default: ~2m 10s
+    let queueInfo: QueueInfo | null = null;
+    try {
+      queueInfo = await fetchQueueInfo();
+      if (queueInfo) {
+        estimatedTotalSeconds = queueInfo.estimated_total_seconds;
       }
+    } catch {
+      // Use default if queue info fetch fails
+    }
 
-      // Start progress simulation - runs for full 2m 30s
-      modelProgressIntervalRef.current = setInterval(() => {
-        setModelGenerationProgress(prev => {
-          if (prev >= 99) {
-            // Stop at 99% - wait for actual completion
-            if (modelProgressIntervalRef.current) {
-              clearInterval(modelProgressIntervalRef.current);
-              modelProgressIntervalRef.current = null;
-            }
-            return 99;
-          }
-          return Math.min(prev + progressStep, 99);
-        });
-      }, updateInterval);
+    const startTime = Date.now();
+    const modelDuration = estimatedTotalSeconds * 1000; // Convert to ms
+    const updateInterval = 500; // Update every 500ms
+    const progressStep = (99 / modelDuration) * updateInterval;
 
-      try {
-        let result;
-        const tokenGetter = async () => await getToken();
+    // Clear any existing interval
+    if (modelProgressIntervalRef.current) {
+      clearInterval(modelProgressIntervalRef.current);
+    }
 
-        if (uploadedFile) {
-          setUploading(true);
-          try {
-            result = await submitImageTo3D(null, uploadedFile, tokenGetter);
-          } catch (uploadErr: any) {
-            setError(uploadErr.message || "Failed to submit image");
-            setLoading(false);
-            setUploading(false);
-            setModelGenerationProgress(0);
-            if (modelProgressIntervalRef.current) {
-              clearInterval(modelProgressIntervalRef.current);
-              modelProgressIntervalRef.current = null;
-            }
-            return;
-          } finally {
-            setUploading(false);
-          }
-        } else if (imageUrl.trim()) {
-          result = await submitImageTo3D(imageUrl.trim(), null, tokenGetter);
-        } else {
-          setError("Please upload an image file or enter an image URL");
-          setLoading(false);
-          setModelGenerationProgress(0);
+    // Start progress simulation based on estimated time
+    modelProgressIntervalRef.current = setInterval(() => {
+      setModelGenerationProgress(prev => {
+        if (prev >= 99) {
+          // Stop at 99% - wait for actual completion
           if (modelProgressIntervalRef.current) {
             clearInterval(modelProgressIntervalRef.current);
             modelProgressIntervalRef.current = null;
           }
-          return;
+          return 99;
         }
+        return Math.min(prev + progressStep, 99);
+      });
+    }, updateInterval);
 
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Authentication required");
+
+      if (mode === "image" && uploadedFile) {
+        const result = await submitImageTo3D(null, uploadedFile, getToken);
+        
         setCurrentGenerating({
           jobId: result.job_id,
-          imageUrl: imagePreview || imageUrl,
+          imageUrl: imagePreview || undefined,
           status: "generating",
-          progress: 0
+          progress: 0,
+          queueInfo: queueInfo || undefined,
+          estimatedTotalSeconds: estimatedTotalSeconds,
+          startTime: startTime
         });
         
-        // Clear form
-        setUploadedFile(null);
-        setImagePreview(null);
-        setImageUrl("");
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-        // Keep progress simulation running - don't reset it
-      } catch (err: any) {
-        setError(err.message || "Failed to submit job");
-        setModelGenerationProgress(0);
-        if (modelProgressIntervalRef.current) {
-          clearInterval(modelProgressIntervalRef.current);
-          modelProgressIntervalRef.current = null;
-        }
-      } finally {
-        setLoading(false);
-        // Don't clear the interval here - let it run for the full duration
+        // Polling is now handled by useEffect hook above
+      } else {
+        throw new Error("Invalid mode or missing data");
       }
+    } catch (err: any) {
+      if (modelProgressIntervalRef.current) {
+        clearInterval(modelProgressIntervalRef.current);
+        modelProgressIntervalRef.current = null;
+      }
+      setError(err.message || "Failed to create 3D model");
+      setLoading(false);
+      setModelGenerationProgress(0);
+    }
+    // Don't set loading to false here - keep it true while job is generating
+  };
+
+  // Reset to start new generation
+  const handleReset = () => {
+    setPrompt("");
+    setUploadedFile(null);
+    setImagePreview(null);
+    setPreviewImageUrl(null);
+    setPreviewId(null);
+    setGlbUrl(null);
+    setCurrentGenerating(null);
+    setError(null);
+    setMode("text");
+    setGeneratingPreview(false);
+    setLoading(false);
+    setPreviewProgress(0);
+    setModelGenerationProgress(0);
+    setIsPromptAtBottom(false);
+    if (previewProgressIntervalRef.current) {
+      clearInterval(previewProgressIntervalRef.current);
+      previewProgressIntervalRef.current = null;
+    }
+    if (modelProgressIntervalRef.current) {
+      clearInterval(modelProgressIntervalRef.current);
+      modelProgressIntervalRef.current = null;
     }
   };
 
-  // View a model from history
-  const viewHistoryModel = (job: BackendJob) => {
-    if (job.resultGlbUrl) {
-      // Use direct S3 URL (bucket is public with CORS)
-      setCurrentGenerating({
-        jobId: job.id,
-        prompt: job.prompt || undefined,
-        status: "completed",
-        progress: 100,
-        glbUrl: job.resultGlbUrl
-      });
-      setShowHistoryPopup(false);
-    }
-  };
-
-  // Get status color for history items
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "DONE": return "bg-black";
-      case "RUN": case "WAIT": return "bg-neutral-400";
-      case "FAIL": return "bg-neutral-300";
-      default: return "bg-neutral-300";
-    }
-  };
-
-  // Show loading state while Clerk is checking auth (only show if no cached state and not mounted yet)
-  if (!isLoaded && !isMounted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="w-10 h-10 mx-auto mb-4">
-            <div className="w-10 h-10 spinner"></div>
-          </div>
-          <div className="text-black text-sm">Loading...</div>
-        </div>
-      </div>
-    );
+  if (!isMounted) {
+    return null;
   }
 
-  // Show sign-in prompt if not authenticated (only after Clerk has loaded)
-  if (isLoaded && userIsSignedIn === false) {
+  if (userIsSignedIn === false) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center space-y-8 p-12 max-w-md w-full">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-black flex items-center justify-center">
-            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+      <>
+        <div className="min-h-screen bg-[#050505] flex items-center justify-center p-6">
+          <div className="text-center space-y-6 max-w-md">
+            <div className="w-20 h-20 mx-auto rounded-2xl bg-white flex items-center justify-center">
+              <Sparkles className="w-10 h-10 text-black" />
+            </div>
+            <h1 className="text-3xl font-bold text-white">Sign in to Generate</h1>
+            <p className="text-gray-400 text-lg">
+              Create amazing 3D models from text or images
+            </p>
+            <SignInButton mode="modal">
+              <button className="px-8 py-4 bg-white text-black rounded-xl font-semibold hover:bg-gray-100 transition-all">
+                Sign In to Continue
+              </button>
+            </SignInButton>
           </div>
-          <div>
-            <h2 className="text-3xl font-semibold text-black mb-3">Sign In Required</h2>
-            <p className="text-neutral-500">Create an account or sign in to start generating 3D models.</p>
-          </div>
-          <SignInButton mode="modal">
-            <button className="w-full px-8 py-4 text-lg font-medium bg-black text-white rounded-xl hover:bg-neutral-800 transition-colors">
-              Sign In to Continue
-            </button>
-          </SignInButton>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Mobile History Popup */}
-      {showHistoryPopup && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/10" onClick={() => setShowHistoryPopup(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm bg-white border-l border-neutral-200 overflow-y-auto shadow-2xl animate-in">
-            <div className="p-5 border-b border-neutral-100 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h2 className="text-lg font-semibold text-black">My Generations</h2>
-              <button 
-                onClick={() => setShowHistoryPopup(false)} 
-                aria-label="Close history panel"
-                className="p-2 hover:bg-neutral-100 rounded-xl transition-colors"
-              >
-                <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              {historyLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 spinner"></div>
-                </div>
-              ) : history.length === 0 ? (
-                <div className="text-center py-8 text-neutral-400">
-                  No generations yet
-                </div>
-              ) : (
-                history.slice(0, 10).map((job) => (
-                  <div
-                    key={job.id}
-                    className="bg-neutral-50 rounded-xl p-3 border border-neutral-100 cursor-pointer hover:border-neutral-300 transition-all"
-                    onClick={() => viewHistoryModel(job)}
+    <>
+      <div className="min-h-screen bg-white relative overflow-hidden">
+        {/* Left Sidebar */}
+        <GenerateSidebar 
+          variations={variations}
+          onSelectVariation={(id) => {
+            setSelectedVariationId(id);
+            const variation = variations.find(v => v.id === id);
+            if (variation) {
+              setPreviewImageUrl(variation.imageUrl);
+              if (variation.prompt) {
+                setPrompt(variation.prompt);
+              }
+            }
+          }}
+          selectedVariationId={selectedVariationId}
+        />
+
+        {/* Top Left: Hydrilla Logo */}
+        <div className="absolute top-5 left-[340px] z-50">
+          <a href="/" className="flex items-center">
+            <span className="text-3xl font-bold text-black" style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}>
+              Hydrilla
+            </span>
+          </a>
+        </div>
+
+        {/* Navigation Components */}
+        {(isPromptAtBottom || loading || glbUrl || generatingPreview) && (
+          <GenerateNavbar zoom={zoom} onZoomChange={setZoom} />
+        )}
+        
+        {/* Top Right Controls - Always visible */}
+        <TopRightControls />
+
+        {/* Main Content Area */}
+        <div className="flex flex-col min-h-screen ml-80">
+          {/* Canvas Area - Shows when generating, preview ready, or model ready */}
+          {(isPromptAtBottom || loading || currentGenerating?.glbUrl || generatingPreview || previewImageUrl || currentGenerating) && (
+            <div className="flex-1 relative bg-transparent min-h-[calc(100vh-200px)] flex flex-col pb-[180px]">
+              <div className="flex-1 flex items-center justify-center">
+                <ModelCanvas 
+                  glbUrl={currentGenerating?.glbUrl || null} 
+                  isLoading={loading || (currentGenerating?.status === "generating")} 
+                  progress={loading || (currentGenerating?.status === "generating") ? modelGenerationProgress : (generatingPreview ? previewProgress : 0)}
+                  zoom={zoom}
+                  onZoomChange={setZoom}
+                  previewImageUrl={previewImageUrl && !loading && !currentGenerating ? previewImageUrl : null}
+                  isGeneratingPreview={generatingPreview && !loading && !currentGenerating}
+                />
+              </div>
+              
+              {/* Regenerate and Generate 3D buttons - Show when preview is ready and not loading model */}
+              {previewImageUrl && !loading && !currentGenerating && !generatingPreview && (
+                <div className="flex items-center justify-center gap-4 mt-6 mb-4">
+                  <button
+                    onClick={handleRegeneratePreview}
+                    disabled={generatingPreview}
+                    className="px-6 py-3 bg-white/90 backdrop-blur-sm border border-gray-200/50 text-gray-800 rounded-xl font-medium hover:bg-white hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-sm"
+                    style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
                   >
-                    <div className="flex items-center gap-3">
-                      {job.previewImageUrl ? (
-                        <img src={job.previewImageUrl} alt="" className="w-14 h-14 rounded-lg object-cover" />
-                      ) : (
-                        <div className="w-14 h-14 rounded-lg bg-neutral-200 flex items-center justify-center">
-                          <svg className="w-6 h-6 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                          </svg>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-black truncate font-medium">{job.prompt || "Image to 3D"}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`w-2 h-2 rounded-full ${getStatusColor(job.status)}`}></span>
-                          <span className="text-xs text-neutral-500">{job.status === "DONE" ? "Completed" : job.status}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                    <RotateCcw size={18} />
+                    Regenerate
+                  </button>
+                  <button
+                    onClick={handleGenerate3D}
+                    disabled={loading || generatingPreview}
+                    className="px-6 py-3 bg-gradient-to-br from-gray-900 to-black text-white rounded-xl font-medium hover:from-gray-800 hover:to-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg"
+                    style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+                  >
+                    <Sparkles size={18} />
+                    Generate 3D Model
+                  </button>
+                </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      <div className="flex flex-col lg:flex-row min-h-screen">
-        {/* Left Panel - Generation Options */}
-        <div className="w-full lg:w-[360px] bg-white border-r border-neutral-100 p-6 flex-shrink-0">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-xl font-semibold text-black">New Model</h1>
-            <button 
-              onClick={() => setShowHistoryPopup(true)}
-              aria-label="View generation history"
-              className="lg:hidden p-2.5 bg-neutral-100 rounded-xl hover:bg-neutral-200 transition-colors"
-            >
-              <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Mode Selection Tabs */}
-          <div className="flex gap-1 p-1 bg-neutral-100 rounded-xl mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setMode("text");
-                setImageUrl("");
-                setError(null);
-                setPreviewImageUrl(null);
-                setPreviewId(null);
-                setUploadedFile(null);
-                setImagePreview(null);
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all text-sm ${
-                mode === "text"
-                  ? "bg-white text-black shadow-sm"
-                  : "text-neutral-500 hover:text-black"
-              }`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-              Text to 3D
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode("image");
-                setPrompt("");
-                setError(null);
-                setPreviewImageUrl(null);
-                setPreviewId(null);
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all text-sm ${
-                mode === "image"
-                  ? "bg-white text-black shadow-sm"
-                  : "text-neutral-500 hover:text-black"
-              }`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Image to 3D
-            </button>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={onSubmit} className="space-y-5">
-            {mode === "text" ? (
-              <>
-                {/* Prompt Input */}
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">Prompt</label>
-                  <div className="relative">
-                    <textarea
-                      className="w-full rounded-xl bg-neutral-50 border border-neutral-200 p-4 text-black placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black/10 transition-all resize-none"
-                      rows={3}
-                      value={prompt}
-                      onChange={(e) => {
-                        setPrompt(e.target.value);
-                        if (previewImageUrl) {
-                          setPreviewImageUrl(null);
-                          setPreviewId(null);
-                        }
-                      }}
-                      placeholder="A detailed fantasy sword with glowing runes..."
-                      disabled={generatingPreview}
-                    />
-                    <div className="absolute bottom-3 right-3 text-xs text-neutral-400">
-                      {prompt.length}/800
-                    </div>
-                  </div>
-                </div>
-
-                {/* Preview Image Section */}
-                {(generatingPreview || previewImageUrl) && (
-                  <div className="rounded-xl bg-neutral-50 border border-neutral-200 overflow-hidden">
-                    {generatingPreview && !previewImageUrl ? (
-                      <div className="aspect-square flex flex-col items-center justify-center p-8">
-                        <div className="w-12 h-12 mb-4">
-                          <div className="w-12 h-12 spinner"></div>
-                        </div>
-                        <p className="text-sm text-black font-medium mb-1">Generating preview...</p>
-                        <p className="text-lg font-semibold text-black">{Math.round(previewProgress)}%</p>
-                        <p className="text-xs text-neutral-400 mt-1">
-                          {history.some(job => job.status === "WAIT" || job.status === "RUN") 
-                            ? "~40 seconds (queue)" 
-                            : "~20 seconds"}
-                        </p>
-                      </div>
-                    ) : previewImageUrl ? (
-                      <div>
-                        <div className="relative">
-                          <img 
-                            src={previewImageUrl} 
-                            alt="Preview" 
-                            className={`w-full aspect-square object-cover ${generatingPreview ? 'opacity-30' : ''}`}
-                          />
-                          {generatingPreview && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="w-10 h-10 spinner"></div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-3 bg-white border-t border-neutral-100">
-                          <button
-                            type="button"
-                            onClick={handleRegeneratePreview}
-                            disabled={generatingPreview}
-                            className="w-full px-3 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            Regenerate
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {/* Image Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-black mb-2">Upload Image</label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    id="image-upload"
-                  />
-                  
-                  {!uploadedFile && !imagePreview ? (
-                    <label
-                      htmlFor="image-upload"
-                      className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-200 bg-neutral-50 p-8 cursor-pointer hover:border-neutral-400 transition-all group"
-                    >
-                      <div className="w-12 h-12 rounded-xl bg-white border border-neutral-200 flex items-center justify-center mb-3 group-hover:border-neutral-400 transition-all">
-                        <svg className="w-6 h-6 text-neutral-400 group-hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <span className="text-sm font-medium text-neutral-600">Click to upload</span>
-                      <span className="text-xs text-neutral-400 mt-1">JPEG, PNG, WebP (max 10MB)</span>
-                    </label>
-                  ) : (
-                    <div className="rounded-xl bg-neutral-50 border border-neutral-200 overflow-hidden">
-                      {imagePreview && (
-                        <img src={imagePreview} alt="Preview" className="w-full aspect-square object-cover" />
-                      )}
-                      <div className="p-3 bg-white border-t border-neutral-100 flex items-center justify-between">
-                        <span className="text-sm text-neutral-600 truncate">{uploadedFile?.name}</span>
-                        <button
-                          type="button"
-                          onClick={removeUploadedFile}
-                          aria-label="Remove uploaded file"
-                          className="p-2 text-neutral-400 hover:text-black transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* URL Input */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-neutral-200"></div>
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="px-3 bg-white text-xs text-neutral-400">or enter URL</span>
-                  </div>
-                </div>
-
-                <input
-                  type="url"
-                  className="w-full rounded-xl bg-neutral-50 border border-neutral-200 p-4 text-black placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black/10 transition-all"
-                  value={imageUrl}
-                  onChange={(e) => {
-                    setImageUrl(e.target.value);
-                    if (e.target.value.trim()) {
-                      setUploadedFile(null);
-                      setImagePreview(null);
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = "";
-                      }
+          {/* Centered Prompt Box - Initially centered */}
+          {!isPromptAtBottom && !loading && !currentGenerating && !generatingPreview && (
+            <div className="flex flex-col items-center justify-center min-h-screen mx-auto px-4 w-full max-w-[700px]">
+              <div className="w-full flex flex-col items-center justify-center" style={{ width: '100%', maxWidth: '700px' }}>
+                <PromptBox
+                  value={prompt}
+                  onChange={(value) => {
+                    setPrompt(value);
+                    // Clear preview when prompt changes
+                    if (previewImageUrl) {
+                      setPreviewImageUrl(null);
+                      setPreviewId(null);
                     }
                   }}
-                  placeholder="https://example.com/image.jpg"
+                  onImageUpload={(file) => {
+                    if (!file || file.size === 0) {
+                      // Image removal
+                      setUploadedFile(null);
+                      setImagePreview(null);
+                      setMode("text");
+                    } else {
+                      setUploadedFile(file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setImagePreview(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                      setMode("image");
+                      setError(null);
+                    }
+                  }}
+                  onSubmit={() => {
+                    if (mode === "text") {
+                      // For text mode, always generate preview first
+                      handleGeneratePreview();
+                    } else if (mode === "image") {
+                      // For image mode, generate 3D model directly
+                      handleCreate3DModel();
+                    }
+                  }}
+                  imagePreview={previewImageUrl || imagePreview}
+                  mode={mode === "image" ? (imagePreview ? "reference" : "image") : "text"}
+                  disabled={generatingPreview || loading}
+                  isAtBottom={false}
                 />
-              </>
-            )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="rounded-xl bg-neutral-100 border border-neutral-200 px-4 py-3 text-sm text-black flex items-center gap-2">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {error}
-              </div>
-            )}
-
-            {/* Generate Button */}
-            {mode === "text" ? (
-              <>
-                {!previewImageUrl ? (
-                  <button
-                    type="submit"
-                    disabled={generatingPreview || !prompt.trim()}
-                    className="w-full rounded-xl bg-black text-white px-6 py-4 font-medium hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                  >
-                    {generatingPreview ? (
-                      <>
-                        <div className="w-5 h-5 spinner border-white"></div>
-                        Generating Preview...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Generate Preview
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleGenerate3D}
-                    disabled={loading}
-                    className="w-full rounded-xl bg-black text-white px-6 py-4 font-medium hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <div className="w-5 h-5 spinner border-white"></div>
-                        {modelGenerationProgress > 0 ? (
-                          <>
-                            <span>Generating... {Math.round(modelGenerationProgress)}%</span>
-                            <span className="text-xs opacity-75 ml-2">(~2m 30s)</span>
-                          </>
-                        ) : (
-                          "Starting..."
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
-                        Generate 3D Model
-                      </>
-                    )}
-                  </button>
+                {/* Error Message */}
+                {error && (
+                  <div className="mt-6 w-full max-w-[700px] p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
                 )}
-              </>
-            ) : (
-              <button
-                type="submit"
-                disabled={loading || uploading || (!uploadedFile && !imageUrl.trim())}
-                className="w-full rounded-xl bg-black text-white px-6 py-4 font-medium hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {uploading ? (
-                  <>
-                    <div className="w-5 h-5 spinner border-white"></div>
-                    Uploading...
-                  </>
-                ) : loading ? (
-                  <>
-                    <div className="w-5 h-5 spinner border-white"></div>
-                    {modelGenerationProgress > 0 ? (
-                      <>
-                        <span>Generating... {Math.round(modelGenerationProgress)}%</span>
-                        <span className="text-xs opacity-75 ml-2">(~2m 20s)</span>
-                      </>
-                    ) : (
-                      "Starting..."
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Generate
-                  </>
-                )}
-              </button>
-            )}
-          </form>
-
-          {/* Generation Info */}
-          <div className="mt-6 flex items-center justify-between text-xs text-neutral-400">
-            <span>⏱️ ~1-2 min</span>
-            <span>🎯 20 credits</span>
-          </div>
-        </div>
-
-        {/* Center - 3D Viewer Area */}
-        <div className="flex-1 flex flex-col min-h-[50vh] lg:min-h-0 bg-neutral-50">
-          {currentGenerating ? (
-            <div className="flex-1 flex flex-col">
-              {currentGenerating.status === "generating" ? (
-                <div className="flex-1 flex items-center justify-center p-8">
-                  <div className="w-full max-w-md">
-                    <div className="text-center mb-6">
-                      <h3 className="text-xl font-semibold text-black mb-2">Generating your 3D model...</h3>
-                      <p className="text-3xl font-bold text-black mb-1">{Math.round(modelGenerationProgress)}%</p>
-                      <p className="text-sm text-neutral-400">Estimated time: ~2m 30s</p>
-                    </div>
-                    
-                    {/* Linear Progress Bar */}
-                    <div className="w-full bg-neutral-200 rounded-full h-3 overflow-hidden mb-4">
-                      <div 
-                        className="h-full bg-black rounded-full transition-all duration-500 ease-out"
-                        style={{ width: `${modelGenerationProgress}%` }}
-                      ></div>
-                    </div>
-                    
-                    {/* Progress Steps */}
-                    <div className="flex justify-between text-xs text-neutral-400">
-                      <span>Processing</span>
-                      <span>Rendering</span>
-                      <span>Finalizing</span>
-                    </div>
-                  </div>
-                </div>
-              ) : currentGenerating.status === "completed" && currentGenerating.glbUrl ? (
-                <div className="flex-1 flex flex-col">
-                  {/* 3D Viewer - Full area */}
-                  <div className="flex-1">
-                    <ThreeViewer glbUrl={currentGenerating.glbUrl} />
-                  </div>
-                  {/* Download Button - Below */}
-                  <div className="p-4 bg-white border-t border-neutral-100 flex items-center justify-center gap-4">
-                    <a
-                      href={currentGenerating.glbUrl}
-                      download
-                      className="px-6 py-3 bg-black text-white font-medium rounded-xl hover:bg-neutral-800 transition-colors flex items-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Download GLB
-                    </a>
-                    <a
-                      href={`/viewer?jobId=${currentGenerating.jobId}`}
-                      className="px-6 py-3 bg-neutral-100 text-black font-medium rounded-xl hover:bg-neutral-200 transition-colors"
-                    >
-                      Full View
-                    </a>
-                  </div>
-                </div>
-              ) : currentGenerating.status === "failed" ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-100 flex items-center justify-center">
-                      <svg className="w-8 h-8 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </div>
-                    <p className="text-black font-medium mb-4">Generation failed</p>
-                    <button
-                      onClick={() => setCurrentGenerating(null)}
-                      className="px-6 py-3 bg-black text-white font-medium rounded-xl hover:bg-neutral-800 transition-colors"
-                    >
-                      Try Again
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center max-w-md px-6">
-                <div className="flex justify-center gap-3 mb-8">
-                  <div className="w-12 h-12 rounded-xl bg-black transform rotate-12"></div>
-                  <div className="w-10 h-10 rounded-full bg-neutral-300 -mt-2"></div>
-                  <div className="w-10 h-10 bg-neutral-800 transform rotate-45 mt-3"></div>
-                </div>
-                <h2 className="text-2xl font-semibold text-black mb-3">What will you create?</h2>
-                <p className="text-neutral-500">
-                  Enter a text prompt or upload an image to generate a 3D model.
-                </p>
               </div>
             </div>
           )}
-        </div>
 
-        {/* Right Panel - History (Desktop Only) */}
-        <div className="hidden lg:flex lg:flex-col w-[280px] bg-white border-l border-neutral-100 flex-shrink-0">
-          <div className="p-4 border-b border-neutral-100">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm text-black placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black/10 transition-all"
-            />
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {/* Current Generating */}
-            {currentGenerating && currentGenerating.status === "generating" && (
-              <div className="mb-4 bg-neutral-50 rounded-xl p-3 border border-neutral-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center border border-neutral-200">
-                    <div className="w-5 h-5 spinner"></div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-black truncate font-medium">{currentGenerating.prompt || "Image to 3D"}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex-1 h-1 bg-neutral-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-black rounded-full transition-all duration-500"
-                          style={{ width: `${currentGenerating.progress}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-xs text-neutral-500">{currentGenerating.progress}%</span>
-                    </div>
-                  </div>
+          {/* Prompt Box at Bottom - When generating or model ready */}
+          {(isPromptAtBottom || loading || currentGenerating || generatingPreview || previewImageUrl) && (
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-4 w-full max-w-[700px] mx-auto" style={{ width: '100%', maxWidth: '700px' }}>
+              <PromptBox
+                value={prompt}
+                onChange={(value) => {
+                  setPrompt(value);
+                  // Clear preview when prompt changes
+                  if (previewImageUrl) {
+                    setPreviewImageUrl(null);
+                    setPreviewId(null);
+                  }
+                }}
+                onImageUpload={(file) => {
+                  if (!file || file.size === 0) {
+                    // Image removal
+                    setUploadedFile(null);
+                    setImagePreview(null);
+                    setMode("text");
+                  } else {
+                    setUploadedFile(file);
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setImagePreview(reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                    setMode("image");
+                    setError(null);
+                  }
+                }}
+                onSubmit={() => {
+                  if (mode === "text" && !previewImageUrl) {
+                    handleGeneratePreview();
+                  } else if (mode === "image" || previewImageUrl) {
+                    handleCreate3DModel();
+                  }
+                }}
+                imagePreview={previewImageUrl || imagePreview}
+                mode={mode === "image" ? (imagePreview ? "reference" : "image") : "text"}
+                disabled={generatingPreview || loading}
+                isAtBottom={true}
+              />
+              {/* Error Message */}
+              {error && (
+                <div className="mt-4 w-full max-w-[700px] p-4 bg-red-50 border border-red-200 rounded-xl">
+                  <p className="text-sm text-red-700">{error}</p>
                 </div>
-              </div>
-            )}
-
-            {/* History */}
-            {historyLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 spinner"></div>
-              </div>
-            ) : history.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-neutral-400 text-sm">No generations yet</p>
-              </div>
-            ) : (
-              history.map((job) => (
-                <div
-                  key={job.id}
-                  onClick={() => viewHistoryModel(job)}
-                  className={`bg-neutral-50 rounded-xl border border-neutral-100 overflow-hidden cursor-pointer hover:border-neutral-300 transition-all ${job.resultGlbUrl ? '' : 'opacity-50'}`}
-                >
-                  <div className="flex gap-3 p-3">
-                    {job.previewImageUrl ? (
-                      <img 
-                        src={job.previewImageUrl} 
-                        alt="" 
-                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-lg bg-neutral-200 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-5 h-5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-black truncate font-medium">{job.prompt || "Image to 3D"}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(job.status)}`}></span>
-                        <span className="text-xs text-neutral-400">
-                          {job.status === "DONE" ? "Done" : job.status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

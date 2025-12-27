@@ -4,7 +4,22 @@ import {
   ClerkProvider,
 } from "@clerk/nextjs";
 import { ClientProviders } from "../components/ClientProviders";
-import { Navigation } from "../components/Navigation";
+import { DM_Sans, Playfair_Display } from "next/font/google";
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-dm-sans",
+  display: "swap",
+});
+
+const playfairDisplay = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  style: ["normal", "italic"],
+  variable: "--font-playfair",
+  display: "swap",
+});
 
 export const metadata = {
   title: "Hydrilla 3D Generator",
@@ -21,11 +36,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         },
       }}
     >
-    <html lang="en">
+    <html lang="en" className={`${dmSans.variable} ${playfairDisplay.variable}`}>
         <body className="min-h-screen bg-white">
           <ClientProviders>
-            <Navigation />
-            <main>{children}</main>
+            {children}
           </ClientProviders>
       </body>
     </html>
