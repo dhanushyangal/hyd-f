@@ -5,6 +5,8 @@ import { useAuth, SignInButton } from "@clerk/nextjs";
 import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, updateJobName } from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
+import { Menu } from "../../components/Menu";
+import { HamburgerMenu } from "../../components/HamburgerMenu";
 
 type Mode = "text" | "image";
 
@@ -135,8 +137,8 @@ export default function GeneratePage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [currentGenerating, setCurrentGenerating] = useState<GeneratingModel | null>(null);
   
-  // Mobile history popup
-  const [showHistoryPopup, setShowHistoryPopup] = useState(false);
+  // Menu state
+  const [showMenu, setShowMenu] = useState(false);
   
   // Search state for library
   const [searchQuery, setSearchQuery] = useState("");
@@ -705,7 +707,7 @@ export default function GeneratePage() {
       });
     }
     
-    setShowHistoryPopup(false);
+    setShowMenu(false);
   };
 
   // Get status color for history items
@@ -1128,35 +1130,74 @@ export default function GeneratePage() {
         </div>
       </div>
 
-      {/* Mobile History Popup */}
-      {showHistoryPopup && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/10" onClick={() => setShowHistoryPopup(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm bg-white border-l border-neutral-200 overflow-y-auto shadow-2xl">
-            <div className="p-5 border-b border-neutral-100 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h2 className="text-lg font-semibold text-black">My Generations</h2>
-              <button 
-                onClick={() => setShowHistoryPopup(false)}
-                aria-label="Close history panel"
-                className="p-2 hover:bg-neutral-100 rounded-xl transition-colors"
-              >
-                <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      {/* Chat Interface - Centered */}
+      <div className="flex-1 flex flex-col min-h-0 relative">
+        {/* Mobile Menu Button */}
+        <HamburgerMenu 
+          onClick={() => setShowMenu(true)}
+          className="lg:hidden absolute top-4 left-4 z-10"
+        />
+        
+        {/* Mobile Menu */}
+        <Menu isOpen={showMenu} onClose={() => setShowMenu(false)}>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-black mb-3">My Generations</h3>
+              {/* Search Bar */}
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm text-black placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black/10 transition-all"
+                aria-label="Search generations"
+                title="Search generations"
+              />
             </div>
-            <div className="p-5 space-y-3">
-              {historyLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 spinner"></div>
+            
+            {/* Current Generating */}
+            {currentGenerating && currentGenerating.status === "generating" && (
+              <div className="mb-4 bg-neutral-50 rounded-xl p-3 border border-neutral-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center border border-neutral-200">
+                    <div className="w-5 h-5 spinner"></div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-black truncate font-medium">{currentGenerating.prompt || "Image to 3D"}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 bg-neutral-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-black rounded-full transition-all duration-500"
+                          style={{ width: `${currentGenerating.progress}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-xs text-neutral-500">{currentGenerating.progress}%</span>
+                    </div>
+                  </div>
                 </div>
-              ) : history.length === 0 ? (
-                <div className="text-center py-8 text-neutral-400">No generations yet</div>
-              ) : (
-                history.slice(0, 10).map((job) => (
+              </div>
+            )}
+
+            {/* History */}
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-5 h-5 spinner"></div>
+              </div>
+            ) : filteredHistory.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-neutral-400 text-sm">
+                  {searchQuery ? "No results found" : "No generations yet"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredHistory.slice(0, 10).map((job) => (
                   <div
                     key={job.id}
-                    onClick={() => viewHistoryModel(job)}
+                    onClick={() => {
+                      viewHistoryModel(job);
+                      setShowMenu(false);
+                    }}
                     className="bg-neutral-50 rounded-xl p-3 border border-neutral-100 hover:border-neutral-300 transition-all cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
@@ -1174,9 +1215,9 @@ export default function GeneratePage() {
                       <div className="flex-1 min-w-0">
                         {editingJobId === job.id ? (
                           <div className="space-y-2">
-                            <label htmlFor={`edit-name-mobile-${job.id}`} className="sr-only">Edit job name</label>
+                            <label htmlFor={`edit-name-menu-${job.id}`} className="sr-only">Edit job name</label>
                             <input
-                              id={`edit-name-mobile-${job.id}`}
+                              id={`edit-name-menu-${job.id}`}
                               type="text"
                               value={editingName}
                               onChange={(e) => setEditingName(e.target.value)}
@@ -1217,8 +1258,7 @@ export default function GeneratePage() {
                           <>
                             <div className="flex items-start justify-between gap-2">
                               <p 
-                                className="text-sm text-black truncate font-medium flex-1 cursor-pointer"
-                                onClick={() => viewHistoryModel(job)}
+                                className="text-sm text-black truncate font-medium flex-1"
                                 title={job.name || job.prompt || "Image to 3D"}
                               >
                                 {job.name || job.prompt || "Image to 3D"}
@@ -1247,72 +1287,66 @@ export default function GeneratePage() {
                               </span>
                             </div>
                           </>
-                        )}
-                      </div>
+                )}
+              </div>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-              </div>
+                ))}
             </div>
           )}
-
-      {/* Chat Interface - Centered */}
-      <div className="flex-1 flex flex-col min-h-0 relative">
-        {/* Mobile History Button */}
-        <button 
-          onClick={() => setShowHistoryPopup(true)}
-          aria-label="View generation history"
-          className="lg:hidden absolute top-4 left-4 z-10 p-2.5 bg-white/90 backdrop-blur-sm rounded-xl hover:bg-white transition-colors shadow-lg border border-neutral-200"
-        >
-          <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </button>
-        
-        <div className="flex-1 flex flex-col min-h-0 max-w-4xl mx-auto w-full">
-          {/* Chat Messages Area - Scrollable */}
-          <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
-            {chatMessages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="flex justify-center gap-3 mb-6">
-                    <div className="w-12 h-12 rounded-xl bg-black transform rotate-12"></div>
-                    <div className="w-10 h-10 rounded-full bg-neutral-300 -mt-2"></div>
-                    <div className="w-10 h-10 bg-neutral-800 transform rotate-45 mt-3"></div>
-                  </div>
-                  <h2 className="text-2xl font-semibold text-black mb-3">What will you create?</h2>
-                  <p className="text-neutral-500">
-                    Enter a text prompt or upload an image to generate a 3D model.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {chatMessages.map((message) => renderChatMessage(message))}
-                <div ref={chatEndRef} />
-              </div>
-            )}
           </div>
+        </Menu>
+        
+         <div className="flex-1 flex flex-col min-h-0 max-w-4xl mx-auto w-full">
+           {chatMessages.length === 0 ? (
+             /* Empty State - Centered Prompt Box */
+             <div className="flex-1 flex items-center justify-center px-4 py-8">
+               <div className="w-full max-w-3xl">
+                 <PromptBox
+                   value={mode === "text" ? prompt : ""}
+                   onChange={(value) => {
+                     setPrompt(value);
+                   }}
+                   onImageUpload={handleImageUpload}
+                   onSubmit={handlePromptSubmit}
+                   imagePreview={imagePreview}
+                   mode={mode === "text" ? "text" : "image"}
+                   disabled={loading || generatingPreview || uploading}
+                   placeholder={mode === "text" ? "Describe your scene with visual references..." : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
+                   isAtBottom={false}
+                 />
+               </div>
+             </div>
+           ) : (
+             /* Chat Messages View */
+             <div className="flex-1 flex flex-col h-full">
+               {/* Chat Messages Area - Scrollable */}
+               <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
+                 <div className="space-y-4 w-full">
+                   {chatMessages.map((message) => renderChatMessage(message))}
+                   <div ref={chatEndRef} />
+                 </div>
+               </div>
 
-          {/* Prompt Box - Fixed at bottom */}
-          <div className="w-full bg-white border-t border-neutral-100 p-4 sm:p-6 flex-shrink-0">
-              <PromptBox
-              value={mode === "text" ? prompt : ""}
-              onChange={(value) => {
-                  setPrompt(value);
-              }}
-              onImageUpload={handleImageUpload}
-              onSubmit={handlePromptSubmit}
-              imagePreview={imagePreview}
-              mode={mode === "text" ? "text" : "image"}
-              disabled={loading || generatingPreview || uploading}
-              placeholder={mode === "text" ? "Describe your scene with visual references..." : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
-                isAtBottom={true}
-              />
-                </div>
-            </div>
+               {/* Prompt Box - Fixed at bottom */}
+               <div className="w-full bg-white border-t border-neutral-100 p-4 sm:p-6 flex-shrink-0">
+                 <PromptBox
+                   value={mode === "text" ? prompt : ""}
+                   onChange={(value) => {
+                     setPrompt(value);
+                   }}
+                   onImageUpload={handleImageUpload}
+                   onSubmit={handlePromptSubmit}
+                   imagePreview={imagePreview}
+                   mode={mode === "text" ? "text" : "image"}
+                   disabled={loading || generatingPreview || uploading}
+                   placeholder={mode === "text" ? "Describe your scene with visual references..." : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
+                   isAtBottom={true}
+                 />
+               </div>
+             </div>
+           )}
+         </div>
         </div>
       </div>
   );
