@@ -6,14 +6,14 @@ import Navbar from "./Navbar";
 export function ConditionalNavbar() {
   const pathname = usePathname();
   
-  // Don't show navbar on generate page
-  if (pathname === "/generate") {
+  // Don't show navbar on generate, sign-in, and sign-up pages
+  if (pathname === "/generate" || pathname?.startsWith("/sign-in") || pathname?.startsWith("/sign-up")) {
     return null;
   }
   
   // Use default variant for library page, hero for others
   const variant = pathname === "/library" ? "default" : "hero";
   
-  return <Navbar variant={variant} />;
+  return <Navbar variant={variant} pathname={pathname} />;
 }
 

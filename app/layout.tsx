@@ -5,7 +5,7 @@ import {
 } from "@clerk/nextjs";
 import { ClientProviders } from "../components/ClientProviders";
 import { ConditionalNavbar } from "../components/layout/ConditionalNavbar";
-import { DM_Sans } from "next/font/google";
+import { DM_Sans, Space_Grotesk } from "next/font/google";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -14,9 +14,16 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+
 export const metadata = {
-  title: "Hydrilla 3D Generator",
-  description: "AI 3D generation powered by Tencent Hunyuan 3D Pro",
+  title: "Hydrilla",
+  description: "3D Assets Made Easy",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -29,7 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         },
       }}
     >
-    <html lang="en" className={dmSans.variable}>
+    <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
         <body className="min-h-screen bg-white">
           <ClientProviders>
             <ConditionalNavbar />
