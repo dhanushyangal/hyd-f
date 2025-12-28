@@ -131,21 +131,21 @@ function ViewerContent() {
   const previewUrl = job ? getPreviewImageUrl(job) : null;
 
   return (
-    <div className="space-y-6 px-4 lg:px-8 py-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="space-y-6 px-4 lg:px-8 py-6 max-w-6xl mx-auto pt-20 sm:pt-24">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-black">3D Model Viewer</h1>
-          <p className="text-gray-600 mt-1">
-            Job ID: <code className="bg-gray-100 px-2 py-1 rounded text-black text-sm">{jobId}</code>
+          <h1 className="text-xl sm:text-2xl font-semibold text-black">3D Model Viewer</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">
+            Job ID: <code className="bg-gray-100 px-2 py-1 rounded text-black text-xs sm:text-sm">{jobId}</code>
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {job && <JobStatusBadge status={job.status} />}
           {job && (job.status === "pending" || job.status === "processing") && (
             <button
               onClick={handleCancelClick}
               disabled={cancelling}
-              className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-black transition-colors disabled:opacity-50"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-black transition-colors disabled:opacity-50 text-sm sm:text-base flex-1 sm:flex-initial justify-center"
             >
               {cancelling ? "Cancelling..." : "Cancel Job"}
             </button>
@@ -201,15 +201,15 @@ function ViewerContent() {
               <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
                 <ThreeViewer glbUrl={glbUrl} />
               </div>
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 flex-wrap">
                 <a
                   href={glbUrl}
                   download
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-black text-white font-medium hover:bg-gray-900 transition-all"
+                  className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-black text-white font-medium hover:bg-gray-900 transition-all text-sm sm:text-base"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                   Download GLB
@@ -217,18 +217,18 @@ function ViewerContent() {
                 {previewUrl && (
                   <a
                     href={previewUrl}
-                    className="flex items-center gap-2 px-6 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all"
+                    className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all text-sm sm:text-base"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     View Preview Image
                   </a>
                 )}
                 {job.result && (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
                     Completed in {job.result.elapsed_seconds}s
                   </div>
                 )}
@@ -253,6 +253,7 @@ function ViewerContent() {
             
             {/* Linear Progress Bar */}
             <div className="w-full bg-neutral-200 rounded-full h-3 overflow-hidden mb-4">
+              {/* eslint-disable-next-line @next/next/no-inline-styles */}
               <div 
                 className="h-full bg-black rounded-full transition-all duration-500 ease-out"
                 style={{ width: `${modelGenerationProgress}%` }}

@@ -259,3 +259,8 @@ div[class*="footer"] {
   margin: 0 !important;
   opacity: 0 !important;
 }
+
+/* Font family utility for DM Sans */
+.font-dm-sans {
+  font-family: var(--font-dm-sans), DM Sans, sans-serif;
+}

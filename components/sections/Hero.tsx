@@ -1,60 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
-import { ArrowUp } from "lucide-react";
 
 /**
  * Hero Section Component
- * Features gradient background with promotional badge, main heading, and CTA
+ * Features premium white background with main heading and CTA
  */
 export default function Hero() {
-  const [inputValue, setInputValue] = useState("");
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [placeholderOpacity, setPlaceholderOpacity] = useState(1);
-  
-  const placeholders = [
-    "Create a futuristic robot character",
-    "Generate a vintage car model",
-    "Design a modern furniture piece"
-  ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Fade out
-      setPlaceholderOpacity(0);
-      setTimeout(() => {
-        setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
-        // Fade in
-        setPlaceholderOpacity(1);
-      }, 300); // Half of transition duration
-    }, 3000); // Change every 3 seconds
-
-    return () => clearInterval(interval);
-  }, []); // Empty dependency array - placeholders is constant
 
   return (
-    <section className="relative min-h-screen w-full overflow-hidden">
-      {/* Background GIF - Optimized with loading="lazy" */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url('/bg-hydrilla.gif')",
-          willChange: "transform",
-        }}
-        aria-hidden="true"
-      />
-
-      {/* Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-blue-900/20 via-transparent to-blue-900/40" />
-
+    <section className="relative min-h-screen w-full overflow-hidden bg-white">
       {/* Content Container */}
       <div className="relative z-10 container mx-auto px-4 sm:px-6 md:px-6 pt-20 sm:pt-24 md:pt-32 pb-12 sm:pb-16 md:pb-20 flex flex-col items-center justify-center min-h-screen">
         {/* Main Heading */}
         <h1 className="text-center mb-4 sm:mb-6 md:mb-8 max-w-5xl px-2">
           <span 
-            className="block text-3xl sm:text-4xl md:text-5xl lg:text-7xl xl:text-8xl text-white leading-[1.1] tracking-tight"
-            style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+            className="block text-3xl sm:text-4xl md:text-5xl lg:text-7xl xl:text-8xl text-black leading-[1.1] tracking-tight font-dm-sans"
           >
             Create Production Ready 3D Assets In Minutes
           </span>
@@ -63,14 +25,12 @@ export default function Hero() {
         {/* Subheading */}
         <div className="text-center mb-6 sm:mb-8 md:mb-10 max-w-2xl px-4">
           <p 
-            className="text-sm sm:text-base md:text-lg lg:text-xl text-white/95 leading-relaxed mb-2"
-            style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+            className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-700 leading-relaxed mb-2 font-dm-sans"
           >
             Transform text and images into high quality 3D models instantly.
           </p>
           <p 
-            className="text-xs sm:text-sm md:text-base lg:text-lg text-white/85 leading-relaxed"
-            style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+            className="text-xs sm:text-sm md:text-base lg:text-lg text-gray-600 leading-relaxed font-dm-sans"
           >
             Trusted by artist studios and game developers worldwide.
           </p>
@@ -80,7 +40,7 @@ export default function Hero() {
         <div className="mb-8 sm:mb-12 md:mb-16">
           <Link
             href="/sign-up"
-            className="inline-flex items-center gap-2 sm:gap-3 bg-white text-black px-6 sm:px-8 py-3 sm:py-4 rounded-full text-sm sm:text-base md:text-lg font-bold hover:bg-gray-50 hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.3)] active:scale-95"
+            className="inline-flex items-center gap-2 sm:gap-3 bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full text-sm sm:text-base md:text-lg font-bold hover:bg-gray-900 hover:scale-105 transition-all duration-300 shadow-2xl active:scale-95 font-dm-sans"
           >
             GET STARTED
             <svg
@@ -101,61 +61,7 @@ export default function Hero() {
             </svg>
           </Link>
         </div>
-
-        {/* Search/Question Input */}
-        <div className="w-full max-w-2xl px-4">
-          <div className="relative group">
-            <div className="relative w-full">
-              <label htmlFor="prompt-input" className="sr-only">
-                Enter prompt to create 3D asset
-              </label>
-              <input
-                id="prompt-input"
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                aria-label="Enter prompt to create 3D asset"
-                className="w-full px-4 sm:px-6 md:px-8 py-3 sm:py-4 md:py-5 pr-12 sm:pr-14 md:pr-16 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 text-white text-sm sm:text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-white/40 focus:border-white/40 transition-all duration-300 shadow-lg"
-                style={{
-                  fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif',
-                }}
-              />
-              {!inputValue && (
-                <div 
-                  className="absolute left-4 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 pointer-events-none text-white/60 text-xs sm:text-sm md:text-base lg:text-lg truncate max-w-[calc(100%-4rem)] sm:max-w-[calc(100%-5rem)] md:max-w-none"
-                  style={{
-                    fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif',
-                    opacity: placeholderOpacity,
-                    transition: 'opacity 0.3s ease',
-                  }}
-                >
-                  {placeholders[placeholderIndex]}
-                </div>
-              )}
-            </div>
-            <button
-              className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-md hover:bg-white/30 active:bg-white/25 flex items-center justify-center transition-all duration-300 group-hover:scale-110 active:scale-95"
-              aria-label="Submit question"
-              type="button"
-            >
-              <ArrowUp className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Text */}
-        <div className="mt-8 sm:mt-12 md:mt-16 px-4">
-          <p 
-            className="text-white/80 text-xs sm:text-sm md:text-base font-medium"
-            style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-          >
-            Describe anything. Generate 3D assets.
-          </p>
-        </div>
       </div>
-
-      {/* Decorative Elements */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
     </section>
   );
 }

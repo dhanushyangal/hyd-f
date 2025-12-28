@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import Link from "next/link";
 
 interface MenuProps {
   isOpen: boolean;
@@ -34,12 +35,13 @@ export function Menu({ isOpen, onClose, children }: MenuProps) {
           >
             {/* Header */}
             <div className="p-4 border-b border-neutral-100 flex items-center justify-between sticky top-0 bg-white z-10">
-              <span 
-                className="text-xl font-bold text-black tracking-tight"
-                style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-              >
-                Hydrilla
-              </span>
+              <Link href="/" onClick={onClose}>
+                <span 
+                  className="text-xl font-bold text-black tracking-tight font-dm-sans"
+                >
+                  Hydrilla
+                </span>
+              </Link>
               <button
                 onClick={onClose}
                 aria-label="Close menu"

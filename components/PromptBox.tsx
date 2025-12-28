@@ -161,6 +161,7 @@ export function PromptBox({
           <div className="absolute inset-0 bg-gradient-to-b from-white/25 via-white/5 to-transparent pointer-events-none rounded-[24px]" />
           {/* Subtle border highlight for premium look */}
           <div className="absolute inset-0 rounded-[24px] border border-white/30 pointer-events-none" />
+          {/* eslint-disable-next-line @next/next/no-inline-styles */}
           <textarea 
             ref={textareaRef}
             value={value}
@@ -168,11 +169,10 @@ export function PromptBox({
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={placeholder}
-            className="w-full bg-transparent border-0 outline-none text-[18px] font-medium text-gray-900 placeholder:text-gray-400 resize-none min-h-[28px] leading-tight tracking-tight p-0 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-0 focus:border-0 focus:outline-none focus:shadow-none"
+            className="w-full bg-transparent border-0 outline-none text-[18px] font-medium text-gray-900 placeholder:text-gray-400 resize-none min-h-[28px] leading-tight tracking-tight p-0 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-0 focus:border-0 focus:outline-none focus:shadow-none font-dm-sans"
             style={{
               whiteSpace: "pre-wrap",
               overflowWrap: "break-word",
-              fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif',
             }}
             autoFocus={false}
           />
@@ -195,9 +195,9 @@ export function PromptBox({
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/60 backdrop-blur-md hover:bg-white/80 transition-all duration-300 border border-gray-300/40 shadow-sm hover:shadow-md group"
-                  style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/60 backdrop-blur-md hover:bg-white/80 transition-all duration-300 border border-gray-300/40 shadow-sm hover:shadow-md group font-dm-sans"
                 >
+                  {/* eslint-disable-next-line @next/next/no-inline-styles */}
                   <span className="text-[11px] font-semibold text-gray-800" style={{ 
                     textShadow: '0 1px 2px rgba(255, 255, 255, 0.9)',
                   }}>
@@ -225,14 +225,13 @@ export function PromptBox({
                             }
                           }}
                           disabled={!model.available}
-                          className={`w-full px-4 py-2.5 text-left text-sm transition-all duration-200 ${
+                          className={`w-full px-4 py-2.5 text-left text-sm transition-all duration-200 font-dm-sans ${
                             model.available
                               ? 'hover:bg-gray-50 text-gray-900'
                               : 'text-gray-400 cursor-not-allowed opacity-60'
                           } ${
                             selectedModel === model.name ? 'bg-gray-50 font-semibold' : ''
                           }`}
-                          style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
                         >
                           <div className="flex items-center justify-between">
                             <span>{model.name}</span>
@@ -260,13 +259,12 @@ export function PromptBox({
                 transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
                 onClick={onSubmit}
                 disabled={disabled || !canSubmit}
-                className={`px-4 py-2 rounded-full text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed ${
+                className={`px-4 py-2 rounded-full text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed font-dm-sans ${
                   canSubmit 
                     ? 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 text-slate-800 shadow-md border border-slate-300/60' 
                     : 'bg-slate-100/50 text-slate-400 border border-slate-200/40'
                 }`}
                 style={{ 
-                  fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif',
                   textShadow: canSubmit ? '0 1px 2px rgba(255, 255, 255, 0.8)' : 'none',
                 }}
                 title="Create"

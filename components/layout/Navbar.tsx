@@ -42,71 +42,73 @@ export default function Navbar({ variant = "hero" }: NavbarProps) {
     };
   }, [mobileMenuOpen]);
 
-  // Hero variant: white/transparent glass with white text
-  // Default variant: solid grey/white background with black text for white pages
+  // Premium liquid glass effect for all pages
   const containerClasses = isHero
-    ? "bg-white/8 backdrop-blur-3xl border border-white/25"
-    : "bg-white border border-gray-200 shadow-md";
+    ? "bg-white/70 backdrop-blur-2xl border border-white/40 shadow-2xl"
+    : "bg-white/80 backdrop-blur-xl border border-gray-200/60 shadow-lg";
   
-  const textColor = isHero ? "text-white" : "text-black";
+  const textColor = "text-black";
   const logoClasses = `text-2xl font-bold ${textColor} tracking-tight`;
   
   const generateButtonClasses = isHero
-    ? "px-4 py-2 rounded-lg bg-white/15 backdrop-blur-md border border-white/30 text-xs font-semibold text-white uppercase tracking-wider hover:bg-white/20 transition-all shadow-sm"
+    ? "px-4 py-2 rounded-lg bg-gray-100 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-200 transition-all shadow-sm"
     : "px-4 py-2 rounded-lg bg-gray-100 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-200 transition-all";
   
   const signInButtonClasses = isHero
-    ? "text-xs font-semibold text-white uppercase tracking-wider hover:text-white/80 transition-colors px-4 py-2"
+    ? "text-xs font-semibold text-black uppercase tracking-wider hover:text-black/70 transition-colors px-4 py-2"
     : "text-xs font-semibold text-black uppercase tracking-wider hover:text-black/70 transition-colors px-4 py-2";
   
   const signUpButtonClasses = isHero
-    ? "px-5 py-2.5 text-xs font-semibold text-black uppercase tracking-wider bg-white/25 backdrop-blur-md border border-white/40 rounded-lg hover:bg-white/35 transition-all duration-300 flex items-center gap-1.5 shadow-lg hover:shadow-xl"
+    ? "px-5 py-2.5 text-xs font-semibold text-white uppercase tracking-wider bg-black backdrop-blur-md border border-black rounded-lg hover:bg-gray-900 transition-all duration-300 flex items-center gap-1.5 shadow-lg hover:shadow-xl"
     : "px-5 py-2.5 text-xs font-semibold text-white uppercase tracking-wider bg-black backdrop-blur-md border border-black rounded-lg hover:bg-gray-900 transition-all duration-300 flex items-center gap-1.5 shadow-lg hover:shadow-xl";
   
-  const userButtonBorder = isHero ? "border-white/40" : "border-gray-300";
+  const userButtonBorder = "border-gray-300";
   
   const mobileMenuClasses = isHero
-    ? "md:hidden border-t border-white/20 bg-white/10 backdrop-blur-xl"
+    ? "md:hidden border-t border-gray-200 bg-white backdrop-blur-xl"
     : "md:hidden border-t border-gray-200 bg-white";
   
   const mobileMenuItemClasses = isHero
-    ? "block px-4 py-2 rounded-lg bg-white/15 text-xs font-semibold text-white uppercase tracking-wider hover:bg-white/20 transition-all"
+    ? "block px-4 py-2 rounded-lg bg-gray-50 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-100 transition-all"
     : "block px-4 py-2 rounded-lg bg-gray-50 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-100 transition-all";
   
   const mobileSignInClasses = isHero
-    ? "w-full text-left text-xs font-semibold text-white uppercase tracking-wider hover:text-white/80 transition-colors"
+    ? "w-full text-left text-xs font-semibold text-black uppercase tracking-wider hover:text-black/70 transition-colors"
     : "w-full text-left text-xs font-semibold text-black uppercase tracking-wider hover:text-black/70 transition-colors";
   
   const mobileSignUpClasses = isHero
-    ? "w-full px-4 py-2 text-xs font-semibold text-white uppercase tracking-wider bg-white/25 backdrop-blur-md border border-white/40 rounded-lg hover:bg-white/35 transition-all"
+    ? "w-full px-4 py-2 text-xs font-semibold text-white uppercase tracking-wider bg-black backdrop-blur-md border border-black rounded-lg hover:bg-gray-900 transition-all"
     : "w-full px-4 py-2 text-xs font-semibold text-white uppercase tracking-wider bg-black backdrop-blur-md border border-black rounded-lg hover:bg-gray-900 transition-all";
   
-  const mobileMenuDivider = isHero ? "border-white/20" : "border-gray-200";
+  const mobileMenuDivider = "border-gray-200";
   
   const hamburgerClasses = isHero
-    ? "md:hidden p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+    ? "md:hidden p-1.5 hover:bg-gray-200/60 rounded-lg transition-colors"
     : "md:hidden p-1.5 hover:bg-gray-200/60 rounded-lg transition-colors";
   
-  const hamburgerIconClasses = isHero ? "w-5 h-5 text-white" : "w-5 h-5 text-black";
+  const hamburgerIconClasses = "w-5 h-5 text-black";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 md:pt-4 px-4 md:px-0">
-      {/* Glassmorphic Navbar */}
-      <div ref={menuRef} className={`${containerClasses} rounded-xl md:rounded-2xl shadow-2xl relative overflow-hidden w-full max-w-7xl`}>
-        {/* Glass inner glow effects */}
-        {isHero ? (
-          <>
-            <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-transparent pointer-events-none rounded-2xl" />
-            <div className="absolute inset-0 bg-gradient-to-t from-white/8 to-transparent pointer-events-none rounded-2xl" />
-          </>
-        ) : null}
+      {/* Liquid Glass Navbar */}
+      <div ref={menuRef} className={`${containerClasses} rounded-xl md:rounded-2xl relative overflow-hidden w-full max-w-7xl before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-br before:from-white/50 before:via-transparent before:to-transparent before:pointer-events-none`}>
+        {/* Liquid glass effects - multiple layers for depth */}
+        <div className="absolute inset-0 pointer-events-none rounded-2xl overflow-hidden">
+          {/* Base glass layer */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-white/20 to-transparent" />
+          {/* Top highlight */}
+          <div className="absolute inset-0 bg-gradient-to-t from-white/30 via-transparent to-white/10" />
+          {/* Side highlights for 3D effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-white/20 via-transparent to-white/20" />
+          {/* Subtle shimmer effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-white/15" />
+        </div>
         
         <div className="flex items-center justify-between px-4 md:px-8 py-2.5 gap-4 md:gap-10 relative z-10">
           {/* Logo - Left Side */}
           <Link href="/" className="flex items-center flex-shrink-0">
             <span 
-              className={logoClasses}
-              style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+              className={`${logoClasses} font-dm-sans`}
             >
               Hydrilla
             </span>
@@ -117,8 +119,7 @@ export default function Navbar({ variant = "hero" }: NavbarProps) {
             <SignedIn>
               <Link
                 href="/generate"
-                className={`hidden md:flex ${generateButtonClasses}`}
-                style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+                className={`hidden md:flex ${generateButtonClasses} font-dm-sans`}
               >
                 Generate
               </Link>
@@ -126,7 +127,7 @@ export default function Navbar({ variant = "hero" }: NavbarProps) {
                 afterSignOutUrl="/"
                 appearance={{
                   elements: {
-                    avatarBox: `w-9 h-9 border-2 ${userButtonBorder}`,
+                    avatarBox: `w-8 h-8 md:w-9 md:h-9 border-2 ${userButtonBorder}`,
                   },
                 }}
               />
@@ -136,16 +137,14 @@ export default function Navbar({ variant = "hero" }: NavbarProps) {
               <div className="hidden md:flex items-center gap-2 md:gap-4">
                 <SignInButton mode="modal">
                   <button 
-                    className={signInButtonClasses}
-                    style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+                    className={`${signInButtonClasses} font-dm-sans`}
                   >
                     Log In
                   </button>
                 </SignInButton>
                 <SignUpButton mode="modal">
                   <button 
-                    className={signUpButtonClasses}
-                    style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+                    className={`${signUpButtonClasses} font-dm-sans`}
                   >
                     Get Started
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -182,9 +181,8 @@ export default function Navbar({ variant = "hero" }: NavbarProps) {
               <SignedIn>
                 <Link
                   href="/generate"
-                  className={mobileMenuItemClasses}
+                  className={`${mobileMenuItemClasses} font-dm-sans`}
                   onClick={() => setMobileMenuOpen(false)}
-                  style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
                 >
                   Generate
                 </Link>
@@ -193,18 +191,16 @@ export default function Navbar({ variant = "hero" }: NavbarProps) {
                 <div className={`pt-2 space-y-2 border-t ${mobileMenuDivider}`}>
                   <SignInButton mode="modal">
                     <button 
-                      className={mobileSignInClasses}
+                      className={`${mobileSignInClasses} font-dm-sans`}
                       onClick={() => setMobileMenuOpen(false)}
-                      style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
                     >
                       Log In
                     </button>
                   </SignInButton>
                   <SignUpButton mode="modal">
                     <button 
-                      className={mobileSignUpClasses}
+                      className={`${mobileSignUpClasses} font-dm-sans`}
                       onClick={() => setMobileMenuOpen(false)}
-                      style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
                     >
                       Get Started
                     </button>

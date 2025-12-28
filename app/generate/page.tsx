@@ -273,7 +273,7 @@ export default function GeneratePage() {
     return () => clearInterval(interval);
   }, [currentGenerating, getToken]);
 
-  // Handle image upload from PromptBox - Auto-show in chat
+  // Handle image upload from PromptBox - Store locally, don't show in chat yet
   const handleImageUpload = (file: File) => {
     if (!file || file.size === 0) {
       setUploadedFile(null);
@@ -302,23 +302,17 @@ export default function GeneratePage() {
       return;
     }
 
-      setUploadedFile(file);
+    setUploadedFile(file);
     setImageUrl("");
     setMode("image");
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
       const preview = reader.result as string;
       setImagePreview(preview);
-      
-      // Add image preview message to chat with auto-generate option
-      addChatMessage({
-        type: "preview",
-        imageUrl: preview,
-        canGenerate3D: true,
-      });
-      };
-      reader.readAsDataURL(file);
+      // Don't add to chat yet - wait for Create button click
+    };
+    reader.readAsDataURL(file);
   };
   
   // Handle prompt box submit - Auto-generate preview for text
@@ -341,14 +335,37 @@ export default function GeneratePage() {
       // Auto-generate preview
       await handleGeneratePreview();
     } else if (mode === "image" && imagePreview) {
-      // Image mode - proceed directly to 3D generation
-      await handleImageTo3D();
+      // Store image preview and file before clearing
+      const previewToAdd = imagePreview;
+      const fileToUse = uploadedFile;
+      
+      // Clear image from PromptBox immediately so it disappears
+      setUploadedFile(null);
+      setImagePreview(null);
+      setImageUrl("");
+      setMode("text");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      
+      // Add image to chat, then proceed to 3D generation
+      addChatMessage({
+        type: "preview",
+        imageUrl: previewToAdd,
+        canGenerate3D: false, // Don't show generate button since we're auto-generating
+      });
+      
+      // Proceed directly to 3D generation (use stored file and preview)
+      await handleImageTo3D(previewToAdd, fileToUse);
     }
   };
   
-  // Handle image to 3D generation
-  const handleImageTo3D = async () => {
-    if (!uploadedFile && !imageUrl.trim()) return;
+  // Handle image to 3D generation with optional stored preview
+  const handleImageTo3D = async (storedPreview?: string, storedFile?: File | null) => {
+    const fileToUse = storedFile !== undefined ? storedFile : uploadedFile;
+    const previewToUse = storedPreview || imagePreview;
+    
+    if (!fileToUse && !imageUrl.trim()) return;
     
     setLoading(true);
     setModelGenerationProgress(0);
@@ -404,10 +421,10 @@ export default function GeneratePage() {
       let result;
       const tokenGetter = async () => await getToken();
 
-      if (uploadedFile) {
+      if (fileToUse) {
         setUploading(true);
         try {
-          result = await submitImageTo3D(null, uploadedFile, tokenGetter);
+          result = await submitImageTo3D(null, fileToUse, tokenGetter);
         } finally {
           setUploading(false);
         }
@@ -426,7 +443,7 @@ export default function GeneratePage() {
 
       setCurrentGenerating({
         jobId: result.job_id,
-        imageUrl: imagePreview || imageUrl,
+        imageUrl: previewToUse || imageUrl,
         status: "generating",
         progress: 0,
         queueInfo: queueInfo || undefined,
@@ -955,6 +972,7 @@ export default function GeneratePage() {
               </div>
               {message.progress !== undefined && (
                 <div className="w-full bg-neutral-200 rounded-full h-2 overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-inline-styles */}
                   <div 
                     className="h-full bg-black rounded-full transition-all duration-300"
                     style={{ width: `${message.progress}%` }}
@@ -989,8 +1007,7 @@ export default function GeneratePage() {
           {/* Hydrilla Logo in Sidebar */}
           <Link href="/" className="flex items-center mb-4">
             <span 
-              className="text-2xl font-bold text-black tracking-tight"
-              style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+              className="text-2xl font-bold text-black tracking-tight font-dm-sans"
             >
               Hydrilla
             </span>
@@ -1018,6 +1035,7 @@ export default function GeneratePage() {
                   <p className="text-xs text-black truncate font-medium">{currentGenerating.prompt || "Image to 3D"}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <div className="flex-1 h-1 bg-neutral-200 rounded-full overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-inline-styles */}
                       <div 
                         className="h-full bg-black rounded-full transition-all duration-500"
                         style={{ width: `${currentGenerating.progress}%` }}
@@ -1148,9 +1166,15 @@ export default function GeneratePage() {
       {/* Chat Interface - Centered */}
       <div className="flex-1 flex flex-col min-h-0 relative">
         {/* Top Bar - Logo and Profile */}
-        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-transparent pointer-events-none">
-          {/* Left: Hydrilla Logo (shown when sidebar closed) or Toggle Button */}
-          <div className="flex items-center gap-3 pointer-events-auto">
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-white/95 backdrop-blur-sm border-b border-neutral-100 lg:bg-transparent lg:border-b-0 pointer-events-none">
+          {/* Left: Hamburger Menu, Logo, and Toggle Button */}
+          <div className="flex items-center gap-2 sm:gap-3 pointer-events-auto">
+            {/* Mobile Menu Button */}
+            <HamburgerMenu 
+              onClick={() => setShowMenu(true)}
+              className="lg:hidden"
+            />
+            
             {/* Sidebar Toggle Button (Desktop) */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1180,42 +1204,34 @@ export default function GeneratePage() {
               )}
             </button>
             
-            {/* Hydrilla Logo (shown when sidebar closed on desktop) */}
-            {!sidebarOpen && (
-              <Link href="/" className="hidden lg:flex items-center">
-                <span 
-                  className="text-2xl font-bold text-black tracking-tight"
-                  style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-                >
-                  Hydrilla
-                </span>
-              </Link>
-            )}
-            
-            {/* Mobile Menu Button */}
-            <HamburgerMenu 
-              onClick={() => setShowMenu(true)}
-              className="lg:hidden"
-            />
+            {/* Hydrilla Logo (shown on mobile and when sidebar closed on desktop) */}
+            <Link href="/" className={`flex items-center ${!sidebarOpen ? '' : 'lg:hidden'}`}>
+              <span 
+                className="text-xl sm:text-2xl font-bold text-black tracking-tight font-dm-sans"
+              >
+                Hydrilla
+              </span>
+            </Link>
           </div>
           
           {/* Right: Library Button and Profile Icon */}
-          <div className="pointer-events-auto flex items-center gap-3">
+          <div className="pointer-events-auto flex items-center gap-2 sm:gap-3">
             <SignedIn>
               <Link
                 href="/library"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-100 text-black text-sm font-medium hover:bg-neutral-200 transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-neutral-100 text-black text-xs sm:text-sm font-medium hover:bg-neutral-200 transition-colors"
+                title="Library"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                Library
+                <span className="hidden sm:inline">Library</span>
               </Link>
               <UserButton
                 afterSignOutUrl="/"
                 appearance={{
                   elements: {
-                    avatarBox: "w-9 h-9 border-2 border-neutral-200",
+                    avatarBox: "w-8 h-8 sm:w-9 sm:h-9 border-2 border-neutral-200",
                   },
                 }}
               />
@@ -1234,15 +1250,6 @@ export default function GeneratePage() {
         <Menu isOpen={showMenu} onClose={() => setShowMenu(false)}>
           <div className="space-y-4">
             <div>
-              {/* Hydrilla Logo in Mobile Menu */}
-              <Link href="/" className="flex items-center mb-4" onClick={() => setShowMenu(false)}>
-                <span 
-                  className="text-2xl font-bold text-black tracking-tight"
-                  style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-                >
-                  Hydrilla
-                </span>
-              </Link>
               <h3 className="text-sm font-semibold text-black mb-3">My Generations</h3>
               {/* Search Bar */}
               <input
@@ -1267,6 +1274,7 @@ export default function GeneratePage() {
                     <p className="text-xs text-black truncate font-medium">{currentGenerating.prompt || "Image to 3D"}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <div className="flex-1 h-1 bg-neutral-200 rounded-full overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-inline-styles */}
                         <div 
                           className="h-full bg-black rounded-full transition-all duration-500"
                           style={{ width: `${currentGenerating.progress}%` }}
@@ -1398,7 +1406,7 @@ export default function GeneratePage() {
           </div>
         </Menu>
         
-         <div className="flex-1 flex flex-col min-h-0 max-w-4xl mx-auto w-full pt-16">
+         <div className="flex-1 flex flex-col min-h-0 max-w-4xl mx-auto w-full pt-14 sm:pt-16">
            {chatMessages.length === 0 ? (
              /* Empty State - Centered Prompt Box */
              <div className="flex-1 flex items-center justify-center px-4 py-8">

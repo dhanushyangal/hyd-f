@@ -162,31 +162,33 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="space-y-8 px-4 lg:px-8 py-6 max-w-7xl mx-auto pt-20 sm:pt-24">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="space-y-6 sm:space-y-8 px-4 lg:px-8 py-4 sm:py-6 max-w-7xl mx-auto pt-20 sm:pt-24">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div>
-          <h1 className="text-3xl font-bold text-black">My Library</h1>
-          <p className="text-gray-600 mt-2">Your generated 3D models and creations.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-black">My Library</h1>
+          <p className="text-gray-600 mt-1 sm:mt-2 text-sm sm:text-base">Your generated 3D models and creations.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={() => loadJobs(false)}
             disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all disabled:opacity-50 text-sm sm:text-base"
           >
-            <svg className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            {refreshing ? "Refreshing..." : "Refresh"}
+            <span className="hidden sm:inline">{refreshing ? "Refreshing..." : "Refresh"}</span>
+            <span className="sm:hidden">{refreshing ? "..." : ""}</span>
           </button>
           <a
             href="/generate"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white font-medium hover:bg-gray-900 transition-all"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-black text-white font-medium hover:bg-gray-900 transition-all text-sm sm:text-base flex-1 sm:flex-initial justify-center"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            New Generation
+            <span className="hidden sm:inline">New Generation</span>
+            <span className="sm:hidden">New</span>
           </a>
         </div>
       </div>
@@ -287,6 +289,8 @@ export default function LibraryPage() {
                     <a
                       href={job.resultGlbUrl}
                       download
+                      title="Download GLB file"
+                      aria-label="Download GLB file"
                       className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-gray-100 text-sm text-gray-700 hover:bg-gray-200 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
