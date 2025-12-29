@@ -387,15 +387,21 @@ export async function fetchQueueInfo(): Promise<QueueInfo & {
 }
 
 /**
- * Get GLB URL from job result (direct S3 access - bucket is public)
+ * Get GLB URL from job result (use proxy endpoint to avoid CORS issues)
  */
 export function getGlbUrl(job: Job): string | null {
   if (!job.result) return null;
   const url = job.result.mesh_url || job.result.output || null;
   if (!url) return null;
 
-  // S3 bucket is now public with CORS, so use direct URLs
-  // No need for proxy anymore
+  // Use proxy endpoint to avoid CORS issues
+  // Extract jobId from the URL or use job.job_id
+  const jobId = job.job_id;
+  if (jobId) {
+    return `${backendBase}/api/3d/glb/${jobId}`;
+  }
+  
+  // Fallback to direct URL if no jobId
   return url;
 }
 
