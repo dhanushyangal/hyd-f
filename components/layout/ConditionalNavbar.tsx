@@ -11,8 +11,8 @@ export function ConditionalNavbar() {
     return null;
   }
   
-  // Use default variant for library page, hero for others
-  const variant = pathname === "/library" ? "default" : "hero";
+  // Use default variant for library and viewer pages (black text), hero for others
+  const variant = pathname === "/library" || pathname === "/viewer" ? "default" : "hero";
   
   return <Navbar variant={variant} pathname={pathname} />;
 }

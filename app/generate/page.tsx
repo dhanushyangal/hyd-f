@@ -160,7 +160,7 @@ export default function GeneratePage() {
 
   const userIsSignedIn = isLoaded ? isSignedIn : (isMounted ? cachedAuthState : null);
 
-  // Fetch history on mount
+  // Fetch history on mount and restore generating jobs
   useEffect(() => {
     const loadHistory = async () => {
       if (!userIsSignedIn) return;
@@ -169,6 +169,59 @@ export default function GeneratePage() {
         const tokenGetter = async () => await getToken();
         const jobs = await fetchHistory(tokenGetter);
         setHistory(jobs);
+        
+        // Check if there's a generating job that should be restored
+        const generatingJob = jobs.find(job => job.status === "WAIT" || job.status === "RUN");
+        if (generatingJob) {
+          // Only restore if we don't already have this job as currentGenerating
+          const shouldRestore = !currentGenerating || currentGenerating.jobId !== generatingJob.id;
+          if (shouldRestore) {
+          // Restore generating state with correct start time
+          const createdAt = generatingJob.createdAt ? new Date(generatingJob.createdAt).getTime() : Date.now();
+          
+          // Fetch current status to get queue info
+          try {
+            const status = await fetchStatus(generatingJob.id);
+            const estimatedTotalSeconds = status.queue?.estimated_total_seconds || 130;
+            
+            // Calculate initial progress based on elapsed time
+            let initialProgress = 0;
+            if (status.created_at) {
+              const now = Date.now();
+              const elapsed = now - status.created_at;
+              const elapsedSeconds = elapsed / 1000;
+              
+              if (status.queue) {
+                if (status.queue.position > 0) {
+                  const waitProgress = Math.min(45, (elapsedSeconds / status.queue.estimated_wait_seconds) * 45);
+                  initialProgress = waitProgress;
+                } else {
+                  const processingElapsed = Math.max(0, elapsedSeconds - (status.queue.estimated_wait_seconds || 0));
+                  const processingProgress = 50 + (processingElapsed / (estimatedTotalSeconds - (status.queue.estimated_wait_seconds || 0))) * 45;
+                  initialProgress = Math.min(95, processingProgress);
+                }
+              } else {
+                initialProgress = Math.min(95, (elapsedSeconds / estimatedTotalSeconds) * 100);
+              }
+            }
+            
+            setModelGenerationProgress(Math.max(0, Math.min(95, initialProgress)));
+            
+            setCurrentGenerating({
+              jobId: generatingJob.id,
+              prompt: generatingJob.prompt || undefined,
+              imageUrl: generatingJob.previewImageUrl || undefined,
+              status: "generating",
+              progress: initialProgress,
+              queueInfo: status.queue,
+              estimatedTotalSeconds: estimatedTotalSeconds,
+              startTime: status.created_at || createdAt,
+            });
+          } catch (err) {
+            console.error("Failed to fetch status for restoring job:", err);
+          }
+          }
+        }
       } catch (err) {
         console.error("Failed to load history:", err);
       } finally {
@@ -176,6 +229,7 @@ export default function GeneratePage() {
       }
     };
     loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userIsSignedIn, getToken]);
 
   // Poll for current generating job
@@ -187,21 +241,40 @@ export default function GeneratePage() {
         const status = await fetchStatus(currentGenerating.jobId);
         
         if (status.queue) {
+          const estimatedTotalSeconds = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 130;
+          
           setCurrentGenerating(prev => prev ? {
             ...prev,
             queueInfo: status.queue,
-            estimatedTotalSeconds: status.queue?.estimated_total_seconds
+            estimatedTotalSeconds: estimatedTotalSeconds
           } : null);
           
+          // Use actual created_at from status if available, otherwise use stored startTime
+          const startTime = status.created_at || currentGenerating.startTime || Date.now();
+          const now = Date.now();
+          const elapsed = now - startTime;
+          const elapsedSeconds = elapsed / 1000;
+          
           if (status.queue.position > 0) {
-            const waitProgress = Math.min(45, (Date.now() - (currentGenerating.startTime || Date.now())) / (status.queue.estimated_wait_seconds * 1000) * 45);
+            // Still waiting in queue
+            const waitProgress = Math.min(45, (elapsedSeconds / status.queue.estimated_wait_seconds) * 45);
             setModelGenerationProgress(waitProgress);
           } else if (status.queue.position === 0) {
-            const processingTime = 130;
-            const elapsed = (Date.now() - (currentGenerating.startTime || Date.now())) / 1000 - (status.queue.estimated_wait_seconds || 0);
-            const processingProgress = Math.min(95, 50 + (elapsed / processingTime) * 45);
-            setModelGenerationProgress(Math.max(50, processingProgress));
+            // Processing - calculate progress based on elapsed time minus wait time
+            const waitTime = status.queue.estimated_wait_seconds || 0;
+            const processingElapsed = Math.max(0, elapsedSeconds - waitTime);
+            const processingDuration = estimatedTotalSeconds - waitTime;
+            const processingProgress = 50 + (processingElapsed / processingDuration) * 45;
+            setModelGenerationProgress(Math.max(50, Math.min(95, processingProgress)));
           }
+        } else if (status.created_at) {
+          // No queue info, but we have created_at - estimate based on elapsed time
+          const estimatedTotalSeconds = currentGenerating.estimatedTotalSeconds || 130;
+          const now = Date.now();
+          const elapsed = now - status.created_at;
+          const elapsedSeconds = elapsed / 1000;
+          const progress = Math.min(95, (elapsedSeconds / estimatedTotalSeconds) * 100);
+          setModelGenerationProgress(Math.max(0, progress));
         }
         
         if (status.status === "completed") {

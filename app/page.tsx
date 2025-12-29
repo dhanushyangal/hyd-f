@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Hero from "../components/sections/Hero";
 import VideoBackground from "../components/sections/VideoBackground";
+import Footer from "../components/layout/Footer";
 
 export default async function Home() {
   const { userId } = await auth();
@@ -64,6 +65,9 @@ export default async function Home() {
         {/* Landing page for non-authenticated users - Hero Section */}
         <Hero />
       </SignedOut>
+      
+      {/* Footer */}
+      <Footer />
     </>
   );
 }

@@ -106,14 +106,14 @@ function transformBackendJobToJob(backendJob: BackendJob | any): Job {
     message: backendJob.errorMessage || (backendJob.status === "DONE" ? "Completed" : "Processing..."),
     created_at: backendJob.createdAt ? new Date(backendJob.createdAt).getTime() : undefined,
     updated_at: backendJob.updatedAt ? new Date(backendJob.updatedAt).getTime() : undefined,
-    result: backendJob.resultGlbUrl ? {
+    result: backendJob.resultGlbUrl || backendJob.previewImageUrl ? {
       job_id: backendJob.id,
       mode: backendJob.prompt ? "text-to-3d" : "image-to-3d",
       prompt: backendJob.prompt || undefined,
-      mesh_url: backendJob.resultGlbUrl,
+      mesh_url: backendJob.resultGlbUrl || undefined,
       processed_image_url: backendJob.previewImageUrl || undefined,
       generated_image_url: backendJob.previewImageUrl || undefined,
-      output: backendJob.resultGlbUrl,
+      output: backendJob.resultGlbUrl || undefined,
       elapsed_seconds: 0
     } : undefined,
     error: backendJob.errorMessage || undefined
@@ -401,16 +401,30 @@ export function getGlbUrl(job: Job): string | null {
 
 /**
  * Get preview image URL from job result
+ * Also tries preview/{jobId}/preview_image.png path if the main URL doesn't work
  */
 export function getPreviewImageUrl(job: Job): string | null {
   if (!job.result) return null;
-  return (
+  const url = (
     job.result.processed_image_url ||
     job.result.generated_image_url ||
     job.result.processed_image ||
     job.result.generated_image ||
     null
   );
+  
+  // If we have a URL, return it
+  if (url) return url;
+  
+  // If no URL but we have a job_id, try to construct preview path
+  // This handles cases where preview images are in preview/{jobId}/preview_image.png
+  if (job.job_id) {
+    const bucket = "hunyuan3d-outputs";
+    const region = "us-east-1";
+    return `https://${bucket}.s3.${region}.amazonaws.com/preview/${job.job_id}/preview_image.png`;
+  }
+  
+  return null;
 }
 
 /**

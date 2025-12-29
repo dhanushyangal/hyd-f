@@ -25,13 +25,42 @@ function ViewerContent() {
   // Start progress simulation when job is pending/processing
   useEffect(() => {
     if (job && (job.status === "pending" || job.status === "processing") && modelProgressIntervalRef.current === null) {
-      const modelDuration = 150000; // 2 minutes 30 seconds = 150 seconds
+      // Get estimated duration from queue info or use default
+      const estimatedTotalSeconds = job.queue?.estimated_total_seconds || 150; // Default 2m 30s
+      const modelDuration = estimatedTotalSeconds * 1000; // Convert to milliseconds
       const updateInterval = 500; // Update every 500ms
       const progressStep = (100 / modelDuration) * updateInterval;
 
-      setModelGenerationProgress(0);
+      // Calculate initial progress based on elapsed time since job creation
+      let initialProgress = 0;
+      if (job.created_at) {
+        const now = Date.now();
+        const elapsed = now - job.created_at; // Elapsed time in milliseconds
+        const elapsedSeconds = elapsed / 1000;
+        
+        // Account for queue wait time if available
+        let processingElapsed = elapsedSeconds;
+        if (job.queue && job.queue.estimated_wait_seconds) {
+          // If we're still waiting, progress is based on wait time
+          if (job.queue.position > 0) {
+            const waitProgress = Math.min(45, (elapsedSeconds / job.queue.estimated_wait_seconds) * 45);
+            initialProgress = waitProgress;
+          } else {
+            // We're processing, subtract wait time from elapsed
+            processingElapsed = Math.max(0, elapsedSeconds - job.queue.estimated_wait_seconds);
+            // Processing takes 50-95% of progress bar
+            const processingProgress = 50 + (processingElapsed / (estimatedTotalSeconds - job.queue.estimated_wait_seconds)) * 45;
+            initialProgress = Math.min(95, processingProgress);
+          }
+        } else {
+          // No queue info, estimate based on elapsed time
+          initialProgress = Math.min(95, (elapsedSeconds / estimatedTotalSeconds) * 100);
+        }
+      }
 
-      // Start progress simulation - runs for full 2m 30s
+      setModelGenerationProgress(Math.max(0, Math.min(95, initialProgress)));
+
+      // Start progress simulation from current point
       modelProgressIntervalRef.current = setInterval(() => {
         setModelGenerationProgress(prev => {
           if (prev >= 99) {
@@ -227,11 +256,6 @@ function ViewerContent() {
                     View Preview Image
                   </a>
                 )}
-                {job.result && (
-                  <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
-                    Completed in {job.result.elapsed_seconds}s
-                  </div>
-                )}
               </div>
             </>
           ) : (
@@ -248,7 +272,20 @@ function ViewerContent() {
             <div className="text-center mb-6">
               <h3 className="text-xl font-semibold text-black mb-2">Generating your 3D model...</h3>
               <p className="text-3xl font-bold text-black mb-1">{Math.round(modelGenerationProgress)}%</p>
-              <p className="text-sm text-neutral-400">Estimated time: ~2m 30s</p>
+              {job.queue && job.queue.estimated_total_seconds ? (
+                <p className="text-sm text-neutral-400">
+                  {job.queue.jobs_ahead > 0 ? (
+                    <>
+                      {job.queue.jobs_ahead} job{job.queue.jobs_ahead !== 1 ? 's' : ''} ahead • 
+                      ~{Math.ceil(job.queue.estimated_total_seconds / 60)}m {Math.ceil(job.queue.estimated_total_seconds % 60)}s total
+                    </>
+                  ) : (
+                    <>Estimated time: ~{Math.ceil(job.queue.estimated_total_seconds / 60)}m {Math.ceil(job.queue.estimated_total_seconds % 60)}s</>
+                  )}
+                </p>
+              ) : (
+                <p className="text-sm text-neutral-400">Estimated time: ~2m 30s</p>
+              )}
             </div>
             
             {/* Linear Progress Bar */}
