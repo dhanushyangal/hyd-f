@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth, SignInButton, UserButton, SignedIn } from "@clerk/nextjs";
 import Link from "next/link";
-import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, updateJobName } from "../../lib/api";
+import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName } from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
 import { Menu } from "../../components/Menu";
@@ -785,7 +785,7 @@ export default function GeneratePage() {
     if (job.resultGlbUrl) {
       addChatMessage({
         type: "3d",
-        glbUrl: job.resultGlbUrl,
+        glbUrl: getProxyGlbUrl(job.id), // Use proxy URL to avoid CORS issues
         status: "completed",
         jobId: job.id,
       });

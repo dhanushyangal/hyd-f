@@ -406,6 +406,13 @@ export function getGlbUrl(job: Job): string | null {
 }
 
 /**
+ * Get proxy GLB URL from job ID (for BackendJob objects)
+ */
+export function getProxyGlbUrl(jobId: string): string {
+  return `${backendBase}/api/3d/glb/${jobId}`;
+}
+
+/**
  * Get preview image URL from job result
  * Also tries preview/{jobId}/preview_image.png path if the main URL doesn't work
  */

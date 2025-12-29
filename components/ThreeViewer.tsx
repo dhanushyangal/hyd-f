@@ -100,6 +100,9 @@ export function ThreeViewer({ glbUrl }: Props) {
 
     // Load GLB model
     const loader = new GLTFLoader();
+    
+    // Start showing progress immediately
+    setLoadProgress(1);
 
     loader.load(
       glbUrl,
@@ -163,7 +166,16 @@ export function ThreeViewer({ glbUrl }: Props) {
       (progress) => {
         if (progress.total > 0) {
           const percent = Math.round((progress.loaded / progress.total) * 100);
-          setLoadProgress(percent);
+          setLoadProgress(Math.max(1, Math.min(99, percent))); // Clamp between 1-99%
+        } else if (progress.loaded > 0) {
+          // If total is unknown but we have loaded bytes, show progress based on loaded size
+          // Estimate: assume typical GLB is 1-5MB, show progress accordingly
+          const estimatedTotal = 3000000; // 3MB estimate
+          const percent = Math.min(95, Math.round((progress.loaded / estimatedTotal) * 100));
+          setLoadProgress(Math.max(1, percent));
+        } else {
+          // Show minimal progress if no data yet
+          setLoadProgress(1);
         }
       },
       (err) => {
@@ -253,8 +265,18 @@ export function ThreeViewer({ glbUrl }: Props) {
               <div className="w-10 h-10 spinner"></div>
             </div>
             <div className="text-black text-sm">Loading model...</div>
-            {loadProgress > 0 && (
-              <div className="text-xs text-neutral-400 mt-1">{loadProgress}%</div>
+            {loadProgress > 0 ? (
+              <>
+                <div className="text-xs text-neutral-400 mt-1">{loadProgress}%</div>
+                <div className="w-48 h-1 bg-neutral-200 rounded-full overflow-hidden mt-2 mx-auto">
+                  <div 
+                    className="h-full bg-black rounded-full transition-all duration-300"
+                    style={{ width: `${loadProgress}%` }}
+                  ></div>
+                </div>
+              </>
+            ) : (
+              <div className="text-xs text-neutral-400 mt-1">Preparing...</div>
             )}
           </div>
         </div>
