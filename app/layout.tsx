@@ -24,6 +24,11 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata = {
   title: "Hydrilla",
   description: "3D Assets Made Easy",
+  icons: {
+    icon: "/hyd01.png",
+    shortcut: "/hyd01.png",
+    apple: "/hyd01.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

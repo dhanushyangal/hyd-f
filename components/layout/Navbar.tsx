@@ -81,7 +81,7 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
       document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
-  
+
   // Premium ultra-clear liquid glass effect for all pages
   const containerClasses = useHeroStyling
     ? "bg-white/2 backdrop-blur-[80px] border border-gray-200/20 shadow-2xl"
@@ -166,14 +166,14 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
             </>
           ) : (
             <>
-              {/* Base glass layer */}
-              <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-white/20 to-transparent" />
-              {/* Top highlight */}
-              <div className="absolute inset-0 bg-gradient-to-t from-white/30 via-transparent to-white/10" />
-              {/* Side highlights for 3D effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-white/20 via-transparent to-white/20" />
-              {/* Subtle shimmer effect */}
-              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-white/15" />
+          {/* Base glass layer */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-white/20 to-transparent" />
+          {/* Top highlight */}
+          <div className="absolute inset-0 bg-gradient-to-t from-white/30 via-transparent to-white/10" />
+          {/* Side highlights for 3D effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-white/20 via-transparent to-white/20" />
+          {/* Subtle shimmer effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-white/15" />
             </>
           )}
         </div>
@@ -181,16 +181,14 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
         <div className={`flex items-center justify-between ${dynamicPadding} gap-4 md:gap-10 relative z-10 transition-all duration-500 ease-out`}>
           {/* Logo and Brand Name - Left Side */}
           <Link href="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {(isHero || pathname === "/team" || pathname === "/faq" || pathname === "/case-study" || pathname === "/3d-ai") && (
-              <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
-                <Image
-                  src="/hyd01.png"
-                  alt="Hydrilla Logo"
-                  fill
-                  className="object-contain"
-                />
-              </div>
-            )}
+            <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
+              <Image
+                src="/hyd01.png"
+                alt="Hydrilla Logo"
+                fill
+                className="object-contain"
+              />
+            </div>
             <span 
               className={`${logoClasses} ${shouldShrink ? 'text-lg sm:text-xl' : ''} font-dm-sans transition-all duration-500 ease-out`}
             >
@@ -232,12 +230,12 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
           <div className="flex items-center gap-2 md:gap-4">
             <SignedIn>
               {!shouldShrink && (
-                <Link
-                  href="/generate"
-                  className={`hidden md:flex ${generateButtonClasses} font-dm-sans`}
-                >
-                  Generate
-                </Link>
+              <Link
+                href="/generate"
+                className={`hidden md:flex ${generateButtonClasses} font-dm-sans`}
+              >
+                Generate
+              </Link>
               )}
               <UserButton
                 afterSignOutUrl="/"
@@ -266,25 +264,25 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
                 </div>
               ) : (
                 // Show both buttons when not scrolled
-                <div className="hidden md:flex items-center gap-2 md:gap-4">
-                  <SignInButton mode="modal">
-                    <button 
-                      className={`${signInButtonClasses} font-dm-sans`}
-                    >
-                      Log In
-                    </button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
-                    <button 
-                      className={`${signUpButtonClasses} font-dm-sans`}
-                    >
-                      Get Started
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </SignUpButton>
-                </div>
+              <div className="hidden md:flex items-center gap-2 md:gap-4">
+                <SignInButton mode="modal">
+                  <button 
+                    className={`${signInButtonClasses} font-dm-sans`}
+                  >
+                    Log In
+                  </button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button 
+                    className={`${signUpButtonClasses} font-dm-sans`}
+                  >
+                    Get Started
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </SignUpButton>
+              </div>
               )}
             </SignedOut>
 
