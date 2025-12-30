@@ -47,7 +47,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <body className="min-h-screen bg-white">
           {/* Google tag (gtag.js) */}
           <Script
-            src="https://www.googletagmanager.com/gtag/js?id=G-R22VY11BMV"
+            async
+            src="https://www.googletagmanager.com/gtag/js?id=G-5DMYT9CZ0S"
             strategy="afterInteractive"
           />
           <Script id="google-analytics" strategy="afterInteractive">
@@ -55,7 +56,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
-              gtag('config', 'G-R22VY11BMV');
+              gtag('config', 'G-5DMYT9CZ0S');
             `}
           </Script>
           <ClientProviders>
