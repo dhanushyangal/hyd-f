@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { ReactNode } from "react";
+import Script from "next/script";
 import {
   ClerkProvider,
 } from "@clerk/nextjs";
@@ -23,7 +24,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata = {
-  title: "Hydrilla",
+  title: "Hydrilla AI",
   description: "3D Assets Made Easy",
   icons: {
     icon: "/hyd01.png",
@@ -44,6 +45,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
     <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
         <body className="min-h-screen bg-white">
+          {/* Google tag (gtag.js) */}
+          <Script
+            src="https://www.googletagmanager.com/gtag/js?id=G-R22VY11BMV"
+            strategy="afterInteractive"
+          />
+          <Script id="google-analytics" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-R22VY11BMV');
+            `}
+          </Script>
           <ClientProviders>
             <ConditionalNavbar />
             <main>{children}</main>
