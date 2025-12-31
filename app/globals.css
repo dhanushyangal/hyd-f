@@ -273,3 +273,21 @@ div[class*="footer"] {
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
 }
+
+/* Logo spin animation - smooth fan-like rotation */
+@keyframes logoSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.logo-spin-hover {
+  transition: transform 0.1s ease-out;
+}
+
+.logo-spin-hover:hover {
+  animation: logoSpin 1.5s cubic-bezier(0.4, 0.25, 0.2, 1) forwards;
+}

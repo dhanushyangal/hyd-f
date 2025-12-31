@@ -182,8 +182,8 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
         
         <div className={`flex items-center justify-between ${dynamicPadding} gap-4 md:gap-10 relative z-10 transition-all duration-500 ease-out`}>
           {/* Logo and Brand Name - Left Side */}
-          <Link href="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
+          <Link href="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0 group">
+            <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 logo-spin-hover">
               <Image
                 src="/hyd01.png"
                 alt="Hydrilla Logo"
