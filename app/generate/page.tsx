@@ -934,8 +934,8 @@ export default function GeneratePage() {
       case "user":
   return (
           <div key={message.id} className="flex justify-end mb-4">
-            <div className="max-w-[80%] bg-black text-white rounded-2xl rounded-tr-sm px-3 sm:px-4 py-2 sm:py-3">
-              <p className="text-xs sm:text-sm whitespace-pre-wrap">{message.content}</p>
+            <div className="max-w-[80%] bg-black text-white rounded-2xl rounded-tr-sm px-4 py-3">
+              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
             </div>
           </div>
         );
@@ -951,12 +951,12 @@ export default function GeneratePage() {
                   className="w-full max-h-[300px] object-contain"
                 />
               )}
-              <div className="p-2 sm:p-3 flex gap-2">
+              <div className="p-3 flex gap-2">
                 {message.canRegenerate && (
                   <button
                     onClick={handleRegeneratePreview}
                     disabled={generatingPreview}
-                    className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50"
+                    className="flex-1 px-3 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50"
                   >
                     Regenerate
                   </button>
@@ -974,7 +974,7 @@ export default function GeneratePage() {
                       }
                     }}
                     disabled={loading || generatingPreview}
-                    className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                    className="flex-1 px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
                   >
                     Generate 3D
                   </button>
@@ -994,18 +994,18 @@ export default function GeneratePage() {
                 </div>
               )}
               {message.glbUrl && (
-                <div className="p-2 sm:p-3 flex gap-2 border-t border-neutral-100">
+                <div className="p-3 flex gap-2 border-t border-neutral-100">
                   <a
                     href={message.glbUrl}
                     download
-                    className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors text-center"
+                    className="flex-1 px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors text-center"
                   >
                     Download GLB
                   </a>
                   {message.jobId && (
                     <a
                       href={`/viewer?jobId=${message.jobId}`}
-                      className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors text-center"
+                      className="flex-1 px-3 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors text-center"
                     >
                       Full View
                     </a>
@@ -1028,13 +1028,13 @@ export default function GeneratePage() {
         
         return (
           <div key={message.id} className="flex justify-start mb-4">
-            <div className="max-w-[80%] bg-white rounded-2xl rounded-tl-sm border border-neutral-200 p-3 sm:p-4 shadow-sm">
-              <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                <div className="w-4 h-4 sm:w-5 sm:h-5 spinner"></div>
+            <div className="max-w-[80%] bg-white rounded-2xl rounded-tl-sm border border-neutral-200 p-4 shadow-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-5 h-5 spinner"></div>
                 <div className="flex-1">
-                  <p className="text-xs sm:text-sm text-black font-medium">{message.content}</p>
+                  <p className="text-sm text-black font-medium">{message.content}</p>
                   {message.estimatedSeconds && (
-                    <p className="text-[10px] sm:text-xs text-neutral-500 mt-1">
+                    <p className="text-xs text-neutral-500 mt-1">
                       {message.queueInfo && message.queueInfo.jobs_ahead > 0 ? (
                         <>
                           {message.jobsAhead} job{message.jobsAhead !== 1 ? 's' : ''} ahead • 
@@ -1090,8 +1090,8 @@ export default function GeneratePage() {
         
         return (
           <div key={message.id} className="flex justify-start mb-4">
-            <div className="max-w-[80%] bg-red-50 border border-red-200 rounded-2xl rounded-tl-sm px-3 sm:px-4 py-2 sm:py-3">
-              <p className="text-xs sm:text-sm text-red-800">{renderErrorContent(message.content)}</p>
+            <div className="max-w-[80%] bg-red-50 border border-red-200 rounded-2xl rounded-tl-sm px-4 py-3">
+              <p className="text-sm text-red-800">{renderErrorContent(message.content)}</p>
             </div>
           </div>
         );
@@ -1544,7 +1544,7 @@ export default function GeneratePage() {
              /* Chat Messages View */
              <div className="flex-1 flex flex-col h-full">
                {/* Chat Messages Area - Scrollable */}
-               <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 scroll-smooth">
+               <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
                  <div className="space-y-4 w-full">
                    {chatMessages.map((message) => renderChatMessage(message))}
                    <div ref={chatEndRef} />

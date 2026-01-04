@@ -256,11 +256,11 @@ export function PromptBox({
                       
                       {/* Dropdown menu */}
                       <motion.div
-                        initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                        initial={{ opacity: 0, y: isAtBottom ? 8 : -8, scale: 0.96 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                        exit={{ opacity: 0, y: isAtBottom ? 8 : -8, scale: 0.96 }}
                         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                        className="absolute top-full mt-1.5 left-0 bg-white rounded-2xl border border-gray-200 shadow-xl py-1.5 min-w-[200px] z-[60] overflow-hidden"
+                        className={`absolute ${isAtBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} left-0 bg-white rounded-2xl border border-gray-200 shadow-xl py-1.5 min-w-[200px] z-[60] overflow-hidden`}
                         style={{
                           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
                         }}
