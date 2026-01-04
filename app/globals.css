@@ -119,6 +119,12 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Override focus styles for PromptBox textarea - remove colored ring */
+.prompt-box-textarea:focus {
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
 /* Button active state */
 button:active:not(:disabled) {
   transform: scale(0.98);
