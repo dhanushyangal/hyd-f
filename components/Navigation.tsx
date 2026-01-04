@@ -9,6 +9,7 @@ import {
   UserButton,
 } from "@clerk/nextjs";
 
+
 export function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
