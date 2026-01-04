@@ -31,7 +31,53 @@ function isApiUnavailableError(err: any): boolean {
  * Get user-friendly error message when GPU/API is offline
  */
 function getGpuOfflineErrorMessage(): string {
-  return "GPU is currently offline. To request GPU activation, please email founders@hydrilla.co";
+  return "GPU is currently offline. Please try again after some time.";
+}
+
+/**
+ * Notify backend about GPU offline error (non-blocking)
+ */
+export async function notifyGpuOffline(errorMessage: string, getToken?: () => Promise<string | null>) {
+  try {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    // Send notification to backend (non-blocking, don't wait for response)
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    fetch(`${backendBase}/api/3d/notify-gpu-offline`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ errorMessage }),
+      signal: controller.signal,
+    })
+      .then((res) => {
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          console.warn("Failed to send GPU offline notification:", res.status, res.statusText);
+        } else {
+          console.log("GPU offline notification sent successfully");
+        }
+        return res.json();
+      })
+      .catch((err) => {
+        clearTimeout(timeoutId);
+        // Log but don't throw - notification is not critical
+        if (err.name !== "AbortError") {
+          console.warn("Failed to send GPU offline notification:", err.message);
+        }
+      });
+  } catch (err: any) {
+    // Log but don't throw - notification is not critical
+    console.warn("Error in notifyGpuOffline:", err.message);
+  }
 }
 
 export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
@@ -218,6 +264,8 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
   } catch (err: any) {
     // Check if it's a network error indicating API is unavailable
     if (isApiUnavailableError(err)) {
+      // Send notification to founders (non-blocking)
+      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       throw new Error(getGpuOfflineErrorMessage());
     }
     // Re-throw other errors
@@ -272,6 +320,8 @@ export async function submitTextTo3D(prompt: string, getToken?: () => Promise<st
   } catch (err: any) {
     // Check if it's a network error indicating API is unavailable
     if (isApiUnavailableError(err)) {
+      // Send notification to founders (non-blocking)
+      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       throw new Error(getGpuOfflineErrorMessage());
     }
     // Re-throw other errors
@@ -373,6 +423,8 @@ export async function submitImageTo3D(
   } catch (err: any) {
     // Check if it's a network error indicating API is unavailable
     if (isApiUnavailableError(err)) {
+      // Send notification to founders (non-blocking)
+      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       throw new Error(getGpuOfflineErrorMessage());
     }
     // Re-throw other errors
@@ -410,16 +462,51 @@ export async function fetchStatus(jobId: string): Promise<Job> {
 /**
  * Fetch queue info for accurate time estimation
  */
-export async function fetchQueueInfo(): Promise<QueueInfo & { 
+export async function fetchQueueInfo(): Promise<(QueueInfo & { 
   estimated_wait_for_preview_seconds?: number;
   estimated_preview_time_seconds?: number;
-} | null> {
+  api_available?: boolean;
+}) | null> {
+  let timeoutId: NodeJS.Timeout | null = null;
   try {
-    const res = await fetch(`${backendBase}/api/3d/queue/info`);
-    if (!res.ok) {
-      return null;
+    // Create abort controller for timeout - reduced to 2 seconds for faster failure detection
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout for faster detection
+    
+    const res = await fetch(`${backendBase}/api/3d/queue/info`, {
+      signal: controller.signal,
+    });
+    
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
     }
+    
+    // Check status immediately before parsing JSON - faster error detection
+    if (!res.ok) {
+      // If 503 (Service Unavailable), API is offline
+      if (res.status === 503) {
+        throw new Error("GPU is currently offline. Please try again after some time.");
+      }
+      // For other errors, try to parse error message
+      try {
+        const errorData = await res.json();
+        if (errorData.api_available === false || errorData.error) {
+          throw new Error("GPU is currently offline. Please try again after some time.");
+        }
+      } catch {
+        throw new Error("GPU is currently offline. Please try again after some time.");
+      }
+    }
+    
     const data = await res.json();
+    
+    // Check if API is unavailable (double check after parsing)
+    if (data.api_available === false) {
+      // API is offline - throw error to be caught by caller
+      throw new Error("GPU is currently offline. Please try again after some time.");
+    }
+    
     return {
       position: 0,
       jobs_ahead: data.queue_length + (data.currently_processing ? 1 : 0),
@@ -429,9 +516,23 @@ export async function fetchQueueInfo(): Promise<QueueInfo & {
       currently_processing: data.currently_processing || false,
       // Preview queue info
       estimated_wait_for_preview_seconds: data.estimated_wait_for_preview_seconds || 0,
-      estimated_preview_time_seconds: data.estimated_preview_time_seconds || 20
+      estimated_preview_time_seconds: data.estimated_preview_time_seconds || 20,
+      api_available: data.api_available !== false, // Default to true if not specified
     };
-  } catch {
+  } catch (err: any) {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    // Check if it's a timeout or network error
+    if (err.name === "AbortError" || err.name === "TimeoutError" || 
+        (err.name === "TypeError" && err.message?.includes("fetch"))) {
+      throw new Error("GPU is currently offline. Please try again after some time.");
+    }
+    // Re-throw if it's already our error message
+    if (err.message?.includes("GPU is currently offline")) {
+      throw err;
+    }
+    // Otherwise return null for other errors
     return null;
   }
 }
@@ -566,19 +667,10 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
                            err.message.includes("Network request failed"));
     
     if (isNetworkError) {
-      const envValue = process.env.NEXT_PUBLIC_BACKEND_URL;
-      let errorMsg = `Unable to connect to backend at ${backendBase}. `;
-      
-      // Check if it's a CORS error
-      if (err.message.includes("CORS") || err.message.includes("cross-origin")) {
-        errorMsg += `CORS error detected. Please check backend CORS configuration.`;
-      } else if (!envValue || envValue === "NEXT_PUBLIC_BACKEND_URL" || envValue.includes("NEXT_PUBLIC_BACKEND_URL")) {
-        errorMsg += `\n\n⚠️ NEXT_PUBLIC_BACKEND_URL environment variable is missing or invalid in Vercel.\n\nPlease add it in Vercel Project Settings → Environment Variables:\n\nName: NEXT_PUBLIC_BACKEND_URL\nValue: https://hydrilla-backend-4i7t07pv4-dharani-kumar-yenagalas-projects.vercel.app\n\nThen redeploy your frontend.`;
-      } else {
-        errorMsg += `\n\nPossible causes:\n1. Backend is not accessible at ${backendBase}\n2. CORS configuration issue\n3. Network timeout\n\nPlease check:\n- Backend URL is correct: ${backendBase}\n- Backend is deployed and running\n- CORS is configured correctly\n\nError details: ${err.message}`;
-      }
-      
-      throw new Error(errorMsg);
+      // For history fetching, return empty array instead of throwing error
+      // This allows the app to continue working even if history can't be loaded
+      console.warn("Failed to fetch history - backend may be temporarily unavailable:", err.message);
+      return [];
     }
     
     // Re-throw other errors (API errors, parsing errors, etc.)

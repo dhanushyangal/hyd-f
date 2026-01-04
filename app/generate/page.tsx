@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth, SignInButton, UserButton, SignedIn } from "@clerk/nextjs";
 import Link from "next/link";
-import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName } from "../../lib/api";
+import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline } from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
 import { Menu } from "../../components/Menu";
@@ -222,8 +222,11 @@ export default function GeneratePage() {
           }
           }
         }
-      } catch (err) {
-        console.error("Failed to load history:", err);
+      } catch (err: any) {
+        // Log error but don't show to user - history loading failure is non-critical
+        console.warn("Failed to load history:", err.message || err);
+        // Set empty history so app continues to work
+        setHistory([]);
       } finally {
         setHistoryLoading(false);
       }
@@ -236,9 +239,13 @@ export default function GeneratePage() {
   useEffect(() => {
     if (!currentGenerating || currentGenerating.status !== "generating") return;
     
+    let consecutiveFailures = 0;
+    const MAX_FAILURES = 3;
+
     const pollStatus = async () => {
       try {
         const status = await fetchStatus(currentGenerating.jobId);
+        consecutiveFailures = 0; // Reset on success
         
         if (status.queue) {
           const estimatedTotalSeconds = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 130;
@@ -337,8 +344,43 @@ export default function GeneratePage() {
           setLoading(false);
           setUploading(false);
         }
-      } catch (err) {
+      } catch (err: any) {
+        consecutiveFailures++;
         console.error("Failed to poll status:", err);
+        
+        // Check if it's a GPU offline or network error
+        const isNetworkError = err.name === "TypeError" && 
+                              (err.message?.includes("fetch") || 
+                               err.message?.includes("Failed to fetch") ||
+                               err.message?.includes("NetworkError") ||
+                               err.message?.includes("GPU is currently offline"));
+        
+        // Stop polling if API is offline or too many failures
+        if (isNetworkError || consecutiveFailures >= MAX_FAILURES) {
+          console.warn("Stopping status polling: API appears to be offline");
+          if (modelProgressIntervalRef.current) {
+            clearInterval(modelProgressIntervalRef.current);
+            modelProgressIntervalRef.current = null;
+          }
+          
+          // Add error message to chat
+          setChatMessages((prev) => {
+            const filtered = prev.filter((msg) => 
+              !(msg.type === "error" && msg.content?.includes("GPU is currently offline"))
+            );
+            filtered.push({
+              id: `error-${Date.now()}`,
+              type: "error",
+              content: err.message || "GPU is currently offline. Please try again after some time.",
+              timestamp: Date.now(),
+            });
+            return filtered;
+          });
+          
+          setLoading(false);
+          setUploading(false);
+          return; // Stop polling
+        }
       }
     };
 
@@ -455,7 +497,23 @@ export default function GeneratePage() {
       if (queueInfo) {
         estimatedTotalSeconds = queueInfo.estimated_total_seconds;
       }
-    } catch {}
+    } catch (err: any) {
+      // If queue info fetch fails, it means API is offline - show error immediately
+      if (err.message?.includes("GPU is currently offline")) {
+        // Send notification to founders (non-blocking)
+        const tokenGetter = async () => await getToken();
+        notifyGpuOffline(err.message || "GPU is currently offline", tokenGetter);
+        
+        addChatMessage({
+          type: "error",
+          content: err.message || "GPU is currently offline. Please try again after some time.",
+        });
+        setLoading(false);
+        setUploading(false);
+        return;
+      }
+      // Silently continue with defaults for other errors
+    }
     
     // Add status message with time estimate
     const statusId = addChatMessage({
@@ -577,7 +635,21 @@ export default function GeneratePage() {
         const baseTime = 20; // Base preview generation time
         estimatedPreviewTime = waitTime + baseTime;
       }
-    } catch {
+    } catch (err: any) {
+      // If queue info fetch fails, it means API is offline - show error immediately
+      if (err.message?.includes("GPU is currently offline")) {
+        // Send notification to founders (non-blocking)
+        const tokenGetter = async () => await getToken();
+        notifyGpuOffline(err.message || "GPU is currently offline", tokenGetter);
+        
+        addChatMessage({
+          type: "error",
+          content: err.message || "GPU is currently offline. Please try again after some time.",
+        });
+        setGeneratingPreview(false);
+        return;
+      }
+      // Silently continue with defaults for other errors
       const hasQueue = history.some(job => job.status === "WAIT" || job.status === "RUN");
       estimatedPreviewTime = hasQueue ? 40 : 20;
     }
@@ -710,7 +782,23 @@ export default function GeneratePage() {
       if (queueInfo) {
         estimatedTotalSeconds = queueInfo.estimated_total_seconds;
       }
-    } catch {}
+    } catch (err: any) {
+      // If queue info fetch fails, it means API is offline - show error immediately
+      if (err.message?.includes("GPU is currently offline")) {
+        // Send notification to founders (non-blocking)
+        const tokenGetter = async () => await getToken();
+        notifyGpuOffline(err.message || "GPU is currently offline", tokenGetter);
+        
+        addChatMessage({
+          type: "error",
+          content: err.message || "GPU is currently offline. Please try again after some time.",
+        });
+        setLoading(false);
+        setUploading(false);
+        return;
+      }
+      // Silently continue with defaults for other errors
+    }
 
     const startTime = Date.now();
     const modelDuration = estimatedTotalSeconds * 1000;
@@ -1062,26 +1150,19 @@ export default function GeneratePage() {
         );
       
       case "error":
-        // Parse error message and make email addresses clickable
+        // Parse error message
         const renderErrorContent = (content: string | undefined) => {
           if (!content) return null;
           
-          // Check if message contains the GPU offline error with email
-          if (content.includes("founders@hydrilla.co")) {
-            const parts = content.split("founders@hydrilla.co");
+          // Check if message contains the GPU offline error
+          if (content.includes("GPU is currently offline")) {
             return (
-              <>
-                {parts[0]}
-                <a 
-                  href="mailto:founders@hydrilla.co" 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-red-900 underline hover:text-red-700 font-medium"
-                >
-                  founders@hydrilla.co
-                </a>
-                {parts[1]}
-              </>
+              <div>
+                <p>{content}</p>
+                <p className="text-xs text-red-700 mt-2">
+                  We've been automatically notified. The GPU should be back online soon.
+                </p>
+              </div>
             );
           }
           
@@ -1091,7 +1172,7 @@ export default function GeneratePage() {
         return (
           <div key={message.id} className="flex justify-start mb-4">
             <div className="max-w-[80%] bg-red-50 border border-red-200 rounded-2xl rounded-tl-sm px-4 py-3">
-              <p className="text-sm text-red-800">{renderErrorContent(message.content)}</p>
+              <div className="text-sm text-red-800">{renderErrorContent(message.content)}</div>
             </div>
           </div>
         );

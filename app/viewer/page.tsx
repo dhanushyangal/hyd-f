@@ -94,19 +94,38 @@ function ViewerContent() {
   useEffect(() => {
     if (!jobId) return;
     let active = true;
+    let consecutiveFailures = 0;
+    const MAX_FAILURES = 3;
 
     const fetchAndSchedule = async () => {
       try {
         const data = await fetchStatus(jobId);
         if (!active) return;
+        consecutiveFailures = 0; // Reset on success
         setJob(data);
         if (data.status === "pending" || data.status === "processing") {
           setTimeout(fetchAndSchedule, POLL_INTERVAL);
         }
       } catch (err: any) {
         if (!active) return;
+        consecutiveFailures++;
+        
+        // Check if it's a GPU offline or network error
+        const isNetworkError = err.name === "TypeError" && 
+                              (err.message?.includes("fetch") || 
+                               err.message?.includes("Failed to fetch") ||
+                               err.message?.includes("NetworkError") ||
+                               err.message?.includes("GPU is currently offline"));
+        
+        // Stop polling if API is offline or too many failures
+        if (isNetworkError || consecutiveFailures >= MAX_FAILURES) {
+          setError(err.message || "Failed to fetch status. API appears to be offline.");
+          return; // Stop polling
+        }
+        
         setError(err.message || "Failed to fetch status");
-        setTimeout(fetchAndSchedule, POLL_INTERVAL * 2);
+        // Retry with exponential backoff, but stop after max failures
+        setTimeout(fetchAndSchedule, POLL_INTERVAL * 2 * consecutiveFailures);
       }
     };
 
