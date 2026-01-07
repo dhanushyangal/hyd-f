@@ -26,7 +26,7 @@ export function PromptBox({
   aspectRatio = "3:4",
   mode = "text",
   disabled = false,
-  placeholder = "Describe your scene with visual references...",
+  placeholder = "Describe what you want to generate…",
   isAtBottom = false,
 }: PromptBoxProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,9 +90,6 @@ export function PromptBox({
   const models = [
     { id: "hunyuan", name: "Hunyuan3D-2.1", available: true },
     { id: "trellis", name: "TRELLIS 2", available: false },
-    { id: "sam3d", name: "SAM3D", available: false },
-    { id: "hunyuan-mini", name: "Hunyuan3D-2mini-Turbo", available: false },
-    { id: "hunyuan-2", name: "Hunyuan3D-2", available: false },
   ];
 
   // Close dropdown when clicking outside
@@ -263,7 +260,7 @@ export function PromptBox({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: isAtBottom ? 8 : -8, scale: 0.96 }}
                         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                        className={`absolute ${isAtBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} left-0 bg-white rounded-2xl border border-gray-200 shadow-xl py-1.5 w-full sm:w-auto min-w-[240px] sm:min-w-[280px] max-w-[calc(100vw-2rem)] z-[60] overflow-hidden`}
+                        className={`absolute ${isAtBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} left-0 bg-white rounded-2xl border border-gray-200 shadow-xl py-1.5 min-w-[200px] z-[60] overflow-hidden`}
                         style={{
                           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
                         }}
@@ -286,27 +283,27 @@ export function PromptBox({
                                 }, 2000);
                               }
                             }}
-                            className={`w-full px-4 py-2.5 sm:py-3 text-left transition-all duration-150 font-dm-sans relative flex items-center justify-between ${
+                            className={`w-full px-4 py-2.5 text-left text-xs sm:text-sm transition-all duration-150 font-dm-sans relative ${
                               model.available
                                 ? 'hover:bg-gray-50 text-gray-900 cursor-pointer active:bg-gray-100'
-                                : 'text-gray-500 cursor-pointer hover:bg-gray-50/50'
+                                : 'text-gray-400 cursor-pointer hover:bg-gray-50/50'
                             } ${
                               selectedModel === model.name 
-                                ? 'bg-gray-50 font-medium text-gray-900' 
-                                : 'font-normal'
+                                ? 'bg-gray-50 font-semibold text-gray-900' 
+                                : ''
                             }`}
                           >
-                            <span className={`text-sm sm:text-base ${!model.available ? 'opacity-70' : ''}`}>
-                              {model.name}
-                            </span>
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center justify-between">
+                              <span className={`${!model.available ? 'opacity-60' : ''} ${selectedModel === model.name ? 'text-gray-900' : ''}`}>
+                                {model.name}
+                              </span>
                               {!model.available && (
-                                <span className="text-[10px] sm:text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">
+                                <span className="text-[10px] font-medium text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full ml-2 border border-orange-200">
                                   Coming Soon
                                 </span>
                               )}
                               {model.available && selectedModel === model.name && (
-                                <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <svg className="w-4 h-4 text-gray-600 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
                               )}

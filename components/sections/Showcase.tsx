@@ -144,18 +144,36 @@ export default function Showcase() {
   };
 
   const [cardsPerView, setCardsPerView] = useState(getCardsPerView());
+  const [isMobile, setIsMobile] = useState(false);
+  const [containerPadding, setContainerPadding] = useState({ left: 'clamp(1rem, 3vw, 3rem)', right: 'clamp(1rem, 12vw, 8rem)' });
 
   useEffect(() => {
     const handleResize = () => {
       setCardsPerView(getCardsPerView());
+      const mobile = window.innerWidth < 640;
+      setIsMobile(mobile);
+      
+      // Set equal padding on mobile for centering, asymmetric on desktop
+      if (mobile) {
+        // Calculate padding to center 85vw card: (100vw - 85vw) / 2 = 7.5vw
+        setContainerPadding({ left: '7.5vw', right: '7.5vw' });
+      } else {
+        setContainerPadding({ left: 'clamp(1rem, 3vw, 3rem)', right: 'clamp(1rem, 12vw, 8rem)' });
+      }
     };
+    if (typeof window !== 'undefined') {
+      const mobile = window.innerWidth < 640;
+      setIsMobile(mobile);
+      if (mobile) {
+        setContainerPadding({ left: '7.5vw', right: '7.5vw' });
+      }
+    }
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Limit navigation to 2 forward and 2 backward from starting position (index 0)
-  // So valid range is 0, 1, 2 (3 cards total)
-  const maxNavIndex = 2;
+  // Allow navigation through all cards
+  const maxNavIndex = showcaseItems.length - 1;
   const minNavIndex = 0;
 
   const scrollToIndex = (index: number) => {
@@ -171,25 +189,16 @@ export default function Showcase() {
       const containerPadding = parseInt(getComputedStyle(container).paddingLeft || '0');
       const maxScroll = container.scrollWidth - container.clientWidth;
       
-      // Calculate scroll position to center the card (or align to start for first card)
-      let scrollLeft: number;
-      if (clampedIndex === 0) {
-        // First card aligns to start
-        scrollLeft = cardLeft - containerPadding;
-      } else if (clampedIndex === maxNavIndex) {
-        // Last navigable card - scroll to show it fully, accounting for right padding
-        const cardRight = cardLeft + cardRect.width;
-        const containerPaddingRight = parseInt(getComputedStyle(container).paddingRight || '0');
-        scrollLeft = cardRight - container.clientWidth + containerPaddingRight;
-      } else {
-        // Other cards center in viewport
-        const cardCenter = cardLeft + cardRect.width / 2;
-        const containerCenter = containerPadding + containerRect.width / 2;
-        scrollLeft = cardCenter - containerCenter;
-      }
+      // On mobile, always center cards. On desktop, center all cards too for consistency
+      const cardCenter = cardLeft + cardRect.width / 2;
+      const containerCenter = containerPadding + containerRect.width / 2;
+      let scrollLeft = cardCenter - containerCenter;
+      
+      // Ensure we don't scroll past boundaries
+      scrollLeft = Math.max(0, Math.min(scrollLeft, maxScroll));
       
       container.scrollTo({
-        left: Math.max(0, Math.min(scrollLeft, maxScroll)),
+        left: scrollLeft,
         behavior: 'auto', // No smooth animation, instant scroll
       });
     }
@@ -217,15 +226,16 @@ export default function Showcase() {
       const containerPadding = parseInt(getComputedStyle(container).paddingLeft || '0');
       const scrollPosition = scrollLeft + containerPadding;
       
-      // Find which card is currently in view
+      // Find which card is currently in view (check all cards, not just up to maxNavIndex)
       let newIndex = 0;
       let minDistance = Infinity;
       
       cardRefs.current.forEach((card, index) => {
-        if (card && index <= maxNavIndex) {
+        if (card) {
           const cardLeft = card.offsetLeft;
           const cardCenter = cardLeft + card.offsetWidth / 2;
-          const distance = Math.abs(scrollPosition + container.clientWidth / 2 - cardCenter);
+          const viewportCenter = scrollPosition + container.clientWidth / 2;
+          const distance = Math.abs(viewportCenter - cardCenter);
           
           if (distance < minDistance) {
             minDistance = distance;
@@ -246,6 +256,33 @@ export default function Showcase() {
       container.removeEventListener('scroll', handleScroll);
     };
   }, [maxNavIndex, minNavIndex]);
+
+  // Center first card on initial load (especially important for mobile)
+  useEffect(() => {
+    if (scrollContainerRef.current && cardRefs.current[0] && isMobile) {
+      // Small delay to ensure layout is complete
+      const timer = setTimeout(() => {
+        const card = cardRefs.current[0];
+        const container = scrollContainerRef.current;
+        if (card && container) {
+          const cardLeft = card.offsetLeft;
+          const cardRect = card.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          const containerPadding = parseInt(getComputedStyle(container).paddingLeft || '0');
+          
+          const cardCenter = cardLeft + cardRect.width / 2;
+          const containerCenter = containerPadding + containerRect.width / 2;
+          const scrollLeft = cardCenter - containerCenter;
+          
+          container.scrollTo({
+            left: Math.max(0, scrollLeft),
+            behavior: 'auto',
+          });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isMobile]);
 
   // Image loop animation for Trellis 2 card
   useEffect(() => {
@@ -273,8 +310,8 @@ export default function Showcase() {
               msOverflowStyle: 'none',
               scrollBehavior: 'auto',
               WebkitOverflowScrolling: 'touch',
-              paddingLeft: 'clamp(1rem, 3vw, 3rem)',
-              paddingRight: 'clamp(1rem, 12vw, 8rem)',
+              paddingLeft: containerPadding.left,
+              paddingRight: containerPadding.right,
             }}
           >
             {showcaseItems.map((item, index) => (
@@ -285,7 +322,7 @@ export default function Showcase() {
                 }}
                 className="group relative bg-white rounded-3xl overflow-hidden border border-gray-200/30 shadow-sm flex-shrink-0 snap-start snap-always w-[85vw] sm:w-[380px]"
                 style={{
-                  scrollSnapAlign: index === 0 ? 'start' : 'center',
+                  scrollSnapAlign: 'center', // Always center on mobile and desktop for consistent behavior
                 }}
               >
                 {/* Card Image Container - All hover effects clipped inside */}

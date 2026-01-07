@@ -5,6 +5,7 @@
 :root {
   --color-background: #ffffff;
   --color-foreground: #000000;
+  --color-muted-foreground: #737373;
 }
 
 body {

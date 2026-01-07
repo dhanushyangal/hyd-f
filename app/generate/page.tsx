@@ -8,6 +8,7 @@ import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
 import { Menu } from "../../components/Menu";
 import { HamburgerMenu } from "../../components/HamburgerMenu";
+import { ImageGeneration } from "../../components/ui/ai-chat-image-generation-1";
 
 type Mode = "text" | "image";
 
@@ -1031,15 +1032,20 @@ export default function GeneratePage() {
       case "preview":
         return (
           <div key={message.id} className="flex justify-start mb-4">
-            <div className="max-w-[300px] bg-white rounded-2xl rounded-tl-sm border border-neutral-200 overflow-hidden shadow-sm">
-              {message.imageUrl && (
-                <img 
-                  src={message.imageUrl} 
-                  alt="Preview" 
-                  className="w-full max-h-[300px] object-contain"
-                />
-              )}
-              <div className="p-3 flex gap-2">
+            <div className="max-w-[300px]">
+              <ImageGeneration
+                progress={100}
+                loadingState="completed"
+              >
+                {message.imageUrl && (
+                  <img 
+                    src={message.imageUrl} 
+                    alt="Preview" 
+                    className="w-full max-h-[300px] object-contain"
+                  />
+                )}
+              </ImageGeneration>
+              <div className="p-3 flex gap-2 bg-white rounded-b-2xl border-x border-b border-neutral-200">
                 {message.canRegenerate && (
                   <button
                     onClick={handleRegeneratePreview}
@@ -1113,6 +1119,41 @@ export default function GeneratePage() {
           const secs = Math.ceil(seconds % 60);
           return `~${minutes}m ${secs}s`;
         };
+        
+        // Use ImageGeneration for preview image generation status
+        if (message.content === "Generating preview image...") {
+          return (
+            <div key={message.id} className="flex justify-start mb-4">
+              <div className="max-w-[300px]">
+                <ImageGeneration
+                  progress={message.progress || 0}
+                  loadingState={message.status === "generating" ? "generating" : message.status === "completed" ? "completed" : "starting"}
+                  duration={(message.estimatedSeconds || 20) * 1000}
+                >
+                  <div className="w-full h-[300px] bg-neutral-50 flex items-center justify-center rounded-xl">
+                    <div className="text-center px-4">
+                      <div className="w-8 h-8 spinner mx-auto mb-3"></div>
+                      <p className="text-sm text-black font-medium mb-1">{message.content}</p>
+                      {message.estimatedSeconds && (
+                        <p className="text-xs text-neutral-500">
+                          {message.queueInfo && message.queueInfo.jobs_ahead > 0 ? (
+                            <>
+                              {message.jobsAhead} job{message.jobsAhead !== 1 ? 's' : ''} ahead • 
+                              Wait: {formatTime(message.queueInfo.estimated_wait_seconds || 0)} • 
+                              Total: {formatTime(message.estimatedSeconds)}
+                            </>
+                          ) : (
+                            <>Estimated time: {formatTime(message.estimatedSeconds)}</>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </ImageGeneration>
+              </div>
+            </div>
+          );
+        }
         
         return (
           <div key={message.id} className="flex justify-start mb-4">
@@ -1616,7 +1657,7 @@ export default function GeneratePage() {
                    imagePreview={imagePreview}
                    mode={mode === "text" ? "text" : "image"}
                    disabled={loading || generatingPreview || uploading}
-                   placeholder={mode === "text" ? "Describe your scene with visual references..." : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
+                   placeholder={mode === "text" ? "Describe what you want to generate…" : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
                    isAtBottom={false}
                  />
                </div>
@@ -1654,7 +1695,7 @@ export default function GeneratePage() {
                    imagePreview={imagePreview}
                    mode={mode === "text" ? "text" : "image"}
                    disabled={loading || generatingPreview || uploading}
-                   placeholder={mode === "text" ? "Describe your scene with visual references..." : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
+                   placeholder={mode === "text" ? "Describe what you want to generate…" : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
                    isAtBottom={true}
                  />
                </div>
