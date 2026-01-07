@@ -64,9 +64,27 @@ export default function Showcase() {
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [imageLoopIndex, setImageLoopIndex] = useState(0);
   const [shouldAutoplay, setShouldAutoplay] = useState(false);
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(false);
+  const [isPageLoaded, setIsPageLoaded] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const posterImageRef = useRef<HTMLDivElement>(null);
 
-  // Check for low-power mode and data-saver mode
+  // Check if page has loaded
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Wait for initial page render to complete
+    if (document.readyState === 'complete') {
+      setIsPageLoaded(true);
+    } else {
+      window.addEventListener('load', () => setIsPageLoaded(true));
+      return () => window.removeEventListener('load', () => setIsPageLoaded(true));
+    }
+  }, []);
+
+  // Check for low-power mode and data-saver mode, and network conditions
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
@@ -77,9 +95,44 @@ export default function Showcase() {
     // Check for reduced motion preference
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     
-    // Only autoplay if not in data-saver mode and not reduced motion
-    setShouldAutoplay(!isDataSaver && !prefersReducedMotion);
+    // Check network conditions
+    const effectiveType = connection?.effectiveType;
+    const isSlowNetwork = effectiveType === 'slow-2g' || effectiveType === '2g' || effectiveType === '3g';
+    const isLowEndDevice = (navigator as any).hardwareConcurrency && (navigator as any).hardwareConcurrency < 4;
+    
+    // Only autoplay if not in data-saver mode, not reduced motion, and not slow network/low-end device
+    setShouldAutoplay(!isDataSaver && !prefersReducedMotion && !isSlowNetwork && !isLowEndDevice);
   }, []);
+
+  // Lazy load video after page load and when card is in view
+  useEffect(() => {
+    if (!isPageLoaded || !videoContainerRef.current) return;
+
+    // Use Intersection Observer to load video when card is visible
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !shouldLoadVideo) {
+            // Small delay to ensure poster image is displayed first
+            setTimeout(() => {
+              setShouldLoadVideo(true);
+            }, 100);
+            observer.disconnect();
+          }
+        });
+      },
+      {
+        rootMargin: '50px', // Start loading when card is 50px away from viewport
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(videoContainerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isPageLoaded, shouldLoadVideo]);
 
   // Calculate how many cards to show per view based on screen size
   const getCardsPerView = () => {
@@ -100,11 +153,13 @@ export default function Showcase() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Calculate max index - allow scrolling to the last card
-  const maxIndex = Math.max(0, showcaseItems.length - 1);
+  // Limit navigation to 2 forward and 2 backward from starting position (index 0)
+  // So valid range is 0, 1, 2 (3 cards total)
+  const maxNavIndex = 2;
+  const minNavIndex = 0;
 
   const scrollToIndex = (index: number) => {
-    const clampedIndex = Math.max(0, Math.min(index, maxIndex));
+    const clampedIndex = Math.max(minNavIndex, Math.min(index, maxNavIndex));
     setCurrentIndex(clampedIndex);
     
     if (scrollContainerRef.current && cardRefs.current[clampedIndex]) {
@@ -121,8 +176,8 @@ export default function Showcase() {
       if (clampedIndex === 0) {
         // First card aligns to start
         scrollLeft = cardLeft - containerPadding;
-      } else if (clampedIndex === showcaseItems.length - 1) {
-        // Last card - scroll to show it fully, accounting for right padding
+      } else if (clampedIndex === maxNavIndex) {
+        // Last navigable card - scroll to show it fully, accounting for right padding
         const cardRight = cardLeft + cardRect.width;
         const containerPaddingRight = parseInt(getComputedStyle(container).paddingRight || '0');
         scrollLeft = cardRight - container.clientWidth + containerPaddingRight;
@@ -135,19 +190,19 @@ export default function Showcase() {
       
       container.scrollTo({
         left: Math.max(0, Math.min(scrollLeft, maxScroll)),
-        behavior: 'smooth',
+        behavior: 'auto', // No smooth animation, instant scroll
       });
     }
   };
 
   const handleNext = () => {
-    if (currentIndex < maxIndex) {
+    if (currentIndex < maxNavIndex) {
       scrollToIndex(currentIndex + 1);
     }
   };
 
   const handlePrev = () => {
-    if (currentIndex > 0) {
+    if (currentIndex > minNavIndex) {
       scrollToIndex(currentIndex - 1);
     }
   };
@@ -167,7 +222,7 @@ export default function Showcase() {
       let minDistance = Infinity;
       
       cardRefs.current.forEach((card, index) => {
-        if (card) {
+        if (card && index <= maxNavIndex) {
           const cardLeft = card.offsetLeft;
           const cardCenter = cardLeft + card.offsetWidth / 2;
           const distance = Math.abs(scrollPosition + container.clientWidth / 2 - cardCenter);
@@ -179,27 +234,18 @@ export default function Showcase() {
         }
       });
       
-      setCurrentIndex(Math.min(Math.max(0, newIndex), maxIndex));
+      // Clamp to navigation limits
+      const clampedIndex = Math.min(Math.max(minNavIndex, newIndex), maxNavIndex);
+      setCurrentIndex(clampedIndex);
     };
 
-    // Only prevent default for horizontal wheel events
-    const handleWheel = (e: WheelEvent) => {
-      // Only prevent if scrolling horizontally
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-        e.preventDefault();
-        container.scrollLeft += e.deltaX;
-      }
-      // Allow vertical scrolling
-    };
-
+    // Allow normal horizontal scrolling without preventing default
     container.addEventListener('scroll', handleScroll, { passive: true });
-    container.addEventListener('wheel', handleWheel, { passive: false });
     
     return () => {
       container.removeEventListener('scroll', handleScroll);
-      container.removeEventListener('wheel', handleWheel);
     };
-  }, [maxIndex]);
+  }, [maxNavIndex, minNavIndex]);
 
   // Image loop animation for Trellis 2 card
   useEffect(() => {
@@ -221,11 +267,11 @@ export default function Showcase() {
           {/* Scrollable Cards Container - Smooth horizontal scroll with snap, asymmetric padding for cinematic flow */}
           <div
             ref={scrollContainerRef}
-            className="flex gap-6 sm:gap-8 md:gap-10 overflow-x-auto scrollbar-hide snap-x snap-mandatory scroll-smooth"
+            className="flex gap-6 sm:gap-8 md:gap-10 overflow-x-auto scrollbar-hide snap-x snap-mandatory"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
-              scrollBehavior: 'smooth',
+              scrollBehavior: 'auto',
               WebkitOverflowScrolling: 'touch',
               paddingLeft: 'clamp(1rem, 3vw, 3rem)',
               paddingRight: 'clamp(1rem, 12vw, 8rem)',
@@ -243,34 +289,89 @@ export default function Showcase() {
                 }}
               >
                 {/* Card Image Container - All hover effects clipped inside */}
-                <div className="relative aspect-[3/4] w-full overflow-hidden bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300">
+                <div className="relative aspect-[3/4] w-full overflow-hidden bg-black">
                   {/* Background Media Layer - Video, Image, or Looping Images */}
                   <div className="absolute inset-0 transform scale-100 group-hover:scale-[1.05] transition-transform duration-700 ease-out">
                     {item.video ? (
-                      <video
-                        ref={index === 0 ? videoRef : null}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        autoPlay={shouldAutoplay}
-                        loop
-                        muted
-                        playsInline
-                        preload="metadata"
-                        style={{
-                          willChange: 'transform',
-                          contentVisibility: 'auto',
-                        }}
-                        onLoadedMetadata={(e) => {
-                          // Prevent repaint/reflow during load
-                          const video = e.currentTarget;
-                          video.style.opacity = '0';
-                          requestAnimationFrame(() => {
-                            video.style.opacity = '1';
-                            video.style.transition = 'opacity 0.3s ease-in';
-                          });
-                        }}
+                      <div 
+                        ref={index === 0 ? videoContainerRef : null}
+                        className="absolute inset-0 w-full h-full"
                       >
-                        <source src={item.video} type="video/mp4" />
-                      </video>
+                        {/* Poster Image - Shown immediately, prevents layout shift */}
+                        <div
+                          ref={index === 0 ? posterImageRef : null}
+                          className="absolute inset-0 w-full h-full"
+                          style={{
+                            opacity: isVideoReady ? 0 : 1,
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          <Image
+                            src="/hallowhydrilla_001.jpg"
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                            priority={index === 0}
+                            loading={index === 0 ? "eager" : "lazy"}
+                            style={{
+                              willChange: 'transform',
+                              contentVisibility: 'auto',
+                            }}
+                          />
+                        </div>
+                        {/* Video - Lazy loaded after page render and when in view */}
+                        {shouldLoadVideo && (
+                          <video
+                            ref={index === 0 ? videoRef : null}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            poster="/hallowhydrilla_001.jpg"
+                            loop
+                            muted
+                            playsInline
+                            preload="metadata"
+                            style={{
+                              willChange: 'transform',
+                              contentVisibility: 'auto',
+                              opacity: isVideoReady ? 1 : 0,
+                            }}
+                            onLoadedMetadata={(e) => {
+                              // Prevent repaint/reflow during load
+                              const video = e.currentTarget;
+                              // Wait for video to be ready to play
+                              if (video.readyState >= 2) {
+                                requestAnimationFrame(() => {
+                                  setIsVideoReady(true);
+                                  // Autoplay only when video is ready and conditions are met
+                                  if (shouldAutoplay) {
+                                    video.play().catch(() => {
+                                      // Autoplay failed, keep poster visible
+                                      setIsVideoReady(false);
+                                    });
+                                  }
+                                });
+                              }
+                            }}
+                            onCanPlay={(e) => {
+                              // Ensure smooth transition when video is ready
+                              const video = e.currentTarget;
+                              if (video.readyState >= 3 && !isVideoReady) {
+                                setIsVideoReady(true);
+                                if (shouldAutoplay) {
+                                  video.play().catch(() => {
+                                    setIsVideoReady(false);
+                                  });
+                                }
+                              }
+                            }}
+                            onError={() => {
+                              // If video fails to load, keep poster visible
+                              setIsVideoReady(false);
+                            }}
+                          >
+                            <source src={item.video} type="video/mp4" />
+                          </video>
+                        )}
+                      </div>
                     ) : item.images ? (
                       <Image
                         src={item.images[imageLoopIndex]}
@@ -414,7 +515,7 @@ export default function Showcase() {
           <div className="absolute top-full mt-6 sm:mt-8 md:mt-10 right-4 sm:right-6 md:right-8 lg:right-12 flex gap-2 z-30">
             <button
               onClick={handlePrev}
-              disabled={currentIndex === 0}
+              disabled={currentIndex <= minNavIndex}
               className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/95 backdrop-blur-md border border-gray-300/50 shadow-md flex items-center justify-center hover:bg-white hover:shadow-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Previous"
             >
@@ -424,7 +525,7 @@ export default function Showcase() {
             </button>
             <button
               onClick={handleNext}
-              disabled={currentIndex >= maxIndex}
+              disabled={currentIndex >= maxNavIndex}
               className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/95 backdrop-blur-md border border-gray-300/50 shadow-md flex items-center justify-center hover:bg-white hover:shadow-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
               aria-label="Next"
             >
