@@ -183,7 +183,7 @@ function EarlyAccessContent() {
       <div className="min-h-screen bg-white">
         <section 
           ref={heroSectionRef}
-          className="relative min-h-screen w-full overflow-hidden"
+          className="relative min-h-screen w-full overflow-hidden bg-neutral-900"
         >
           <div className="absolute inset-0 z-0">
             <Image
@@ -192,6 +192,8 @@ function EarlyAccessContent() {
               fill
               className="object-cover"
               priority
+              sizes="100vw"
+              quality={80}
             />
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
           </div>
@@ -240,7 +242,7 @@ function EarlyAccessContent() {
       <div className="min-h-screen bg-white">
         <section 
           ref={heroSectionRef}
-          className="relative min-h-screen w-full overflow-hidden"
+          className="relative min-h-screen w-full overflow-hidden bg-neutral-900"
         >
           <div className="absolute inset-0 z-0">
             <Image
@@ -249,6 +251,8 @@ function EarlyAccessContent() {
               fill
               className="object-cover"
               priority
+              sizes="100vw"
+              quality={80}
             />
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
           </div>
@@ -283,10 +287,10 @@ function EarlyAccessContent() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero Section */}
+      {/* Hero Section - bg-neutral-900 prevents flash while image loads */}
       <section 
         ref={heroSectionRef}
-        className="relative min-h-screen w-full overflow-hidden"
+        className="relative min-h-screen w-full overflow-hidden bg-neutral-900"
       >
         <div className="absolute inset-0 z-0">
           <Image
@@ -295,6 +299,8 @@ function EarlyAccessContent() {
             fill
             className="object-cover"
             priority
+            sizes="100vw"
+            quality={80}
           />
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
         </div>

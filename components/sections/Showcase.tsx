@@ -511,33 +511,14 @@ export default function Showcase() {
                     </p>
                   </div>
 
-                  {/* Create 3D Button - Small, left-aligned, slides up from bottom on hover */}
+                  {/* Create 3D Button - mobile: larger text; subtle hover shade */}
                   <div className="absolute bottom-0 left-0 z-20 p-4 sm:p-5 md:p-6">
                     <Link
                       href="/generate"
-                      className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-transform duration-500 ease-out"
+                      className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit no-underline text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out"
                       style={{
-                        backgroundColor: '#262626',
-                        color: '#fff',
-                        paddingTop: 'calc(0.25rem * 3)',
-                        paddingBottom: 'calc(0.25rem * 3)',
-                        paddingLeft: 'calc(0.25rem * 5)',
-                        paddingRight: 'calc(0.25rem * 5)',
-                        borderRadius: 'calc(0.625rem - 2px)',
-                        fontSize: '0.8125rem',
-                        lineHeight: '100%',
-                        fontWeight: 500,
                         fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                        willChange: 'transform',
-                        transitionProperty: 'transform, translate',
-                        transitionDuration: '0.5s',
-                        transitionTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
-                        width: 'fit-content',
-                        textDecoration: 'none',
+                        lineHeight: '100%',
                       }}
                     >
                       Create 3D

@@ -7,6 +7,7 @@ import { ClientProviders } from "../components/ClientProviders";
 import { ConditionalNavbar } from "../components/layout/ConditionalNavbar";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -87,6 +88,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <main>{children}</main>
           </ClientProviders>
           <Analytics />
+          <SpeedInsights />
       </body>
     </html>
     </ClerkProvider>
