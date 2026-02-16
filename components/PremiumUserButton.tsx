@@ -12,7 +12,8 @@ interface PremiumUserButtonProps {
 
 /**
  * UserButton with Premium Pass ring
- * Shows a bright silver/platinum glowing ring around the avatar if user has early access
+ * Shows a bright silver/platinum glowing ring around the avatar if user has early access.
+ * Renders UserButton only after mount to avoid Clerk hydration mismatch.
  */
 export default function PremiumUserButton({ 
   afterSignOutUrl = "/", 
@@ -23,8 +24,13 @@ export default function PremiumUserButton({
   const { user } = useUser();
   const [hasPremium, setHasPremium] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   const userEmail = user?.emailAddresses?.[0]?.emailAddress || user?.primaryEmailAddress?.emailAddress || null;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const checkPremium = async () => {
@@ -47,6 +53,15 @@ export default function PremiumUserButton({
 
     checkPremium();
   }, [isSignedIn, userEmail, getToken]);
+
+  // Defer UserButton until client mount to avoid hydration mismatch (Clerk renders different markup on server vs client)
+  if (!mounted) {
+    return (
+      <div className={`relative inline-flex items-center ${className}`} aria-hidden="true">
+        <div className="w-8 h-8 rounded-full bg-neutral-200 animate-pulse" />
+      </div>
+    );
+  }
 
   // If user has premium, wrap avatar with perfect silver circle
   if (hasPremium && !isChecking) {

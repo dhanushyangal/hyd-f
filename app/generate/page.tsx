@@ -5,7 +5,8 @@ import { useAuth, SignInButton, SignedIn } from "@clerk/nextjs";
 import PremiumUserButton from "../../components/PremiumUserButton";
 import EarlyAccessCard from "../../components/sections/EarlyAccessCard";
 import Link from "next/link";
-import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName } from "../../lib/api";
+import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
+import { setCurrentWorkspaceId } from "../../lib/utils";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
 import { Menu } from "../../components/Menu";
@@ -97,6 +98,7 @@ export default function GeneratePage() {
   
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [editingImage, setEditingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelGenerationProgress, setModelGenerationProgress] = useState(0);
   
@@ -142,6 +144,11 @@ export default function GeneratePage() {
   // Search state for library
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Workspace states (for sidebar list)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
+  const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
+
   // Update cached auth state when Clerk loads
   useEffect(() => {
     if (isLoaded && isSignedIn !== undefined) {
@@ -173,14 +180,76 @@ export default function GeneratePage() {
         })));
         setChats(loadedChats);
         
-        // Don't auto-select a chat - let user create one by entering a prompt
-        setCurrentChatId(null);
-        setHistory([]);
-        setChatMessages([]);
+        if (loadedChats.length > 0) {
+          // Auto-open most recent chat so refresh shows last conversation
+          setCurrentChatId(loadedChats[0].id);
+          try {
+            const chatData = await fetchChat(loadedChats[0].id, tokenGetter);
+            setHistory(chatData.jobs);
+            const messages: ChatMessage[] = [];
+            const ts = Date.now();
+            chatData.jobs.forEach((job, i) => {
+              if (job.resultGlbUrl) {
+                messages.push({
+                  id: `msg-${ts}-${i}-3d`,
+                  type: "3d",
+                  glbUrl: getProxyGlbUrl(job.id),
+                  status: "completed",
+                  jobId: job.id,
+                  timestamp: ts + i,
+                });
+              } else if (job.previewImageUrl) {
+                if (job.prompt) {
+                  messages.push({
+                    id: `msg-${ts}-${i}-user`,
+                    type: "user",
+                    content: job.prompt,
+                    jobId: job.id,
+                    timestamp: ts + i,
+                  });
+                }
+                messages.push({
+                  id: `msg-${ts}-${i}-preview`,
+                  type: "preview",
+                  imageUrl: job.previewImageUrl,
+                  canRegenerate: false,
+                  canGenerate3D: !job.resultGlbUrl,
+                  status: "completed",
+                  jobId: job.id,
+                  timestamp: ts + i + 0.5,
+                });
+              } else {
+                if (job.prompt) {
+                  messages.push({
+                    id: `msg-${ts}-${i}-user`,
+                    type: "user",
+                    content: job.prompt,
+                    jobId: job.id,
+                    timestamp: ts + i,
+                  });
+                }
+                messages.push({
+                  id: `msg-${ts}-${i}-status`,
+                  type: "status",
+                  content: job.prompt || "Job in progress...",
+                  status: job.status === "DONE" ? "completed" : "generating",
+                  jobId: job.id,
+                  timestamp: ts + i + 0.5,
+                });
+              }
+            });
+            setChatMessages(messages);
+          } catch (loadErr: any) {
+            console.warn("Failed to load first chat:", loadErr?.message);
+            setHistory([]);
+            setChatMessages([]);
+          }
+        } else {
+          setCurrentChatId(null);
+          setHistory([]);
+          setChatMessages([]);
+        }
         setHistoryLoading(false);
-        
-        // No need to check for generating jobs since no chat is selected by default
-        // Users will create a new chat when they enter a prompt
       } catch (err: any) {
         // Log error but don't show to user - chat loading failure is non-critical
         console.warn("Failed to load chats:", err.message || err);
@@ -193,6 +262,13 @@ export default function GeneratePage() {
       }
     };
     loadChats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userIsSignedIn]);
+
+  // Fetch workspaces on mount
+  useEffect(() => {
+    if (!userIsSignedIn) return;
+    loadWorkspaces();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userIsSignedIn]);
 
@@ -419,6 +495,49 @@ export default function GeneratePage() {
     reader.readAsDataURL(file);
   };
   
+  const loadWorkspaces = async () => {
+    setWorkspacesLoading(true);
+    try {
+      const tokenGetter = async () => await getToken();
+      const ws = await fetchWorkspaces(tokenGetter);
+      setWorkspaces(ws);
+    } catch { /* ignore */ }
+    setWorkspacesLoading(false);
+  };
+
+  const handleCreateNewWorkspace = async () => {
+    try {
+      const tokenGetter = async () => await getToken();
+      const ws = await createWorkspaceApi(undefined, tokenGetter);
+      // Navigate to the new workspace (URL stays /workspace)
+      setCurrentWorkspaceId(ws.id);
+      window.location.href = "/workspace";
+    } catch (err: any) {
+      console.error("Failed to create workspace:", err);
+    }
+  };
+
+  const handleOpenWorkspace = (workspaceId: string) => {
+    setCurrentWorkspaceId(workspaceId);
+    window.location.href = "/workspace";
+  };
+
+  const handleDeleteWorkspace = async (e: React.MouseEvent, workspaceId: string) => {
+    e.stopPropagation();
+    if (!confirm("Delete this workspace? Jobs inside it will not be deleted.")) return;
+    try {
+      const tokenGetter = async () => await getToken();
+      await deleteWorkspaceApi(workspaceId, tokenGetter);
+      setWorkspaces((prev) => prev.filter((ws) => ws.id !== workspaceId));
+    } catch (err: any) {
+      console.error("Failed to delete workspace:", err);
+    }
+  };
+
+  const filteredWorkspaces = workspaces.filter((ws) =>
+    ws.name.toLowerCase().includes(workspaceSearchQuery.toLowerCase())
+  );
+
   // Handle prompt box submit - Auto-generate preview for text
   const handlePromptSubmit = async () => {
     if (!userIsSignedIn) {
@@ -482,6 +601,9 @@ export default function GeneratePage() {
       // Auto-generate preview with the chat ID
       await handleGeneratePreview(chatIdToUse);
     } else if (mode === "image" && imagePreview) {
+      const promptText = prompt.trim();
+      const hasEditPrompt = promptText.length > 0;
+
       // If no chat is selected, create a new one
       let chatIdToUse = currentChatId;
       if (!chatIdToUse) {
@@ -490,7 +612,7 @@ export default function GeneratePage() {
           const newChat = await createChat("New Chat", tokenGetter);
           setChats((prev) => [newChat, ...prev]);
           setCurrentChatId(newChat.id);
-          chatIdToUse = newChat.id; // Use the new chat ID directly
+          chatIdToUse = newChat.id;
           setHistory([]);
           setChatMessages([]);
         } catch (err: any) {
@@ -502,37 +624,69 @@ export default function GeneratePage() {
           return;
         }
       }
-      
-      // Store image preview and file before clearing
+
+      if (hasEditPrompt) {
+        // Image + prompt: edit image with prompt, then show result with "Generate 3D" option
+        addChatMessage({ type: "user", content: promptText });
+        const statusId = addChatMessage({
+          type: "status",
+          content: "Editing image...",
+          status: "generating",
+          progress: 50,
+        });
+        setEditingImage(true);
+        try {
+          const tokenGetter = async () => await getToken();
+          const result = await editImage(promptText, uploadedFile, imageUrl || undefined, tokenGetter);
+          updateChatMessage(statusId, { content: "Edit complete.", status: "completed", progress: 100 });
+          setPreviewImageUrl(result.image_url);
+          setPreviewId(null);
+          addChatMessage({
+            type: "preview",
+            imageUrl: result.image_url,
+            canGenerate3D: true,
+            canRegenerate: false,
+          });
+          if (chatIdToUse && result.image_url) {
+            setChats((prev) => prev.map((c) =>
+              c.id === chatIdToUse ? { ...c, firstJobPreviewImageUrl: result.image_url } : c
+            ));
+          }
+          setPrompt("");
+          setUploadedFile(null);
+          setImagePreview(null);
+          setImageUrl("");
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        } catch (err: any) {
+          updateChatMessage(statusId, { type: "error", content: err.message || "Failed to edit image" });
+          addChatMessage({
+            type: "error",
+            content: err.message || "Failed to edit image",
+          });
+        } finally {
+          setEditingImage(false);
+        }
+        return;
+      }
+
+      // No prompt: proceed directly to 3D generation from uploaded image
       const previewToAdd = imagePreview;
       const fileToUse = uploadedFile;
-      
-      // Update chat preview image immediately
       if (chatIdToUse && previewToAdd) {
-        setChats((prev) => prev.map((chat) => 
-          chat.id === chatIdToUse 
-            ? { ...chat, firstJobPreviewImageUrl: previewToAdd }
-            : chat
+        setChats((prev) => prev.map((chat) =>
+          chat.id === chatIdToUse ? { ...chat, firstJobPreviewImageUrl: previewToAdd } : chat
         ));
       }
-      
-      // Clear image from PromptBox immediately so it disappears
       setUploadedFile(null);
       setImagePreview(null);
       setImageUrl("");
       setMode("text");
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      
-      // Add image to chat, then proceed to 3D generation
+      if (fileInputRef.current) fileInputRef.current.value = "";
       addChatMessage({
         type: "preview",
         imageUrl: previewToAdd,
-        canGenerate3D: false, // Don't show generate button since we're auto-generating
+        canGenerate3D: false,
       });
-      
-      // Proceed directly to 3D generation (use stored file and preview) with the chat ID
       await handleImageTo3D(previewToAdd, fileToUse, chatIdToUse);
     }
   };
@@ -1265,7 +1419,7 @@ export default function GeneratePage() {
                           handleImageTo3D();
                         }
                       }}
-                      disabled={loading || generatingPreview}
+                      disabled={loading || generatingPreview || editingImage}
                       className="flex-1 px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
                     >
                       Generate 3D
@@ -1908,6 +2062,69 @@ export default function GeneratePage() {
               </div>
             ))
           )}
+
+          {/* Workspaces Section */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-black">Workspaces</h2>
+              <button
+                onClick={handleCreateNewWorkspace}
+                className="px-3 py-1.5 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors"
+              >
+                + New
+              </button>
+            </div>
+            {workspacesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-5 h-5 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
+              </div>
+            ) : workspaces.length === 0 ? (
+              <p className="text-neutral-400 text-sm text-center py-4">No workspaces yet</p>
+            ) : (
+              workspaces.slice(0, 10).map((ws) => (
+                <div
+                  key={ws.id}
+                  className="bg-neutral-50 rounded-xl border border-neutral-100 overflow-hidden hover:border-neutral-300 transition-all mb-2"
+                >
+                  <div className="flex gap-3 p-3 group">
+                    <div
+                      className="flex gap-3 flex-1 min-w-0 cursor-pointer"
+                      onClick={() => handleOpenWorkspace(ws.id)}
+                    >
+                      <div className="flex-shrink-0">
+                        {ws.firstJobPreviewImageUrl ? (
+                          <img src={ws.firstJobPreviewImageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-neutral-200 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-black truncate font-medium">{ws.name}</p>
+                        <p className="text-xs text-neutral-400 mt-0.5">
+                          {ws.jobCount ? `${ws.jobCount} items` : "Empty"} · {new Date(ws.updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => handleDeleteWorkspace(e, ws.id)}
+                        className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete workspace"
+                      >
+                        <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -1967,26 +2184,14 @@ export default function GeneratePage() {
              <div className="flex-1 flex items-center justify-center px-4 py-8">
                <div className="w-full max-w-3xl">
                  <PromptBox
-                   value={mode === "text" ? prompt : ""}
-                   onChange={(value) => {
-                     setPrompt(value);
-                     // Clear image when text is typed
-                     if (value.trim() && imagePreview) {
-                       setImagePreview(null);
-                       setUploadedFile(null);
-                       setImageUrl("");
-                       setMode("text");
-                       if (fileInputRef.current) {
-                         fileInputRef.current.value = "";
-                       }
-                     }
-                   }}
+                   value={prompt}
+                   onChange={(value) => setPrompt(value)}
                    onImageUpload={handleImageUpload}
                    onSubmit={handlePromptSubmit}
                    imagePreview={imagePreview}
                    mode={mode === "text" ? "text" : "image"}
-                   disabled={loading || generatingPreview || uploading}
-                   placeholder={mode === "text" ? "Describe what you want to generate…" : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
+                   disabled={loading || generatingPreview || uploading || editingImage}
+                   placeholder={mode === "text" ? "Describe what you want to generate…" : imagePreview ? "Add a prompt to edit the image, or click Create to generate 3D model..." : "Upload an image to generate a 3D model or edit with a prompt..."}
                    isAtBottom={false}
                  />
                </div>
@@ -2005,26 +2210,14 @@ export default function GeneratePage() {
                {/* Prompt Box */}
                <div className="pb-6 px-4">
                  <PromptBox
-                   value={mode === "text" ? prompt : ""}
-                   onChange={(value) => {
-                     setPrompt(value);
-                     // Clear image when text is typed
-                     if (value.trim() && imagePreview) {
-                       setImagePreview(null);
-                       setUploadedFile(null);
-                       setImageUrl("");
-                       setMode("text");
-                       if (fileInputRef.current) {
-                         fileInputRef.current.value = "";
-                       }
-                     }
-                   }}
+                   value={prompt}
+                   onChange={(value) => setPrompt(value)}
                    onImageUpload={handleImageUpload}
                    onSubmit={handlePromptSubmit}
                    imagePreview={imagePreview}
                    mode={mode === "text" ? "text" : "image"}
-                   disabled={loading || generatingPreview || uploading}
-                   placeholder={mode === "text" ? "Describe what you want to generate…" : imagePreview ? "Image uploaded. Click Create to generate 3D model..." : "Upload an image to generate a 3D model..."}
+                   disabled={loading || generatingPreview || uploading || editingImage}
+                   placeholder={mode === "text" ? "Describe what you want to generate…" : imagePreview ? "Add a prompt to edit the image, or click Create to generate 3D model..." : "Upload an image to generate a 3D model or edit with a prompt..."}
                    isAtBottom={true}
                  />
                </div>
@@ -2032,6 +2225,7 @@ export default function GeneratePage() {
            )}
          </div>
       </div>
+
     </div>
   );
 }

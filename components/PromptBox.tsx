@@ -271,18 +271,9 @@ export function PromptBox({
           <textarea 
             ref={textareaRef}
             value={value}
-            onChange={(e) => {
-              const newValue = e.target.value;
-              // Clear image when text is typed
-              if (newValue.trim() && images.length > 0 && onImageUpload) {
-                const emptyFile = new File([], "");
-                // @ts-ignore
-                onImageUpload(emptyFile);
-              }
-              onChange(newValue);
-            }}
+            onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={disabled || images.length > 0}
+            disabled={disabled}
             placeholder={placeholder}
             className="prompt-box-textarea w-full bg-transparent border-0 outline-none text-[14px] sm:text-[18px] font-medium text-gray-900 placeholder:text-gray-400 resize-none min-h-[28px] leading-tight tracking-tight p-0 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-0 focus:border-0 focus:outline-none focus:shadow-none font-dm-sans"
             style={{

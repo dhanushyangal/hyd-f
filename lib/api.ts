@@ -1,4 +1,4 @@
-const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.co";
+const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.ai";
 
 // Backend URL - must be set in Vercel environment variables as NEXT_PUBLIC_BACKEND_URL
 const getBackendBase = (): string => {
@@ -10,11 +10,6 @@ const getBackendBase = (): string => {
 };
 
 const backendBase = getBackendBase();
-
-// Log the backend URL being used (helpful for debugging)
-if (typeof window !== 'undefined') {
-  console.log("🌐 Backend URL configured:", backendBase);
-}
 
 /**
  * Check if an error is a network error indicating the API is unavailable
@@ -133,6 +128,17 @@ export interface Chat {
   firstJobPrompt?: string | null;
 }
 
+export interface Workspace {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  firstJobPreviewImageUrl?: string | null;
+  firstJobPrompt?: string | null;
+  jobCount?: number;
+}
+
 export interface BackendJob {
   id: string;
   userId: string | null;
@@ -148,6 +154,10 @@ export interface BackendJob {
   errorCode: string | null;
   errorMessage: string | null;
   name?: string | null;
+  workspaceId?: string | null;
+  parentJobId?: string | null;
+  parentJobIds?: string[];       // All parent IDs (multi-parent merges)
+  sourceImages?: string[] | null; // Actual source image URLs used as input
   createdAt: string;
   updatedAt: string;
 }
@@ -212,7 +222,12 @@ export async function registerJobWithPreview(
   previewImageUrl: string,
   prompt: string,
   getToken?: () => Promise<string | null>,
-  chatId?: string | null
+  chatId?: string | null,
+  generateType?: string | null,
+  workspaceId?: string | null,
+  parentJobId?: string | null,
+  parentJobIds?: string[] | null,
+  sourceImages?: string[] | null
 ): Promise<void> {
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
@@ -230,6 +245,21 @@ export async function registerJobWithPreview(
     };
     if (chatId) {
       body.chatId = chatId;
+    }
+    if (generateType) {
+      body.generateType = generateType;
+    }
+    if (workspaceId) {
+      body.workspaceId = workspaceId;
+    }
+    if (parentJobId) {
+      body.parentJobId = parentJobId;
+    }
+    if (parentJobIds && parentJobIds.length > 0) {
+      body.parentJobIds = parentJobIds;
+    }
+    if (sourceImages && sourceImages.length > 0) {
+      body.sourceImages = sourceImages;
     }
 
     await fetch(`${backendBase}/api/3d/register-job`, {
@@ -295,9 +325,147 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
 }
 
 /**
+ * Edit image with prompt (image-to-image). Sync; returns edited image URL.
+ * Pass either imageFile or imageUrl so the GPU API can fetch/use the image.
+ */
+export async function editImage(
+  prompt: string,
+  imageFile?: File | null,
+  imageUrl?: string | null,
+  getToken?: () => Promise<string | null>
+): Promise<{ edit_id: string; image_url: string; prompt: string; strength: number }> {
+  const formData = new FormData();
+  formData.append("prompt", prompt.trim());
+  if (imageFile) {
+    formData.append("image", imageFile);
+  } else if (imageUrl) {
+    formData.append("image_url", imageUrl);
+  } else {
+    throw new Error("Either image file or image URL is required");
+  }
+
+  try {
+    const res = await fetch(`${apiBase}/edit-image`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      let errorText: string;
+      try {
+        const errorData = await res.json();
+        errorText = errorData.error || "Failed to edit image";
+      } catch {
+        errorText = (await res.text()) || "Failed to edit image";
+      }
+      throw new Error(errorText);
+    }
+
+    const result = await res.json();
+    // Resolve relative image_url to full URL for use in image-to-3d
+    let imageUrlResolved = result.image_url || "";
+    if (imageUrlResolved.startsWith("/")) {
+      const base = apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase;
+      imageUrlResolved = `${base}${imageUrlResolved}`;
+    }
+    return {
+      edit_id: result.edit_id,
+      image_url: imageUrlResolved,
+      prompt: result.prompt || prompt,
+      strength: result.strength ?? 0.6,
+    };
+  } catch (err: any) {
+    if (isApiUnavailableError(err)) {
+      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      throw new Error(getGpuOfflineErrorMessage());
+    }
+    throw err;
+  }
+}
+
+/**
+ * Fetch a remote image URL and convert it to a File object for FormData uploads.
+ * Routes through our backend image proxy to avoid S3 CORS issues.
+ */
+async function urlToFile(url: string, filename: string): Promise<File> {
+  // Use the backend proxy to avoid CORS when fetching S3 images
+  const proxyUrl = `${backendBase}/api/3d/image-proxy?url=${encodeURIComponent(url)}`;
+  const response = await fetch(proxyUrl);
+  if (!response.ok) throw new Error(`Failed to fetch image: ${url}`);
+  const blob = await response.blob();
+  const ext = url.split(".").pop()?.split("?")[0] || "png";
+  const mimeType = blob.type || `image/${ext}`;
+  return new File([blob], `${filename}.${ext}`, { type: mimeType });
+}
+
+/**
+ * Combined edit: Prompt + 2 images -> one combined/edited image (sync).
+ * Uses the /combined-edit gateway endpoint.
+ * Accepts either File objects (from disk upload) or URL strings (from workspace library).
+ */
+export async function combinedEdit(
+  prompt: string,
+  imageFile1: File | null,
+  imageFile2: File | null,
+  getToken?: () => Promise<string | null>,
+  imageUrl1?: string | null,
+  imageUrl2?: string | null
+): Promise<{ combined_id: string; image_url: string; prompt: string; prompt_used: string }> {
+  // Resolve URL-based images to File objects (so the external API always gets files)
+  const file1 = imageFile1 || (imageUrl1 ? await urlToFile(imageUrl1, "image_1") : null);
+  const file2 = imageFile2 || (imageUrl2 ? await urlToFile(imageUrl2, "image_2") : null);
+
+  if (!file1 || !file2) {
+    throw new Error("Both images are required for combined edit");
+  }
+
+  const formData = new FormData();
+  formData.append("prompt", prompt.trim());
+  formData.append("image_1", file1);
+  formData.append("image_2", file2);
+
+  try {
+    const res = await fetch(`${apiBase}/combined-edit`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      let errorText: string;
+      try {
+        const errorData = await res.json();
+        errorText = errorData.error || "Failed to combine images";
+      } catch {
+        errorText = (await res.text()) || "Failed to combine images";
+      }
+      throw new Error(errorText);
+    }
+
+    const result = await res.json();
+    let imageUrlResolved = result.image_url || "";
+    if (imageUrlResolved.startsWith("/")) {
+      const base = apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase;
+      imageUrlResolved = `${base}${imageUrlResolved}`;
+    }
+    return {
+      combined_id: result.combined_id,
+      image_url: imageUrlResolved,
+      prompt: result.prompt || prompt,
+      prompt_used: result.prompt_used || prompt,
+    };
+  } catch (err: any) {
+    if (isApiUnavailableError(err)) {
+      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      throw new Error(getGpuOfflineErrorMessage());
+    }
+    throw err;
+  }
+}
+
+/**
  * Submit text-to-3D job
  */
-export async function submitTextTo3D(prompt: string, getToken?: () => Promise<string | null>, chatId?: string | null): Promise<{ job_id: string }> {
+export async function submitTextTo3D(prompt: string, getToken?: () => Promise<string | null>, chatId?: string | null, workspaceId?: string | null): Promise<{ job_id: string }> {
   const formData = new FormData();
   formData.append("prompt", prompt);
 
@@ -334,6 +502,9 @@ export async function submitTextTo3D(prompt: string, getToken?: () => Promise<st
     if (chatId) {
       registerBody.chatId = chatId;
     }
+    if (workspaceId) {
+      registerBody.workspaceId = workspaceId;
+    }
 
     await fetch(`${backendBase}/api/3d/register-job`, {
       method: "POST",
@@ -356,7 +527,7 @@ export async function submitTextTo3D(prompt: string, getToken?: () => Promise<st
 }
 
 /**
- * Upload image file to backend and get URL
+ * Upload image file to backend and get URL (backend may use local uploads or S3).
  */
 export async function uploadImage(file: File, getToken?: () => Promise<string | null>): Promise<string> {
   const formData = new FormData();
@@ -392,6 +563,43 @@ export async function uploadImage(file: File, getToken?: () => Promise<string | 
 }
 
 /**
+ * Upload image via the gateway API so the returned URL is always an S3 URL.
+ * Use this for source_images in combined-edit so DB stores stable S3 links (not localhost).
+ */
+export async function uploadImageViaApi(file: File, getToken?: () => Promise<string | null>): Promise<string> {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const headers: HeadersInit = {};
+  if (getToken) {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  const res = await fetch(`${apiBase}/upload-image`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let errorText: string;
+    try {
+      const errorData = await res.json();
+      errorText = errorData.error || "Failed to upload image";
+    } catch {
+      errorText = (await res.text()) || "Failed to upload image";
+    }
+    throw new Error(errorText);
+  }
+
+  const data = await res.json();
+  return data.url;
+}
+
+/**
  * Submit image-to-3D job
  */
 export async function submitImageTo3D(
@@ -399,12 +607,23 @@ export async function submitImageTo3D(
   imageFile: File | null = null,
   getToken?: () => Promise<string | null>,
   previewJobId?: string | null,
-  chatId?: string | null
+  chatId?: string | null,
+  workspaceId?: string | null,
+  parentJobId?: string | null
 ): Promise<{ job_id: string }> {
   const formData = new FormData();
 
+  // Resolve source image URL: upload file to get S3 URL so source_images is always a real URL
+  let sourceImageUrl: string | null = imageUrl || null;
   if (imageFile) {
-    formData.append("image_file", imageFile);
+    try {
+      sourceImageUrl = await uploadImageViaApi(imageFile, getToken);
+      formData.append("image_url", sourceImageUrl);
+    } catch (uploadErr) {
+      // Fallback: send file directly (register-job won't have a source image URL)
+      formData.append("image_file", imageFile);
+      sourceImageUrl = null;
+    }
   } else if (imageUrl) {
     formData.append("image_url", imageUrl);
   } else {
@@ -430,7 +649,7 @@ export async function submitImageTo3D(
 
   const result = await res.json();
 
-  // Register job in backend with auth token
+  // Register job in backend with auth token and source image for lineage
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
     if (getToken) {
@@ -440,12 +659,21 @@ export async function submitImageTo3D(
       }
     }
 
-    const registerBody: any = { job_id: result.job_id, imageUrl: imageUrl || "uploaded_file" };
+    const registerBody: any = { job_id: result.job_id, imageUrl: sourceImageUrl || imageUrl || "uploaded_file" };
+    if (sourceImageUrl) {
+      registerBody.sourceImages = [sourceImageUrl];
+    }
     if (previewJobId) {
       registerBody.previewJobId = previewJobId;
     }
     if (chatId) {
       registerBody.chatId = chatId;
+    }
+    if (workspaceId) {
+      registerBody.workspaceId = workspaceId;
+    }
+    if (parentJobId || previewJobId) {
+      registerBody.parentJobId = parentJobId || previewJobId;
     }
 
     await fetch(`${backendBase}/api/3d/register-job`, {
@@ -466,6 +694,39 @@ export async function submitImageTo3D(
     // Re-throw other errors
     throw err;
   }
+}
+
+/**
+ * Fetch job lineage (iterative prompting chain from root to the given job)
+ */
+export interface LineageItem {
+  id: string;
+  parentJobId: string | null;
+  parentJobIds: string[];         // All parent IDs (multi-parent merges)
+  sourceImages: string[] | null;  // Source image URLs used as input
+  prompt: string | null;
+  previewImageUrl: string | null;
+  resultGlbUrl: string | null;
+  generateType: string;
+  status: string;
+  createdAt: string;
+}
+
+export async function fetchJobLineage(
+  jobId: string,
+  getToken?: () => Promise<string | null>
+): Promise<LineageItem[]> {
+  const headers: HeadersInit = {};
+  if (getToken) {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  const res = await fetch(`${backendBase}/api/3d/jobs/${jobId}/lineage`, { headers });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.lineage || [];
 }
 
 /**
@@ -1162,5 +1423,181 @@ export async function checkEarlyAccess(
     };
   } catch {
     return { hasAccess: false, accessInfo: null };
+  }
+}
+
+
+// ============================================
+// WORKSPACE API
+// ============================================
+
+/**
+ * Fetch all workspaces for the current user
+ */
+export async function fetchWorkspaces(getToken?: () => Promise<string | null>): Promise<Workspace[]> {
+  try {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    const response = await fetch(`${backendBase}/api/3d/workspaces?t=${Date.now()}`, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      if (response.status === 500) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.error?.includes("relation") || errorData.error?.includes("does not exist")) {
+          console.warn("Workspaces table not found, returning empty array.");
+          return [];
+        }
+      }
+      throw new Error(`Failed to fetch workspaces: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.workspaces || [];
+  } catch (err: any) {
+    console.error("Failed to fetch workspaces:", err);
+    return [];
+  }
+}
+
+/**
+ * Create a new workspace
+ */
+export async function createWorkspaceApi(name?: string, getToken?: () => Promise<string | null>): Promise<Workspace> {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (getToken) {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  const response = await fetch(`${backendBase}/api/3d/workspaces`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ name: name || "Untitled Workspace" }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create workspace: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.workspace;
+}
+
+/**
+ * Get a workspace by ID
+ */
+export async function fetchWorkspace(workspaceId: string, getToken?: () => Promise<string | null>): Promise<Workspace | null> {
+  try {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`Failed to fetch workspace: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.workspace || null;
+  } catch (err: any) {
+    console.error("Failed to fetch workspace:", err);
+    return null;
+  }
+}
+
+/**
+ * Get all jobs for a workspace
+ */
+export async function fetchWorkspaceJobs(workspaceId: string, getToken?: () => Promise<string | null>): Promise<BackendJob[]> {
+  try {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}/jobs?t=${Date.now()}`, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch workspace jobs: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.jobs || [];
+  } catch (err: any) {
+    console.error("Failed to fetch workspace jobs:", err);
+    return [];
+  }
+}
+
+/**
+ * Update workspace name
+ */
+export async function updateWorkspaceNameApi(workspaceId: string, name: string, getToken?: () => Promise<string | null>): Promise<void> {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (getToken) {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}/name`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update workspace name: ${response.statusText}`);
+  }
+}
+
+/**
+ * Delete a workspace
+ */
+export async function deleteWorkspaceApi(workspaceId: string, getToken?: () => Promise<string | null>): Promise<void> {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (getToken) {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete workspace: ${response.statusText}`);
   }
 }

@@ -42,6 +42,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           footerPages: "hidden",
         },
       }}
+      signInFallbackRedirectUrl="/"
+      signUpFallbackRedirectUrl="/"
     >
     <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
         <head>

@@ -227,6 +227,26 @@ button:active:not(:disabled) {
   }
 }
 
+/* Top loading bar: smooth progress width animation */
+@keyframes loadingBarWidth {
+  0% {
+    width: 0%;
+  }
+  40% {
+    width: 60%;
+  }
+  80% {
+    width: 88%;
+  }
+  100% {
+    width: 98%;
+  }
+}
+
+.animate-loading-bar-width {
+  animation: loadingBarWidth 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 .animate-in {
   animation: slideIn 0.3s ease-out;
 }
@@ -275,8 +295,8 @@ div[class*="footer"] {
 /* Glassmorphism effect with backdrop filter */
 .glass-overlay {
   background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
 }
@@ -394,10 +414,10 @@ div[class*="footer"] {
   font-family: var(--font-space-grotesk), Space Grotesk, sans-serif;
 }
 
-/* Hide scrollbar but keep functionality */
+/* Hide scrollbar but keep functionality (webkit below for Chrome/Safari) */
 .hide-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  scrollbar-width: none;     /* Firefox; older Chrome/Safari use webkit rule below */
 }
 
 .hide-scrollbar::-webkit-scrollbar {
