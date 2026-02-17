@@ -5,7 +5,7 @@ import { useAuth, SignInButton, SignedIn } from "@clerk/nextjs";
 import PremiumUserButton from "../../components/PremiumUserButton";
 import EarlyAccessCard from "../../components/sections/EarlyAccessCard";
 import Link from "next/link";
-import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
+import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, cancelJob, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
 import { setCurrentWorkspaceId } from "../../lib/utils";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
@@ -309,7 +309,7 @@ export default function GeneratePage() {
         consecutiveFailures = 0; // Reset on success
         
         if (status.queue) {
-          const estimatedTotalSeconds = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 130;
+          const estimatedTotalSeconds = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 300;
           
           setCurrentGenerating(prev => prev ? {
             ...prev,
@@ -337,7 +337,7 @@ export default function GeneratePage() {
           }
         } else if (status.created_at) {
           // No queue info, but we have created_at - estimate based on elapsed time
-          const estimatedTotalSeconds = currentGenerating.estimatedTotalSeconds || 130;
+          const estimatedTotalSeconds = currentGenerating.estimatedTotalSeconds || 300;
           const now = Date.now();
           const elapsed = now - status.created_at;
           const elapsedSeconds = elapsed / 1000;
@@ -406,6 +406,19 @@ export default function GeneratePage() {
           } : null);
           setLoading(false);
           setUploading(false);
+        } else if (status.status === "cancelled") {
+          if (modelProgressIntervalRef.current) {
+            clearInterval(modelProgressIntervalRef.current);
+            modelProgressIntervalRef.current = null;
+          }
+          setCurrentGenerating(null);
+          setLoading(false);
+          setUploading(false);
+          setChatMessages((prev) => {
+            const filtered = prev.filter((msg) => !(msg.type === "status" && msg.status === "generating"));
+            filtered.push({ id: `error-${Date.now()}`, type: "error", content: "Job cancelled", timestamp: Date.now() });
+            return filtered;
+          });
         }
       } catch (err: any) {
         consecutiveFailures++;
@@ -701,7 +714,7 @@ export default function GeneratePage() {
     setLoading(true);
     setModelGenerationProgress(0);
     
-    let estimatedTotalSeconds = 130;
+    let estimatedTotalSeconds = 300;
     let queueInfo: QueueInfo | null = null;
     try {
       queueInfo = await fetchQueueInfo();
@@ -1004,7 +1017,7 @@ export default function GeneratePage() {
       progress: 0,
     });
 
-    let estimatedTotalSeconds = 130;
+    let estimatedTotalSeconds = 300;
     let queueInfo: QueueInfo | null = null;
     try {
       queueInfo = await fetchQueueInfo();
@@ -1692,6 +1705,32 @@ export default function GeneratePage() {
                     <span className="text-xs text-neutral-500">{currentGenerating.progress}%</span>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!currentGenerating?.jobId) return;
+                    try {
+                      await cancelJob(currentGenerating.jobId, () => getToken());
+                      if (modelProgressIntervalRef.current) {
+                        clearInterval(modelProgressIntervalRef.current);
+                        modelProgressIntervalRef.current = null;
+                      }
+                      setCurrentGenerating(null);
+                      setLoading(false);
+                      setUploading(false);
+                      setChatMessages((prev) => {
+                        const filtered = prev.filter((msg) => !(msg.type === "status" && msg.status === "generating"));
+                        filtered.push({ id: `error-${Date.now()}`, type: "error", content: "Job cancelled", timestamp: Date.now() });
+                        return filtered;
+                      });
+                    } catch (e: any) {
+                      setChatMessages((prev) => [...prev, { id: `error-${Date.now()}`, type: "error", content: e?.message || "Failed to cancel", timestamp: Date.now() }]);
+                    }
+                  }}
+                  className="shrink-0 px-2 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}
@@ -1926,6 +1965,32 @@ export default function GeneratePage() {
                     <span className="text-xs text-neutral-500">{currentGenerating.progress}%</span>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!currentGenerating?.jobId) return;
+                    try {
+                      await cancelJob(currentGenerating.jobId, () => getToken());
+                      if (modelProgressIntervalRef.current) {
+                        clearInterval(modelProgressIntervalRef.current);
+                        modelProgressIntervalRef.current = null;
+                      }
+                      setCurrentGenerating(null);
+                      setLoading(false);
+                      setUploading(false);
+                      setChatMessages((prev) => {
+                        const filtered = prev.filter((msg) => !(msg.type === "status" && msg.status === "generating"));
+                        filtered.push({ id: `error-${Date.now()}`, type: "error", content: "Job cancelled", timestamp: Date.now() });
+                        return filtered;
+                      });
+                    } catch (e: any) {
+                      setChatMessages((prev) => [...prev, { id: `error-${Date.now()}`, type: "error", content: e?.message || "Failed to cancel", timestamp: Date.now() }]);
+                    }
+                  }}
+                  className="shrink-0 px-2 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}

@@ -34,6 +34,16 @@ function getGpuOfflineErrorMessage(): string {
   return "GPU is currently offline. Please try again after some time.";
 }
 
+/** Only notify founders when API explicitly reported GPU/offline, not for generic network "Failed to fetch" */
+function shouldNotifyGpuOffline(err: any): boolean {
+  const msg = err?.message ?? "";
+  return (
+    msg.includes("GPU is currently offline") ||
+    msg.includes("External service unavailable") ||
+    msg.includes("GPU API is currently unavailable")
+  );
+}
+
 /**
  * Notify backend about GPU offline error (non-blocking)
  */
@@ -316,7 +326,9 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
     // Check if it's a network error indicating API is unavailable
     if (isApiUnavailableError(err)) {
       // Send notification to founders (non-blocking)
-      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      if (shouldNotifyGpuOffline(err)) {
+        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      }
       throw new Error(getGpuOfflineErrorMessage());
     }
     // Re-throw other errors
@@ -376,7 +388,9 @@ export async function editImage(
     };
   } catch (err: any) {
     if (isApiUnavailableError(err)) {
-      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      if (shouldNotifyGpuOffline(err)) {
+        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      }
       throw new Error(getGpuOfflineErrorMessage());
     }
     throw err;
@@ -455,7 +469,9 @@ export async function combinedEdit(
     };
   } catch (err: any) {
     if (isApiUnavailableError(err)) {
-      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      if (shouldNotifyGpuOffline(err)) {
+        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      }
       throw new Error(getGpuOfflineErrorMessage());
     }
     throw err;
@@ -518,7 +534,9 @@ export async function submitTextTo3D(prompt: string, getToken?: () => Promise<st
     // Check if it's a network error indicating API is unavailable
     if (isApiUnavailableError(err)) {
       // Send notification to founders (non-blocking)
-      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      if (shouldNotifyGpuOffline(err)) {
+        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      }
       throw new Error(getGpuOfflineErrorMessage());
     }
     // Re-throw other errors
@@ -688,7 +706,9 @@ export async function submitImageTo3D(
     // Check if it's a network error indicating API is unavailable
     if (isApiUnavailableError(err)) {
       // Send notification to founders (non-blocking)
-      notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      if (shouldNotifyGpuOffline(err)) {
+        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
+      }
       throw new Error(getGpuOfflineErrorMessage());
     }
     // Re-throw other errors
@@ -766,9 +786,9 @@ export async function fetchQueueInfo(): Promise<(QueueInfo & {
 }) | null> {
   let timeoutId: NodeJS.Timeout | null = null;
   try {
-    // Create abort controller for timeout - reduced to 2 seconds for faster failure detection
+    // Backend responds within 1.5s (its own Python timeout); use 3.5s so we don't abort before backend responds
     const controller = new AbortController();
-    timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout for faster detection
+    timeoutId = setTimeout(() => controller.abort(), 3500);
     
     const res = await fetch(`${backendBase}/api/3d/queue/info`, {
       signal: controller.signal,
@@ -779,57 +799,51 @@ export async function fetchQueueInfo(): Promise<(QueueInfo & {
       timeoutId = null;
     }
     
-    // Check status immediately before parsing JSON - faster error detection
-    if (!res.ok) {
-      // If 503 (Service Unavailable), API is offline
-      if (res.status === 503) {
-        throw new Error("GPU is currently offline. Please try again after some time.");
-      }
-      // For other errors, try to parse error message
-      try {
-        const errorData = await res.json();
-        if (errorData.api_available === false || errorData.error) {
-          throw new Error("GPU is currently offline. Please try again after some time.");
-        }
-      } catch {
-        throw new Error("GPU is currently offline. Please try again after some time.");
-    }
-    }
-    
+    // Backend may return 200 with api_available: false when gateway is unreachable (no 503)
     const data = await res.json();
-    
-    // Check if API is unavailable (double check after parsing)
-    if (data.api_available === false) {
-      // API is offline - throw error to be caught by caller
-      throw new Error("GPU is currently offline. Please try again after some time.");
+
+    // Never treat queue/info failure as "GPU offline" - use fallback so 3D form stays usable.
+    // GPU offline is only shown when an actual 3D submit (register-job / text-to-3d / image-to-3d) fails.
+    if (!res.ok) {
+      // If we still get 503, use response body as fallback if it has queue shape
+      if (res.status === 503 && data && typeof data.estimated_total_seconds === "number") {
+        return {
+          position: 0,
+          jobs_ahead: data.jobs_ahead_for_new ?? 0,
+          estimated_wait_seconds: data.estimated_wait_for_new_job_seconds ?? 0,
+          estimated_total_seconds: data.estimated_total_seconds ?? 300,
+          queue_length: data.queue_length ?? 0,
+          currently_processing: data.currently_processing ?? false,
+          estimated_wait_for_preview_seconds: data.estimated_wait_for_preview_seconds ?? 0,
+          estimated_preview_time_seconds: data.estimated_preview_time_seconds ?? 25,
+          api_available: false,
+        };
+      }
+      return null;
     }
-    
+
     return {
       position: 0,
-      jobs_ahead: data.queue_length + (data.currently_processing ? 1 : 0),
+      jobs_ahead: data.jobs_ahead_for_new ?? data.queue_length + (data.currently_processing ? 1 : 0),
       estimated_wait_seconds: data.estimated_wait_for_new_job_seconds || 0,
-      estimated_total_seconds: (data.estimated_wait_for_new_job_seconds || 0) + (data.estimated_time_per_job_seconds || 130),
+      estimated_total_seconds: data.estimated_total_seconds ?? (data.estimated_wait_for_new_job_seconds || 0) + (data.estimated_time_per_job_seconds || 300),
       queue_length: data.queue_length || 0,
       currently_processing: data.currently_processing || false,
-      // Preview queue info
       estimated_wait_for_preview_seconds: data.estimated_wait_for_preview_seconds || 0,
-      estimated_preview_time_seconds: data.estimated_preview_time_seconds || 20,
-      api_available: data.api_available !== false, // Default to true if not specified
+      estimated_preview_time_seconds: data.estimated_preview_time_seconds ?? 25,
+      api_available: data.api_available !== false,
     };
   } catch (err: any) {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
-    // Check if it's a timeout or network error
-    if (err.name === "AbortError" || err.name === "TimeoutError" || 
-        (err.name === "TypeError" && err.message?.includes("fetch"))) {
-      throw new Error("GPU is currently offline. Please try again after some time.");
+    // Timeout or network error: return null so callers use defaults; do not show "GPU offline"
+    if (err.name === "AbortError" || err.name === "TimeoutError" || (err.name === "TypeError" && err.message?.includes("fetch"))) {
+      return null;
     }
-    // Re-throw if it's already our error message
     if (err.message?.includes("GPU is currently offline")) {
-      throw err;
+      return null;
     }
-    // Otherwise return null for other errors
     return null;
   }
 }
@@ -1241,15 +1255,24 @@ export async function deleteJob(jobId: string, getToken: () => Promise<string | 
 }
 
 /**
- * Cancel a job
+ * Cancel a 3D job (via backend; backend proxies to Python gateway).
  */
-export async function cancelJob(jobId: string): Promise<void> {
-  const res = await fetch(`${apiBase}/cancel/${jobId}`, {
+export async function cancelJob(
+  jobId: string,
+  getToken?: () => Promise<string | null>
+): Promise<void> {
+  const headers: HeadersInit = {};
+  if (getToken) {
+    const token = await getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${backendBase}/api/3d/cancel/${jobId}`, {
     method: "POST",
+    headers,
   });
 
   if (!res.ok) {
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     throw new Error(data.error || "Failed to cancel job");
   }
 }

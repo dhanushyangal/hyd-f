@@ -24,6 +24,7 @@ import {
   getGlbUrl,
   getProxyGlbUrl,
   notifyGpuOffline,
+  cancelJob,
   BackendJob,
   QueueInfo,
   LineageItem,
@@ -341,16 +342,22 @@ function WorkspacePage() {
         consecutiveFailures = 0;
 
         if (status.queue) {
-          const estimatedTotal = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 130;
+          const estimatedTotal = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 300;
           setCurrentGenerating((prev) =>
             prev ? { ...prev, queueInfo: status.queue, estimatedTotalSeconds: estimatedTotal } : null
           );
           const startTime = status.created_at || currentGenerating.startTime || Date.now();
           const elapsedSeconds = (Date.now() - startTime) / 1000;
 
-          if (status.queue.position > 0) {
-            const waitProgress = Math.min(45, (elapsedSeconds / status.queue.estimated_wait_seconds) * 45);
-            setCenterView({ type: "generating", progress: waitProgress, message: `Waiting in queue (position ${status.queue.position})...` });
+          if (status.queue.position > 0 || (status.queue.jobs_ahead ?? 0) > 0) {
+            const jobsAhead = status.queue.jobs_ahead ?? status.queue.position ?? 0;
+            const waitSec = status.queue.estimated_wait_seconds ?? 0;
+            const waitMin = Math.round(waitSec / 60);
+            const waitProgress = waitSec > 0 ? Math.min(45, (elapsedSeconds / waitSec) * 45) : 20;
+            const msg = jobsAhead > 0
+              ? `Waiting in queue (${jobsAhead} user${jobsAhead !== 1 ? "s" : ""} ahead${waitMin > 0 ? `, ~${waitMin} min` : ""})...`
+              : "Starting soon...";
+            setCenterView({ type: "generating", progress: waitProgress, message: msg });
           } else {
             const waitTime = status.queue.estimated_wait_seconds || 0;
             const processingElapsed = Math.max(0, elapsedSeconds - waitTime);
@@ -396,6 +403,13 @@ function WorkspacePage() {
           }
           setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
           setCenterView({ type: "error", message: status.error || "Generation failed" });
+        } else if (status.status === "cancelled") {
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+          }
+          setCurrentGenerating(null);
+          setCenterView({ type: "error", message: "Job cancelled" });
         }
       } catch {
         consecutiveFailures++;
@@ -493,7 +507,7 @@ function WorkspacePage() {
         setLoading(false);
         return;
       }
-      const estimatedTotal = queueInfo?.estimated_total_seconds || 130;
+      const estimatedTotal = queueInfo?.estimated_total_seconds || 300;
       try {
         const result = await submitImageTo3D(imageUrl, null, tokenGetter, previewId, null, workspaceId, previewId);
         setCurrentGenerating({
@@ -590,28 +604,29 @@ function WorkspacePage() {
       return;
     }
 
-    // ── Text + 1 image: /edit-image (image-to-image), or image-to-3D when no prompt ──
+    // ── Text + 1 image: /edit-image (image-to-image), or image-to-3D if no prompt ──
     if (inputMode === "text_1img") {
       if (!file1 && !image1) { setError("Please upload an image"); return; }
 
-      // No prompt: use this image directly for 3D (set as preview, then start 3D if requested)
+      // No prompt: send the image directly to 3D model generation
       if (!prompt.trim()) {
         setError(null);
-        try {
-          const srcUrl = file1
-            ? await uploadImageViaApi(file1, tokenGetter)
-            : (image1 ?? null);
-          if (!srcUrl) return;
-          setLastPreviewImageUrl(srcUrl);
-          setLastPreviewId(jobId1 || null);
-          setCurrentParentJobId(jobId1 || null);
-          setCenterView({ type: "preview", imageUrl: srcUrl, previewId: jobId1 || undefined });
-          if (thenGenerate3D) {
-            await start3DFromImage(srcUrl, jobId1 || null);
+        const tokenGetter = async () => await getToken();
+        let imageUrl: string;
+        if (file1) {
+          try {
+            imageUrl = await uploadImageViaApi(file1, tokenGetter);
+          } catch (err: any) {
+            setError(err.message || "Failed to upload image");
+            return;
           }
-        } catch (err: any) {
-          setCenterView({ type: "error", message: err.message || "Failed to use image for 3D" });
+        } else {
+          imageUrl = image1!;
         }
+        setLastPreviewImageUrl(imageUrl);
+        setLastPreviewId(jobId1);
+        setCenterView({ type: "preview", imageUrl, previewId: jobId1 || undefined });
+        await start3DFromImage(imageUrl, jobId1);
         return;
       }
 
@@ -1241,11 +1256,41 @@ function WorkspacePage() {
           {centerView.type === "generating" && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <div className="w-16 h-16 mb-4 border-4 border-neutral-200 border-t-black rounded-full animate-spin" />
-              <p className="text-sm font-medium text-black mb-3">{centerView.message}</p>
+              <p className="text-sm font-medium text-black mb-1">{centerView.message}</p>
+              {currentGenerating?.queueInfo && (currentGenerating.queueInfo.jobs_ahead > 0 || (currentGenerating.queueInfo.estimated_total_seconds ?? 0) > 0) && (
+                <p className="text-xs text-neutral-500 mb-2">
+                  {currentGenerating.queueInfo.jobs_ahead > 0 && (
+                    <span>Position {currentGenerating.queueInfo.position + 1} in queue</span>
+                  )}
+                  {currentGenerating.queueInfo.estimated_total_seconds != null && currentGenerating.queueInfo.estimated_total_seconds > 0 && (
+                    <span>{currentGenerating.queueInfo.jobs_ahead > 0 ? " · " : ""}Est. ~{Math.round(currentGenerating.queueInfo.estimated_total_seconds / 60)} min total</span>
+                  )}
+                </p>
+              )}
               <div className="w-64 h-2 bg-neutral-200 rounded-full overflow-hidden">
                 <div className="h-full bg-black rounded-full transition-all duration-500" style={{ width: `${Math.min(centerView.progress, 100)}%` }} />
               </div>
               <p className="text-xs text-neutral-500 mt-2">{Math.round(centerView.progress)}%</p>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!currentGenerating?.jobId) return;
+                  try {
+                    await cancelJob(currentGenerating.jobId, () => getToken());
+                    if (progressIntervalRef.current) {
+                      clearInterval(progressIntervalRef.current);
+                      progressIntervalRef.current = null;
+                    }
+                    setCurrentGenerating(null);
+                    setCenterView({ type: "error", message: "Job cancelled" });
+                  } catch (e: any) {
+                    setCenterView({ type: "error", message: e?.message || "Failed to cancel" });
+                  }
+                }}
+                className="mt-4 px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                Cancel generation
+              </button>
             </div>
           )}
 
@@ -1323,44 +1368,69 @@ function WorkspacePage() {
             </div>
           )}
 
-          {/* ──────────── Creation Lineage Panel (main content when job selected) ──────────── */}
+          {/* ──────────── Generation Info Panel (header always visible when job selected; content toggles) ──────────── */}
           {selectedJobInfo && centerView.type !== "empty" && (
             <div className="flex-shrink-0 border-t border-neutral-200 bg-white min-h-[44px]">
-              {/* Header: Creation Lineage (main); Reuse prompt; expand/collapse */}
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-100">
-                <button
-                  type="button"
-                  onClick={() => setGenInfoExpanded((v) => !v)}
-                  className="flex-1 flex items-center justify-between min-w-0 hover:bg-neutral-50 -mx-2 px-2 py-1 rounded transition-colors"
-                >
-                  <span className="text-sm font-semibold text-black truncate">
-                    Creation Lineage
-                    {jobLineage.length >= 1 && (
-                      <span className="ml-1.5 font-normal text-neutral-500">
-                        ({jobLineage.length} step{jobLineage.length !== 1 ? "s" : ""})
-                      </span>
-                    )}
-                  </span>
-                  <svg className={`w-5 h-5 text-neutral-400 shrink-0 transition-transform ${genInfoExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                {selectedJobInfo.prompt && (
-                  <button
-                    type="button"
-                    onClick={() => updateCurrentMode({ prompt: selectedJobInfo.prompt ?? "" })}
-                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:text-black hover:bg-neutral-100 rounded-lg transition-colors"
-                    title="Use this job's prompt in the prompt field"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17L17 7M17 7H7M17 7V17" /></svg>
-                    Reuse prompt
-                  </button>
-                )}
-              </div>
+              {/* Toggle header - always visible so user can expand again */}
+              <button
+                type="button"
+                onClick={() => setGenInfoExpanded((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 hover:bg-neutral-50 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Generation Info
+                  {jobLineage.length >= 1 && (
+                    <span className="normal-case font-medium text-neutral-400">
+                      · {jobLineage.length} step{jobLineage.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </span>
+                <svg className={`w-4 h-4 transition-transform ${genInfoExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
 
-              {/* Collapsible content — lineage only */}
+              {/* Collapsible content */}
               {genInfoExpanded && (
-              <div className="px-4 pb-4 max-h-[280px] overflow-y-auto">
+              <div className="px-4 pb-4 space-y-3 max-h-[200px] overflow-y-auto">
+                {/* Current job details */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                  <div className="text-neutral-400 font-medium">Type</div>
+                  <div className="text-neutral-700 capitalize">{selectedJobInfo.generateType?.replace(/_/g, " ") || "Image"}</div>
+
+                  <div className="text-neutral-400 font-medium">Status</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${selectedJobInfo.status === "DONE" ? "bg-green-500" : selectedJobInfo.status === "FAIL" ? "bg-red-500" : "bg-yellow-500"}`} />
+                    <span className="text-neutral-700 capitalize">{{ DONE: "Completed", FAIL: "Failed", RUN: "Processing", WAIT: "Pending" }[selectedJobInfo.status] || selectedJobInfo.status || "Unknown"}</span>
+                  </div>
+
+                  {selectedJobInfo.resultGlbUrl && selectedJobInfo.sourceImages?.[0] && (
+                    <>
+                      <div className="text-neutral-400 font-medium">Source image</div>
+                      <div className="flex items-center gap-1.5">
+                        <img src={selectedJobInfo.sourceImages[0]} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedJobInfo.prompt && (
+                    <>
+                      <div className="text-neutral-400 font-medium">Prompt</div>
+                      <div className="text-neutral-700 truncate" title={selectedJobInfo.prompt}>{selectedJobInfo.prompt}</div>
+                    </>
+                  )}
+
+                  <div className="text-neutral-400 font-medium">Created</div>
+                  <div className="text-neutral-700">{selectedJobInfo.createdAt ? new Date(selectedJobInfo.createdAt).toLocaleString() : "—"}</div>
+
+                  <div className="text-neutral-400 font-medium">Job ID</div>
+                  <div className="text-neutral-700 font-mono text-[10px] truncate" title={selectedJobInfo.id}>{selectedJobInfo.id}</div>
+                </div>
+
+                {/* Iterative Lineage DAG — show when we have lineage or when selected job is Combined (so first-time combine shows Step 1 + 2 sources) */}
                 {jobLineage.length >= 1 && (
-                  <div className="relative pl-4">
+                  <div className="pt-2 border-t border-neutral-100">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">Creation Lineage</p>
+                    <div className="relative pl-4">
                       {/* Vertical line */}
                       <div className="absolute left-[7px] top-1 bottom-1 w-px bg-neutral-200" />
                       {jobLineage.map((item, idx) => {
@@ -1428,10 +1498,13 @@ function WorkspacePage() {
                         );
                       })}
                     </div>
+                  </div>
                 )}
 
                 {jobLineage.length === 0 && (
-                  <p className="text-sm text-neutral-400 italic">No iterative history — this is an original generation.</p>
+                  <div className="pt-2 border-t border-neutral-100">
+                    <p className="text-[10px] text-neutral-400 italic">No iterative history — this is an original generation.</p>
+                  </div>
                 )}
               </div>
               )}
