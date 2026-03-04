@@ -5,9 +5,124 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-type Props = { glbUrl: string };
+export type ViewerEnvLighting = "studio" | "outdoor" | "neutral";
+export type ViewerMaterialType = "standard" | "matcap" | "toon" | "depth" | "lambert" | "normal";
+export type ViewerMaterialRoughness = "smooth" | "medium" | "rough";
 
-export function ThreeViewer({ glbUrl }: Props) {
+type Props = {
+  glbUrl: string;
+  background?: boolean;
+  grid?: boolean;
+  shadow?: boolean;
+  autoRotate?: boolean;
+  lighting?: ViewerEnvLighting;
+  lightIntensity?: number;
+  brightness?: number;
+  materialType?: ViewerMaterialType;
+  materialRoughness?: ViewerMaterialRoughness;
+};
+
+// Default neutral matcap texture (baked sphere lighting)
+function createDefaultMatcapTexture(): THREE.Texture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.Texture();
+  const gradient = ctx.createRadialGradient(size * 0.4, size * 0.35, 0, size * 0.5, size * 0.5, size * 0.6);
+  gradient.addColorStop(0, "#ffffff");
+  gradient.addColorStop(0.4, "#b0b0b0");
+  gradient.addColorStop(0.7, "#707070");
+  gradient.addColorStop(1, "#404040");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+let defaultMatcapTexture: THREE.Texture | null = null;
+function getDefaultMatcap(): THREE.Texture {
+  if (!defaultMatcapTexture) defaultMatcapTexture = createDefaultMatcapTexture();
+  return defaultMatcapTexture;
+}
+
+// Gradient map for MeshToonMaterial (discrete steps for cel/toon shading)
+function createToonGradientMap(): THREE.Texture {
+  const width = 4; // 4 shading steps
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.Texture();
+  const imageData = ctx.createImageData(width, 1);
+  const data = imageData.data;
+  const steps = [
+    [0.15, 0.15, 0.2],   // shadow
+    [0.45, 0.45, 0.5],   // mid-dark
+    [0.75, 0.75, 0.8],   // mid-light
+    [1.0, 1.0, 1.0],     // highlight
+  ];
+  for (let i = 0; i < width; i++) {
+    const [r, g, b] = steps[i];
+    data[i * 4] = Math.floor(r * 255);
+    data[i * 4 + 1] = Math.floor(g * 255);
+    data[i * 4 + 2] = Math.floor(b * 255);
+    data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+let toonGradientMap: THREE.Texture | null = null;
+function getToonGradientMap(): THREE.Texture {
+  if (!toonGradientMap) toonGradientMap = createToonGradientMap();
+  return toonGradientMap;
+}
+
+// Gradient background texture (Blender-style soft backdrop when background is on)
+function createGradientBackgroundTexture(): THREE.CanvasTexture {
+  const w = 256;
+  const h = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+  const gradient = ctx.createLinearGradient(0, 0, 0, h);
+  gradient.addColorStop(0, "#f5f5f5");
+  gradient.addColorStop(0.5, "#fafafa");
+  gradient.addColorStop(1, "#ebebeb");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, w, h);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+let gradientBackgroundTexture: THREE.CanvasTexture | null = null;
+function getGradientBackgroundTexture(): THREE.CanvasTexture {
+  if (!gradientBackgroundTexture) gradientBackgroundTexture = createGradientBackgroundTexture();
+  return gradientBackgroundTexture;
+}
+
+export function ThreeViewer({
+  glbUrl,
+  background = true,
+  grid: showGrid = false,
+  shadow: showShadow = true,
+  autoRotate = false,
+  lighting = "neutral",
+  lightIntensity = 1,
+  brightness = 1,
+  materialType = "standard",
+  materialRoughness = "medium",
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -16,10 +131,17 @@ export function ThreeViewer({ glbUrl }: Props) {
   const modelRef = useRef<THREE.Group | null>(null); // Store reference to the actual model
   const wireframeOverlayRef = useRef<THREE.Group | null>(null); // Store reference to wireframe overlay
   const sceneRefForWireframe = useRef<THREE.Scene | null>(null); // Store scene reference for wireframe toggle
+  const gridHelperRef = useRef<THREE.GridHelper | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const hemisphereLightRef = useRef<THREE.HemisphereLight | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
   const [wireframeMode, setWireframeMode] = useState(false); // Wireframe toggle state
+  const [modelReady, setModelReady] = useState(false); // Triggers material sync when model has loaded
 
   // Function to toggle wireframe overlay on top of the model
   const toggleWireframe = () => {
@@ -108,14 +230,14 @@ export function ThreeViewer({ glbUrl }: Props) {
       wireframeOverlayRef.current = null;
     }
     modelRef.current = null;
+    setModelReady(false);
 
     setLoading(true);
     setError(null);
     setLoadProgress(0);
 
     const scene = new THREE.Scene();
-    // Light gray background for premium look
-    scene.background = new THREE.Color("#fafafa");
+    scene.background = background ? getGradientBackgroundTexture() : null;
     sceneRef.current = scene;
     sceneRefForWireframe.current = scene; // Store scene reference for wireframe toggle
 
@@ -129,7 +251,7 @@ export function ThreeViewer({ glbUrl }: Props) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = showShadow;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
@@ -142,39 +264,47 @@ export function ThreeViewer({ glbUrl }: Props) {
     controls.minDistance = 0.5;
     controls.maxDistance = 10;
     controls.target.set(0, 0, 0);
+    controls.autoRotate = autoRotate;
+    controls.autoRotateSpeed = 1.0;
     controls.update();
     controlsRef.current = controls;
 
-    // Enhanced lighting for dark theme
+    // Lighting (presets: neutral, studio, outdoor)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
+    ambientLightRef.current = ambientLight;
 
-    // Key light (main light source)
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
     keyLight.position.set(5, 10, 5);
-    keyLight.castShadow = true;
+    keyLight.castShadow = showShadow;
     keyLight.shadow.mapSize.width = 2048;
     keyLight.shadow.mapSize.height = 2048;
     scene.add(keyLight);
+    keyLightRef.current = keyLight;
 
     // Fill light (softer, from opposite side)
     const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
     fillLight.position.set(-5, 5, -5);
     scene.add(fillLight);
+    fillLightRef.current = fillLight;
 
     // Rim light (back light for depth)
     const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
     rimLight.position.set(0, 3, -8);
     scene.add(rimLight);
+    rimLightRef.current = rimLight;
 
     // Hemisphere light for ambient fill
     const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5);
     hemisphereLight.position.set(0, 20, 0);
     scene.add(hemisphereLight);
+    hemisphereLightRef.current = hemisphereLight;
 
     // Grid helper with light gray colors
     const gridHelper = new THREE.GridHelper(10, 20, 0xd4d4d4, 0xe5e5e5);
     gridHelper.position.y = -0.5;
+    gridHelper.visible = showGrid;
+    gridHelperRef.current = gridHelper;
     scene.add(gridHelper);
 
     // Load GLB model
@@ -205,19 +335,16 @@ export function ThreeViewer({ glbUrl }: Props) {
           model.position.y = -center.y * scale;
           model.position.z = -center.z * scale;
 
-          // Enable shadows and enhance materials on the actual model geometry
+          // Enable shadows; store original material ref for material-type switching
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
               child.receiveShadow = true;
-              
-              // Enhance material for better appearance
+              (child as THREE.Mesh & { userData: { originalMaterial?: THREE.Material } }).userData.originalMaterial = child.material;
               if (child.material) {
                 if (Array.isArray(child.material)) {
-                  child.material.forEach(mat => {
-                    if (mat instanceof THREE.MeshStandardMaterial) {
-                      mat.envMapIntensity = 0.8;
-                    }
+                  child.material.forEach((mat: THREE.Material) => {
+                    if (mat instanceof THREE.MeshStandardMaterial) mat.envMapIntensity = 0.8;
                   });
                 } else if (child.material instanceof THREE.MeshStandardMaterial) {
                   child.material.envMapIntensity = 0.8;
@@ -228,6 +355,7 @@ export function ThreeViewer({ glbUrl }: Props) {
 
           scene.add(model);
           setLoading(false);
+          setModelReady(true); // So material sync effect runs and applies materialType/roughness
 
           // Adjust camera to view the model
           const newBox = new THREE.Box3().setFromObject(model);
@@ -286,7 +414,7 @@ export function ThreeViewer({ glbUrl }: Props) {
     };
     animate();
 
-    // Handle resize
+    // Handle resize (window + container so we react to layout changes e.g. full view)
     const handleResize = () => {
       if (!containerRef.current || !rendererRef.current || !camera) return;
       const { clientWidth, clientHeight } = containerRef.current;
@@ -297,9 +425,13 @@ export function ThreeViewer({ glbUrl }: Props) {
       rendererRef.current.setSize(clientWidth, clientHeight);
     };
     window.addEventListener("resize", handleResize);
+    const containerEl = containerRef.current;
+    const ro = new ResizeObserver(handleResize);
+    if (containerEl) ro.observe(containerEl);
 
     // Cleanup
     return () => {
+      if (containerEl) ro.unobserve(containerEl);
       window.removeEventListener("resize", handleResize);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -347,6 +479,178 @@ export function ThreeViewer({ glbUrl }: Props) {
       }
     };
   }, [glbUrl]);
+
+  // Sync viewer options when they change (background, grid, autoRotate, lighting, material, brightness)
+  useEffect(() => {
+    if (sceneRef.current) {
+      sceneRef.current.background = background ? getGradientBackgroundTexture() : null;
+    }
+    if (gridHelperRef.current) {
+      gridHelperRef.current.visible = showGrid;
+    }
+    if (controlsRef.current) {
+      controlsRef.current.autoRotate = autoRotate;
+    }
+    if (rendererRef.current) {
+      rendererRef.current.toneMappingExposure = brightness;
+      rendererRef.current.shadowMap.enabled = showShadow;
+    }
+    if (keyLightRef.current) keyLightRef.current.castShadow = showShadow;
+    const lightingPresets: Record<ViewerEnvLighting, { ambient: number; key: number; fill: number; rim: number; hemi: number }> = {
+      neutral: { ambient: 0.4, key: 1.0, fill: 0.3, rim: 0.2, hemi: 0.5 },
+      studio: { ambient: 0.6, key: 1.2, fill: 0.35, rim: 0.25, hemi: 0.55 },
+      outdoor: { ambient: 0.7, key: 1.4, fill: 0.4, rim: 0.3, hemi: 0.6 },
+    };
+    const preset = lightingPresets[lighting];
+    const scale = Math.max(0.3, Math.min(2, lightIntensity));
+    if (ambientLightRef.current) ambientLightRef.current.intensity = preset.ambient * scale;
+    if (keyLightRef.current) keyLightRef.current.intensity = preset.key * scale;
+    if (fillLightRef.current) fillLightRef.current.intensity = preset.fill * scale;
+    if (rimLightRef.current) rimLightRef.current.intensity = preset.rim * scale;
+    if (hemisphereLightRef.current) hemisphereLightRef.current.intensity = preset.hemi * scale;
+
+    const model = modelRef.current;
+    if (!model) return;
+
+    const roughnessMap: Record<ViewerMaterialRoughness, number> = {
+      smooth: 0.2,
+      medium: 0.5,
+      rough: 0.9,
+    };
+    const r = roughnessMap[materialRoughness];
+    const matcapTex = getDefaultMatcap();
+
+    model.traverse((child) => {
+      if (!(child instanceof THREE.Mesh) || !child.geometry) return;
+      const mesh = child;
+      const orig = (mesh.userData as { originalMaterial?: THREE.Material }).originalMaterial;
+      if (!orig) return;
+
+      const current = mesh.material;
+      const currentSingle = Array.isArray(current) ? current[0] : current;
+      const isReplacement =
+        current !== orig && !(Array.isArray(orig) && (orig as THREE.Material[]).includes(currentSingle as THREE.Material));
+
+      const alreadyStandard = currentSingle instanceof THREE.MeshStandardMaterial && (current === orig || (Array.isArray(orig) && orig.includes(currentSingle)));
+      const alreadyMatcap = currentSingle instanceof THREE.MeshMatcapMaterial;
+      const alreadyToon = currentSingle instanceof THREE.MeshToonMaterial;
+      const alreadyDepth = currentSingle instanceof THREE.MeshDepthMaterial;
+      const alreadyLambert = currentSingle instanceof THREE.MeshLambertMaterial;
+      const alreadyNormal = currentSingle instanceof THREE.MeshNormalMaterial;
+
+      if (materialType === "standard") {
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const allStandard = mats.every((m) => m instanceof THREE.MeshStandardMaterial);
+        const sameAsOrig =
+          current === orig || (Array.isArray(current) && Array.isArray(orig) && (current as THREE.Material[]).length === orig.length);
+        if (allStandard && sameAsOrig) {
+          mats.forEach((m) => {
+            if (m instanceof THREE.MeshStandardMaterial) {
+              m.roughness = r;
+              m.envMapIntensity = 0.8;
+            }
+          });
+          return;
+        }
+        if (isReplacement && current) {
+          if (Array.isArray(current)) current.forEach((m) => m.dispose());
+          else (current as THREE.Material).dispose();
+        }
+        if (Array.isArray(orig)) {
+          const clones = orig.map((o) => (o as THREE.Material).clone());
+          mesh.material = clones.length === 1 ? clones[0] : clones;
+          (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) => {
+            if (m instanceof THREE.MeshStandardMaterial) {
+              m.roughness = r;
+              m.envMapIntensity = 0.8;
+            }
+          });
+        } else {
+          const origMat = orig as THREE.Material;
+          if (origMat instanceof THREE.MeshStandardMaterial) {
+            const base = origMat.clone();
+            mesh.material = base;
+            base.roughness = r;
+            base.envMapIntensity = 0.8;
+          } else {
+            // GLB may use MeshBasicMaterial or other; use MeshStandardMaterial for PBR
+            const color = origMat instanceof THREE.MeshBasicMaterial ? (origMat as THREE.MeshBasicMaterial).color.clone() : new THREE.Color(0xcccccc);
+            if ("color" in origMat && origMat.color) color.copy((origMat as { color: THREE.Color }).color);
+            mesh.material = new THREE.MeshStandardMaterial({ color, roughness: r, metalness: 0.1, envMapIntensity: 0.8 });
+          }
+        }
+        return;
+      }
+
+      if (materialType === "matcap") {
+        if (alreadyMatcap) return;
+        if (isReplacement && current) {
+          if (Array.isArray(current)) current.forEach((m) => m.dispose());
+          else (current as THREE.Material).dispose();
+        }
+        const color = new THREE.Color(0xcccccc);
+        if (Array.isArray(orig) && orig[0] && "color" in orig[0]) color.copy((orig[0] as { color: THREE.Color }).color);
+        else if (orig && "color" in orig) color.copy((orig as { color: THREE.Color }).color);
+        mesh.material = new THREE.MeshMatcapMaterial({ matcap: matcapTex, color });
+        return;
+      }
+
+      if (materialType === "toon") {
+        if (alreadyToon) return;
+        if (isReplacement && current) {
+          if (Array.isArray(current)) current.forEach((m) => m.dispose());
+          else (current as THREE.Material).dispose();
+        }
+        const colorToon = new THREE.Color(0xcccccc);
+        if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorToon.copy((orig[0] as { color: THREE.Color }).color);
+        else if (orig && "color" in orig) colorToon.copy((orig as { color: THREE.Color }).color);
+        const gradientMap = getToonGradientMap();
+        const origMat = Array.isArray(orig) ? orig[0] : orig;
+        const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
+        mesh.material = new THREE.MeshToonMaterial({
+          color: colorToon,
+          gradientMap,
+          map: map || undefined,
+        });
+        return;
+      }
+
+      if (materialType === "depth") {
+        if (alreadyDepth) return;
+        if (isReplacement && current) {
+          if (Array.isArray(current)) current.forEach((m) => m.dispose());
+          else (current as THREE.Material).dispose();
+        }
+        mesh.material = new THREE.MeshDepthMaterial();
+        return;
+      }
+
+      if (materialType === "lambert") {
+        if (alreadyLambert) return;
+        if (isReplacement && current) {
+          if (Array.isArray(current)) current.forEach((m) => m.dispose());
+          else (current as THREE.Material).dispose();
+        }
+        const colorLambert = new THREE.Color(0xcccccc);
+        if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorLambert.copy((orig[0] as { color: THREE.Color }).color);
+        else if (orig && "color" in orig) colorLambert.copy((orig as { color: THREE.Color }).color);
+        const origMat = Array.isArray(orig) ? orig[0] : orig;
+        const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
+        mesh.material = new THREE.MeshLambertMaterial({ color: colorLambert, map: map || undefined });
+        return;
+      }
+
+      if (materialType === "normal") {
+        if (alreadyNormal) return;
+        if (isReplacement && current) {
+          if (Array.isArray(current)) current.forEach((m) => m.dispose());
+          else (current as THREE.Material).dispose();
+        }
+        mesh.material = new THREE.MeshNormalMaterial({ flatShading: false });
+        return;
+      }
+    });
+  }, [background, showGrid, showShadow, autoRotate, lighting, lightIntensity, brightness, materialType, materialRoughness, modelReady]);
 
   return (
     <div className="relative h-full min-h-[400px]">

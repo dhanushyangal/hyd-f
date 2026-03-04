@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Use this directory as workspace root so Turbopack doesn't warn about multiple lockfiles
+  turbopack: {
+    root: __dirname,
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.tencentcos.cn" },

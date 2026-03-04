@@ -8,6 +8,74 @@
   --color-muted-foreground: #737373;
 }
 
+/* App shell: hide main site navbar when inside /app */
+body.app-shell [data-site-navbar] {
+  display: none !important;
+}
+
+/* App sidebar – premium / tatva-like design tokens, bg #fafafa */
+.app-sidebar-root {
+  --sidebar-bg: #fafafa;
+  --sidebar-fg: 0 0% 20%;
+  --sidebar-fg-muted: 0 0% 20% / 0.7;
+  --sidebar-accent: 0 0% 94%;
+  --sidebar-accent-hover: 0 0% 92%;
+  --sidebar-border: 0 0% 91%;
+  --sidebar-spacing: 8px;
+  --sidebar-radius: 4px;
+  --sidebar-item-height: 36px;
+  --sidebar-item-px: 12px;
+  --sidebar-transition: color 0.15s ease, background-color 0.15s ease;
+}
+.app-sidebar-root .sidebar-item {
+  transition: var(--sidebar-transition);
+}
+.app-sidebar-root .sidebar-item:hover {
+  background-color: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-fg));
+}
+.app-sidebar-root .sidebar-item.active {
+  background-color: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-fg));
+}
+.app-sidebar-root .sidebar-toggle:hover {
+  background-color: hsl(var(--sidebar-accent));
+}
+.app-sidebar-root .sidebar-upgrade-btn {
+  transition: filter 0.2s ease, box-shadow 0.2s ease;
+}
+.app-sidebar-root .sidebar-upgrade-btn:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 4px 12px -2px rgba(37, 99, 235, 0.35);
+}
+
+/* App content pages – full width, tatva-style spacing (big, clear, not centric) */
+.app-content-page {
+  --app-spacing-base: 2px;
+  --app-content-gap: calc(var(--app-spacing-base) * 28);
+  --app-content-px: calc(var(--app-spacing-base) * 24);
+  --app-content-py: calc(var(--app-spacing-base) * 16);
+  width: 100%;
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-content-gap);
+  padding: var(--app-content-py) var(--app-content-px);
+  overflow: auto;
+  min-height: 0;
+}
+.app-content-page::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.app-content-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+.app-content-page::-webkit-scrollbar-thumb {
+  background: rgb(229 231 235);
+  border-radius: 4px;
+}
+
 body {
   color: var(--color-foreground);
   background: var(--color-background);
@@ -417,9 +485,69 @@ div[class*="footer"] {
 /* Hide scrollbar but keep functionality (webkit below for Chrome/Safari) */
 .hide-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;     /* Firefox; older Chrome/Safari use webkit rule below */
+  scrollbar-width: none;     /* Firefox */
 }
 
 .hide-scrollbar::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Minimal scrollbar: very thin, only when needed */
+.scrollbar-minimal {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+.scrollbar-minimal::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-minimal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-minimal::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+}
+.scrollbar-minimal::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Premium minimal range slider: thin track, small thumb */
+input.range-minimal {
+  height: 4px;
+  border-radius: 2px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background: rgb(229 231 235);
+}
+input.range-minimal::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #262626;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.5);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.08);
+}
+input.range-minimal::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #262626;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.5);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.08);
+}
+input.range-minimal::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(229 231 235);
+}
+input.range-minimal::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(229 231 235);
 }

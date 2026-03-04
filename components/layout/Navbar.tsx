@@ -91,13 +91,14 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     ? "bg-white/2 backdrop-blur-[80px] border border-gray-200/20 shadow-2xl"
     : "bg-white/60 backdrop-blur-xl border border-gray-200/50 shadow-lg";
   
-  // For team page, FAQ, case study, 3D & AI, early access, and home pages, change text color to black when in second section
-  const textColor = (useHeroStyling && !(isTeamPage && isInSecondSection) && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection) ? "text-white" : "text-black";
+  // Home page hero is light (white bg) → use black nav; other hero pages use white until second section
+  const isLightHeroPage = pathname === "/";
+  const textColor = (useHeroStyling && !isLightHeroPage && !(isTeamPage && isInSecondSection) && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection) ? "text-white" : "text-black";
   const logoClasses = `text-2xl font-bold ${textColor} tracking-tight transition-colors duration-500`;
   
-  // Adjust button classes based on section for team page, FAQ, case study, 3D & AI, early access, and home pages
+  // Adjust button classes: light hero (home) uses dark buttons; other hero pages use white until second section
   const isTeamPageInSecondSection = isTeamPage && isInSecondSection;
-  const shouldUseWhiteButtons = (useHeroStyling && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection);
+  const shouldUseWhiteButtons = (useHeroStyling && !isLightHeroPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection);
   const generateButtonClasses = shouldUseWhiteButtons
     ? "px-4 py-2 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-xs font-semibold text-white uppercase tracking-wider hover:bg-white/30 transition-all duration-500 ease-out shadow-sm"
     : "px-4 py-2 rounded-lg bg-gray-100 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-200 transition-all duration-500 ease-out";
@@ -112,26 +113,26 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   
   const userButtonBorder = shouldUseWhiteButtons ? "border-white/40" : "border-gray-300";
   
-  // Mobile menu classes - same as team page (white background when in second section, glass when in hero)
-  const mobileMenuClasses = (useHeroStyling && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
+  // Mobile menu: light hero (home) uses solid menu; other hero pages use glass until second section
+  const mobileMenuClasses = (useHeroStyling && !isLightHeroPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
     ? "md:hidden border-t border-white/20 bg-white/10 backdrop-blur-xl"
     : "md:hidden border-t border-gray-200 bg-white shadow-lg";
   
-  const mobileMenuItemClasses = (useHeroStyling && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
+  const mobileMenuItemClasses = (useHeroStyling && !isLightHeroPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
     ? "block px-4 py-2 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-xs font-semibold text-white uppercase tracking-wider hover:bg-white/30 transition-all"
     : "block px-4 py-3 rounded-lg bg-gray-50/80 text-sm font-medium text-black uppercase tracking-wider hover:bg-gray-100 transition-all";
   
-  const mobileSignInClasses = (useHeroStyling && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
+  const mobileSignInClasses = (useHeroStyling && !isLightHeroPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
     ? "w-full text-left text-xs font-semibold text-white uppercase tracking-wider hover:text-white/80 transition-colors"
     : "w-full text-left text-xs font-semibold text-black uppercase tracking-wider hover:text-black/70 transition-colors";
   
-  const mobileSignUpClasses = (useHeroStyling && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
+  const mobileSignUpClasses = (useHeroStyling && !isLightHeroPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection)
     ? "w-full px-4 py-2 text-xs font-semibold text-black uppercase tracking-wider bg-white/90 backdrop-blur-md border border-white/40 rounded-lg hover:bg-white transition-all"
     : "w-full px-4 py-2 text-xs font-semibold text-white uppercase tracking-wider bg-black backdrop-blur-md border border-black rounded-lg hover:bg-gray-900 transition-all";
   
-  const mobileMenuDivider = (useHeroStyling && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection) ? "border-white/20" : "border-gray-200";
+  const mobileMenuDivider = (useHeroStyling && !isLightHeroPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection) ? "border-white/20" : "border-gray-200";
   
-  const hamburgerClasses = isHero
+  const hamburgerClasses = isHero && pathname !== "/"
     ? "md:hidden p-1.5 hover:bg-white/20 rounded-lg transition-colors"
     : "md:hidden p-1.5 hover:bg-gray-200/60 rounded-lg transition-colors";
   
@@ -152,7 +153,7 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     : "rounded-xl md:rounded-2xl";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 md:pt-4 px-4 md:px-0">
+    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 md:pt-4 px-4 md:px-0" data-site-navbar>
       {/* Ultra-Clear Liquid Glass Navbar */}
       <div ref={menuRef} className={`${dynamicContainerClasses} ${dynamicRounded} relative overflow-visible w-full ${shouldShrink ? 'max-w-2xl' : 'max-w-7xl'} before:absolute before:inset-0 ${shouldShrink ? 'before:rounded-full' : 'before:rounded-2xl'} before:bg-gradient-to-br ${useHeroStyling ? 'before:from-white/20 before:via-white/5 before:to-transparent' : 'before:from-white/50 before:via-transparent before:to-transparent'} before:pointer-events-none transition-all duration-500 ease-out`}>
         {/* Ultra-clear liquid glass effects - minimal layers for maximum clarity */}

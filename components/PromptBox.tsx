@@ -15,6 +15,8 @@ interface PromptBoxProps {
   disabled?: boolean;
   placeholder?: string;
   isAtBottom?: boolean;
+  /** Hero variant: no camera button, larger centered box for landing */
+  variant?: "default" | "hero";
 }
 
 export function PromptBox({
@@ -28,7 +30,9 @@ export function PromptBox({
   disabled = false,
   placeholder = "Describe what you want to generate…",
   isAtBottom = false,
+  variant = "default",
 }: PromptBoxProps) {
+  const isHero = variant === "hero";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -214,11 +218,11 @@ export function PromptBox({
 
   return (
     <motion.div 
-      className="relative w-full max-w-[700px] mx-auto group"
+      className={`relative w-full mx-auto group ${isHero ? "max-w-[min(90vw,720px)]" : "max-w-[700px]"}`}
       initial={false}
       animate={isAtBottom ? { y: 0, opacity: 1 } : { y: 0, opacity: 1 }}
       transition={{ duration: 0.5, ease: "easeInOut" }}
-      style={{ width: '100%', maxWidth: '700px' }}
+      style={{ width: '100%', maxWidth: isHero ? 'min(90vw, 720px)' : '700px' }}
     >
       {/* Image Preview Stack - Shows when images exist (even at bottom) */}
       <AnimatePresence>
@@ -258,15 +262,13 @@ export function PromptBox({
         )}
       </AnimatePresence>
 
-      {/* Prompt Box - Premium Glassmorphism Frosted Glass Style */}
+      {/* Prompt Box - Hero: very transparent glass; Default: frosted glass */}
       <div className="relative w-full">
-        {/* Frosted glass effect with subtle gradient overlay */}
-        <div className="absolute -inset-[1px] bg-gradient-to-br from-gray-200/30 via-gray-100/20 to-transparent rounded-[24px] -z-10 blur-sm" />
-        <div className="bg-white/15 backdrop-blur-2xl rounded-[24px] border border-gray-400/25 shadow-2xl pt-5 pb-3 px-6 flex flex-col gap-1 w-full relative overflow-visible">
-          {/* Inner glow for depth */}
-          <div className="absolute inset-0 bg-gradient-to-b from-white/25 via-white/5 to-transparent pointer-events-none rounded-[24px]" />
-          {/* Subtle border highlight for premium look */}
-          <div className="absolute inset-0 rounded-[24px] border border-white/30 pointer-events-none" />
+        <div className={`backdrop-blur-xl rounded-2xl pt-5 pb-3 px-6 flex flex-col gap-1 w-full relative overflow-visible sm:pt-6 sm:pb-4 sm:px-8 min-h-[72px] ${
+          isHero
+            ? "bg-white/[0.07] border border-white/20 shadow-none"
+            : "bg-white/25 border border-white/30 shadow-lg"
+        }`}>
           {/* eslint-disable-next-line @next/next/no-inline-styles */}
           <textarea 
             ref={textareaRef}
@@ -275,7 +277,9 @@ export function PromptBox({
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={placeholder}
-            className="prompt-box-textarea w-full bg-transparent border-0 outline-none text-[14px] sm:text-[18px] font-medium text-gray-900 placeholder:text-gray-400 resize-none min-h-[28px] leading-tight tracking-tight p-0 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-0 focus:border-0 focus:outline-none focus:shadow-none font-dm-sans"
+            className={`prompt-box-textarea w-full bg-transparent border-0 outline-none text-[14px] sm:text-[18px] font-medium resize-none min-h-[28px] sm:min-h-[32px] leading-tight tracking-tight p-0 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-0 focus:border-0 focus:outline-none focus:shadow-none font-dm-sans ${
+              isHero ? "text-white placeholder:text-white/50" : "text-neutral-900 placeholder:text-neutral-500"
+            }`}
             style={{
               whiteSpace: "pre-wrap",
               overflowWrap: "break-word",
@@ -285,7 +289,8 @@ export function PromptBox({
           
           <div className="flex items-center justify-between mt-1 gap-3 relative z-10">
             <div className="flex items-center gap-2">
-              {/* Image Upload Button - Always visible */}
+              {/* Image Upload Button - visible in default variant */}
+              {!isHero && (
               <div className="relative group/image-btn">
                 <button 
                   onClick={() => {
@@ -325,8 +330,10 @@ export function PromptBox({
                   </div>
                 )}
               </div>
+              )}
               
-              {/* Camera Button - Always visible */}
+              {/* Camera Button - hidden in hero variant */}
+              {!isHero && (
               <div className="relative group/camera-btn">
                 <button 
                   onClick={() => {
@@ -381,10 +388,12 @@ export function PromptBox({
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3 flex-shrink-0">
-              {/* Model Selector Dropdown - Modern Design */}
+              {/* Model Selector Dropdown - hidden in hero variant */}
+              {!isHero && (
               <div className="relative z-50" ref={dropdownRef}>
                 <button
                   onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
@@ -501,28 +510,24 @@ export function PromptBox({
                   </motion.div>
                 )}
               </div>
+              )}
               
-              {/* Create Button - Premium Silver Style with Slow Hover */}
+              {/* Create Button - Hero: solid so it doesn't mix with glass; Default: silver style */}
               <motion.button 
-                whileHover={canSubmit ? { 
-                  scale: 1.03,
-                  transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] }
-                } : {}}
-                whileTap={canSubmit ? { 
-                  scale: 0.97,
-                  transition: { duration: 0.2 }
-                } : {}}
-                transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+                whileHover={canSubmit ? { scale: 1.02 } : {}}
+                whileTap={canSubmit ? { scale: 0.98 } : {}}
+                transition={{ duration: 0.2 }}
                 onClick={onSubmit}
                 disabled={disabled || !canSubmit}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed font-dm-sans ${
-                  canSubmit 
-                    ? 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 text-slate-800 shadow-md border border-slate-300/60' 
-                    : 'bg-slate-100/50 text-slate-400 border border-slate-200/40'
+                className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed font-dm-sans transition-colors ${
+                  isHero
+                    ? canSubmit
+                      ? "bg-white text-neutral-900 border border-white/40 hover:bg-white/95"
+                      : "bg-white/10 text-white/50 border border-white/20"
+                    : canSubmit 
+                      ? 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 text-slate-800 shadow-md border border-slate-300/60' 
+                      : 'bg-slate-100/50 text-slate-400 border border-slate-200/40'
                 }`}
-                style={{ 
-                  textShadow: canSubmit ? '0 1px 2px rgba(255, 255, 255, 0.8)' : 'none',
-                }}
                 title="Create"
                 aria-label="Create"
               >

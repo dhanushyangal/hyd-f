@@ -281,7 +281,45 @@ export async function registerJobWithPreview(
 }
 
 /**
- * Generate preview image from text prompt
+ * Poll gateway /status/<jobId> until status is completed, failed, or cancelled.
+ * Used when the gateway returns async (status "pending") for preview/edit/combined.
+ */
+async function pollGatewayStatusUntilCompleted(
+  jobId: string,
+  options?: { maxWaitMs?: number; intervalMs?: number }
+): Promise<{ status: string; result?: { image_url?: string }; image_url?: string; error?: string }> {
+  const maxWaitMs = options?.maxWaitMs ?? 120_000; // 2 min
+  const intervalMs = options?.intervalMs ?? 2000;
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    const res = await fetch(`${apiBase}/status/${jobId}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { error?: string }).error || "Failed to fetch status");
+    }
+    const data = await res.json();
+    const status = data.status as string;
+    if (status === "completed") {
+      return data;
+    }
+    if (status === "failed" || status === "cancelled") {
+      throw new Error(data.error || data.message || `Job ${status}`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error("Preview timed out. Please try again.");
+}
+
+/** Resolve relative image URL from gateway to full URL */
+function resolveImageUrl(url: string): string {
+  if (!url || !url.startsWith("/")) return url;
+  const base = apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase;
+  return `${base}${url}`;
+}
+
+/**
+ * Generate preview image from text prompt.
+ * Gateway may return immediately (sync) with image_url, or async (pending) — we poll until completed.
  */
 export async function generatePreviewImage(prompt: string, getToken?: () => Promise<string | null>): Promise<{ 
   image_url: string; 
@@ -317,28 +355,38 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
   }
 
   const result = await res.json();
+  const previewId = result.preview_id ?? result.job_id;
+
+  // Async gateway: status "pending" → poll until completed
+  if (result.status === "pending" || (result.image_url == null && previewId)) {
+    const statusData = await pollGatewayStatusUntilCompleted(previewId);
+    const imageUrl = statusData.image_url ?? statusData.result?.image_url ?? "";
+    return {
+      image_url: resolveImageUrl(imageUrl),
+      preview_id: previewId,
+      queue: result.queue,
+    };
+  }
+
   return {
-    image_url: result.image_url,
-    preview_id: result.preview_id,
-    queue: result.queue,  // Include queue info if available
+    image_url: resolveImageUrl(result.image_url ?? ""),
+    preview_id: previewId,
+    queue: result.queue,
   };
   } catch (err: any) {
-    // Check if it's a network error indicating API is unavailable
     if (isApiUnavailableError(err)) {
-      // Send notification to founders (non-blocking)
       if (shouldNotifyGpuOffline(err)) {
         notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       }
       throw new Error(getGpuOfflineErrorMessage());
     }
-    // Re-throw other errors
     throw err;
   }
 }
 
 /**
- * Edit image with prompt (image-to-image). Sync; returns edited image URL.
- * Pass either imageFile or imageUrl so the GPU API can fetch/use the image.
+ * Edit image with prompt (image-to-image).
+ * Gateway may return sync image_url or async (pending) — we poll until completed.
  */
 export async function editImage(
   prompt: string,
@@ -374,15 +422,23 @@ export async function editImage(
     }
 
     const result = await res.json();
-    // Resolve relative image_url to full URL for use in image-to-3d
-    let imageUrlResolved = result.image_url || "";
-    if (imageUrlResolved.startsWith("/")) {
-      const base = apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase;
-      imageUrlResolved = `${base}${imageUrlResolved}`;
+    const editId = result.edit_id ?? result.job_id;
+
+    // Async gateway: status "pending" → poll until completed
+    if (result.status === "pending" || (result.image_url == null && editId)) {
+      const statusData = await pollGatewayStatusUntilCompleted(editId);
+      const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
+      return {
+        edit_id: editId,
+        image_url: resolveImageUrl(imageUrlFromStatus),
+        prompt: result.prompt || prompt,
+        strength: result.strength ?? 0.6,
+      };
     }
+
     return {
-      edit_id: result.edit_id,
-      image_url: imageUrlResolved,
+      edit_id: editId,
+      image_url: resolveImageUrl(result.image_url || ""),
       prompt: result.prompt || prompt,
       strength: result.strength ?? 0.6,
     };
@@ -413,9 +469,8 @@ async function urlToFile(url: string, filename: string): Promise<File> {
 }
 
 /**
- * Combined edit: Prompt + 2 images -> one combined/edited image (sync).
- * Uses the /combined-edit gateway endpoint.
- * Accepts either File objects (from disk upload) or URL strings (from workspace library).
+ * Combined edit: Prompt + 2 images -> one combined/edited image.
+ * Gateway may return sync image_url or async (pending) — we poll until completed.
  */
 export async function combinedEdit(
   prompt: string,
@@ -425,7 +480,6 @@ export async function combinedEdit(
   imageUrl1?: string | null,
   imageUrl2?: string | null
 ): Promise<{ combined_id: string; image_url: string; prompt: string; prompt_used: string }> {
-  // Resolve URL-based images to File objects (so the external API always gets files)
   const file1 = imageFile1 || (imageUrl1 ? await urlToFile(imageUrl1, "image_1") : null);
   const file2 = imageFile2 || (imageUrl2 ? await urlToFile(imageUrl2, "image_2") : null);
 
@@ -456,14 +510,23 @@ export async function combinedEdit(
     }
 
     const result = await res.json();
-    let imageUrlResolved = result.image_url || "";
-    if (imageUrlResolved.startsWith("/")) {
-      const base = apiBase.endsWith("/") ? apiBase.slice(0, -1) : apiBase;
-      imageUrlResolved = `${base}${imageUrlResolved}`;
+    const combinedId = result.combined_id ?? result.job_id;
+
+    // Async gateway: status "pending" → poll until completed
+    if (result.status === "pending" || (result.image_url == null && combinedId)) {
+      const statusData = await pollGatewayStatusUntilCompleted(combinedId);
+      const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
+      return {
+        combined_id: combinedId,
+        image_url: resolveImageUrl(imageUrlFromStatus),
+        prompt: result.prompt || prompt,
+        prompt_used: (statusData.result as { prompt_used?: string })?.prompt_used ?? result.prompt ?? prompt,
+      };
     }
+
     return {
-      combined_id: result.combined_id,
-      image_url: imageUrlResolved,
+      combined_id: combinedId,
+      image_url: resolveImageUrl(result.image_url || ""),
       prompt: result.prompt || prompt,
       prompt_used: result.prompt_used || prompt,
     };

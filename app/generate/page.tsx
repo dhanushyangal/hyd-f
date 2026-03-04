@@ -60,7 +60,19 @@ export default function GeneratePage() {
       }
     }
   }, []);
-  
+
+  // Prefill prompt when navigating from hero (landing) prompt box
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const heroPrompt = sessionStorage.getItem("hero_prompt");
+      if (heroPrompt) {
+        setPrompt(heroPrompt);
+        sessionStorage.removeItem("hero_prompt");
+      }
+    } catch (_) {}
+  }, []);
+
   const [mode, setMode] = useState<Mode>("text");
   const [prompt, setPrompt] = useState("");
   const [imageUrl, setImageUrl] = useState("");

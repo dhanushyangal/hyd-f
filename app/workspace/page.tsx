@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import PremiumUserButton from "../../components/PremiumUserButton";
+import { Slider } from "../../components/ui/slider";
 import {
   submitImageTo3D,
   generatePreviewImage,
@@ -172,38 +173,85 @@ function WorkspacePage() {
     { id: "hunyuan3d", label: "Hunyuan 3D", comingSoon: true },
   ];
 
+  // 3D viewer options (Environment, Material, lighting intensity/brightness)
+  const [envLighting, setEnvLighting] = useState<"studio" | "outdoor" | "neutral">("neutral");
+  const [lightingDropdownOpen, setLightingDropdownOpen] = useState(false);
+  const [roughnessDropdownOpen, setRoughnessDropdownOpen] = useState(false);
+  const [lightIntensity, setLightIntensity] = useState(1); // 0.3–2, default 1
+  const [brightness, setBrightness] = useState(1);         // 0.5–2, tone mapping exposure
+  const [envBackground, setEnvBackground] = useState(true);
+  const [envGrid, setEnvGrid] = useState(false);
+  const [envShadow, setEnvShadow] = useState(true);
+  const [envAutoRotate, setEnvAutoRotate] = useState(false);
+  const [materialType, setMaterialType] = useState<"standard" | "matcap" | "toon" | "depth" | "lambert" | "normal">("standard");
+  const [materialRoughness, setMaterialRoughness] = useState<"smooth" | "medium" | "rough">("medium");
+  const [numGenerations, setNumGenerations] = useState(1);
+
+  // Prompt history (localStorage); max 20 entries, newest first
+  const PROMPT_HISTORY_KEY = "hydrilla-prompt-history";
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const [historyDropdownOpen, setHistoryDropdownOpen] = useState(false);
+  const historyButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PROMPT_HISTORY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
+          setPromptHistory(parsed.slice(0, 20));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const savePromptToHistory = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setPromptHistory((prev) => {
+      const next = [trimmed, ...prev.filter((p) => p !== trimmed)].slice(0, 20);
+      try {
+        localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  // When lighting preset changes, set suggested intensity/brightness (HDRI-style defaults)
+  useEffect(() => {
+    const presets = { neutral: [1, 1], studio: [1.2, 1.15], outdoor: [1.4, 1.25] } as const;
+    const [int, bri] = presets[envLighting];
+    setLightIntensity(int);
+    setBrightness(bri);
+  }, [envLighting]);
+
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
   const libraryPanelRef = useRef<HTMLElement>(null);
 
   // Sliding & resizable side panels
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+  const [leftLibraryTab, setLeftLibraryTab] = useState<"images" | "3d">("images");
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [fullView, setFullView] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(300);
-  const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const [resizingLeft, setResizingLeft] = useState(false);
-  const [resizingRight, setResizingRight] = useState(false);
-  const resizeStartRef = useRef({ x: 0, leftW: 0, rightW: 0 });
+  const resizeStartRef = useRef({ x: 0, leftW: 0 });
 
   const MIN_PANEL = 200;
   const MAX_LEFT = 500;
-  const MAX_RIGHT = 480;
+  const RIGHT_PANEL_WIDTH = 320; // fixed width, not resizable; collapse gives more space to viewer
 
   useEffect(() => {
-    if (!resizingLeft && !resizingRight) return;
+    if (!resizingLeft) return;
     const onMove = (e: MouseEvent) => {
-      if (resizingLeft) {
-        const delta = e.clientX - resizeStartRef.current.x;
-        setLeftPanelWidth((w) => Math.min(MAX_LEFT, Math.max(MIN_PANEL, resizeStartRef.current.leftW + delta)));
-      }
-      if (resizingRight) {
-        const delta = resizeStartRef.current.x - e.clientX;
-        setRightPanelWidth((w) => Math.min(MAX_RIGHT, Math.max(MIN_PANEL, resizeStartRef.current.rightW + delta)));
-      }
+      const delta = e.clientX - resizeStartRef.current.x;
+      setLeftPanelWidth((w) => Math.min(MAX_LEFT, Math.max(MIN_PANEL, resizeStartRef.current.leftW + delta)));
     };
-    const onUp = () => {
-      setResizingLeft(false);
-      setResizingRight(false);
-    };
+    const onUp = () => setResizingLeft(false);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     window.addEventListener("mousemove", onMove);
@@ -214,7 +262,7 @@ function WorkspacePage() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [resizingLeft, resizingRight]);
+  }, [resizingLeft]);
 
   // Current mode's state
   const current = modeStates[inputMode];
@@ -531,6 +579,7 @@ function WorkspacePage() {
   const handleGenerateImage = async (thenGenerate3D?: boolean) => {
     if (loading || generatingPreview) return;
     setError(null);
+    if (prompt.trim()) savePromptToHistory(prompt);
     if (!thenGenerate3D) {
       setLastPreviewImageUrl(null);
       setLastPreviewId(null);
@@ -935,35 +984,7 @@ function WorkspacePage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-neutral-50 text-black">
-      {/* Top bar */}
-      <header className="flex-shrink-0 z-20 flex items-center justify-between px-4 py-3 bg-white border-b border-neutral-100">
-        <div className="flex-1 min-w-0 flex items-center">
-          <Link href="/" className="text-xl font-bold text-black tracking-tight">Hydrilla</Link>
-        </div>
-        <div className="flex-1 flex justify-center min-w-0 px-4">
-          <input
-            type="text"
-            value={workspaceName}
-            onChange={(e) => handleWorkspaceNameChange(e.target.value)}
-            placeholder="Name your workspace"
-            className="w-full max-w-md text-center text-lg font-semibold text-black bg-transparent border-none outline-none placeholder:text-neutral-400 focus:ring-0"
-          />
-        </div>
-        <div className="flex-1 flex items-center justify-end gap-4 min-w-0">
-          <button
-            type="button"
-            onClick={() => {
-              setNewWorkspaceName("");
-              setShowNewWorkspaceModal(true);
-            }}
-            className="text-sm font-medium text-black hover:text-neutral-600 shrink-0"
-          >
-            New Workspace
-          </button>
-          <Link href="/library" className="text-sm font-medium text-black hover:text-neutral-600 shrink-0">My Library</Link>
-          <PremiumUserButton />
-        </div>
-      </header>
+      {/* No top navbar — left nav in left sidebar, right nav (name, My Library, profile, collapse) in right sidebar */}
 
       {/* New Workspace name modal */}
       {showNewWorkspaceModal && (
@@ -1085,7 +1106,7 @@ function WorkspacePage() {
           <button
             type="button"
             onClick={() => setLeftPanelOpen(true)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-6 h-14 flex items-center justify-center bg-white border border-r-0 border-neutral-200 rounded-r-lg shadow-sm hover:bg-neutral-50 transition-colors"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 flex items-center justify-center bg-white border border-r-0 border-neutral-200 rounded-r-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
             title="Open library"
             aria-label="Open library panel"
           >
@@ -1101,90 +1122,148 @@ function WorkspacePage() {
         >
           <div className="flex h-full min-w-0">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <div className="p-3 border-b border-neutral-100 flex items-center gap-2">
-            <button type="button" onClick={() => setLeftPanelOpen(false)} className="p-1 rounded hover:bg-neutral-100 text-neutral-500 hover:text-black transition-colors shrink-0" title="Close library" aria-label="Close library panel">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          {/* Left navbar: Logo only (larger) + New Workspace */}
+          <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between gap-2">
+            <Link href="/" className="text-2xl font-bold text-black tracking-tight shrink-0 hover:opacity-80 transition-opacity">
+              Hydrilla
+            </Link>
+            <button
+              type="button"
+              onClick={() => { setNewWorkspaceName(""); setShowNewWorkspaceModal(true); }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-black transition-colors shrink-0 px-2.5 py-1.5 rounded-lg hover:bg-neutral-100"
+              title="New Workspace"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              <span>New Workspace</span>
+            </button>
+          </div>
+          <div className="px-3 py-2.5 border-b border-neutral-100 flex items-center gap-2">
+            <button type="button" onClick={() => setLeftPanelOpen(false)} className="p-2 rounded-xl hover:bg-neutral-100 text-black hover:bg-neutral-200 transition-colors shrink-0" title="Close library" aria-label="Close library panel">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
             <div className="relative flex-1 min-w-0">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/70 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search my generation"
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-neutral-50 border border-neutral-200 text-black placeholder:text-neutral-400 text-sm focus:border-black focus:ring-1 focus:ring-black/10"
+                placeholder="Search..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder:text-neutral-500 text-sm focus:border-neutral-300 focus:ring-2 focus:ring-neutral-200/80 focus:outline-none"
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-6">
-            {/* Images */}
-            <div>
-              <Link href="/library" className="flex items-center justify-between group mb-2">
-                <h3 className="text-sm font-semibold text-black">Images</h3>
-                <svg className="w-4 h-4 text-neutral-400 group-hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 hide-scrollbar">
-                {libraryLoading ? (
-                  <div className="flex items-center justify-center w-full min-h-[100px]"><div className="w-5 h-5 border-2 border-neutral-300 border-t-black rounded-full animate-spin" /></div>
-                ) : filteredImages.length === 0 ? (
-                  <div className="flex items-center justify-center w-full min-h-[100px] rounded-lg bg-neutral-50 border border-dashed border-neutral-200 text-neutral-400 text-sm">No images yet</div>
-                ) : (
-                  filteredImages.map((item) => (
-                    <div
-                      key={item.id}
-                      draggable
-                      onDragStart={(e) => {
-                        const imgUrl = item.previewImageUrl || item.imageUrl || "";
-                        e.dataTransfer.setData("application/job-id", item.id);
-                        e.dataTransfer.setData("text/uri-list", imgUrl);
-                        e.dataTransfer.effectAllowed = "copy";
-                      }}
-                      onClick={() => handleImageClick(item)}
-                      className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-neutral-200 hover:border-black/30 transition-colors cursor-pointer bg-neutral-100 flex items-center justify-center"
-                    >
-                      {(item.previewImageUrl || item.imageUrl) ? (
-                        <img src={item.previewImageUrl || item.imageUrl || ""} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
-                      ) : (
-                        <span className="text-neutral-500 text-xs text-center px-1 truncate max-w-full">{item.prompt || "Image"}</span>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+          {/* Tab bar — Images | 3D (shadcn-style Tabs) */}
+          <div className="px-2.5 pt-2 pb-1">
+            <div
+              role="tablist"
+              aria-label="Library tabs"
+              className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-neutral-100 p-1 text-neutral-500"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={leftLibraryTab === "images"}
+                aria-controls="library-images-panel"
+                id="library-tab-images"
+                tabIndex={leftLibraryTab === "images" ? 0 : -1}
+                onClick={() => setLeftLibraryTab("images")}
+                title="Images"
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 ${leftLibraryTab === "images" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:bg-neutral-200/70 hover:text-neutral-700"}`}
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                <span>Images</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={leftLibraryTab === "3d"}
+                aria-controls="library-3d-panel"
+                id="library-tab-3d"
+                tabIndex={leftLibraryTab === "3d" ? 0 : -1}
+                onClick={() => setLeftLibraryTab("3d")}
+                title="3D Assets"
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 ${leftLibraryTab === "3d" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:bg-neutral-200/70 hover:text-neutral-700"}`}
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
+                <span>3D</span>
+              </button>
             </div>
-            {/* 3D Assets */}
-            <div>
-              <Link href="/library" className="flex items-center justify-between group mb-2">
-                <h3 className="text-sm font-semibold text-black">3D Assets</h3>
-                <svg className="w-4 h-4 text-neutral-400 group-hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 hide-scrollbar">
-                {libraryLoading ? (
-                  <div className="flex items-center justify-center w-full min-h-[100px]"><div className="w-5 h-5 border-2 border-neutral-300 border-t-black rounded-full animate-spin" /></div>
-                ) : filtered3DAssets.length === 0 ? (
-                  <div className="flex items-center justify-center w-full min-h-[100px] rounded-lg bg-neutral-50 border border-dashed border-neutral-200 text-neutral-400 text-sm">No 3D assets yet</div>
-                ) : (
-                  filtered3DAssets.map((item) => (
-                    <div key={item.id} onClick={() => handle3DClick(item)} className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-neutral-200 hover:border-black/30 transition-colors cursor-pointer bg-neutral-100 flex items-center justify-center">
-                      {item.previewImageUrl ? (
-                        <img src={item.previewImageUrl} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex flex-col items-center text-neutral-400">
-                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                          <span className="text-[10px] mt-0.5">3D</span>
-                        </div>
-                      )}
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 py-4 min-h-0 scrollbar-minimal" role="tabpanel" id="library-images-panel" aria-labelledby="library-tab-images" hidden={leftLibraryTab !== "images"}>
+            {leftLibraryTab === "images" && (
+              <div className="space-y-4">
+                <Link href="/library" className="flex items-center justify-between group mb-2">
+                  <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-widest">Images</h3>
+                  <svg className="w-4 h-4 text-black/60 group-hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </Link>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {libraryLoading ? (
+                    <div className="col-span-2 flex items-center justify-center min-h-[100px]"><div className="w-6 h-6 border-2 border-neutral-300 border-t-black rounded-full animate-spin" /></div>
+                  ) : filteredImages.length === 0 ? (
+                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[100px] rounded-xl bg-neutral-50 border border-dashed border-neutral-200 text-neutral-600 text-xs gap-2">
+                      <svg className="w-8 h-8 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                      <span>No images yet</span>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    filteredImages.map((item) => (
+                      <div
+                        key={item.id}
+                        draggable
+                        onDragStart={(e) => {
+                          const imgUrl = item.previewImageUrl || item.imageUrl || "";
+                          e.dataTransfer.setData("application/job-id", item.id);
+                          e.dataTransfer.setData("text/uri-list", imgUrl);
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                        onClick={() => handleImageClick(item)}
+                        className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center"
+                      >
+                        {(item.previewImageUrl || item.imageUrl) ? (
+                          <img src={item.previewImageUrl || item.imageUrl || ""} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
+                        ) : (
+                          <span className="text-neutral-600 text-[10px] text-center px-1 truncate max-w-full font-medium">{item.prompt || "Image"}</span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+          <div role="tabpanel" id="library-3d-panel" aria-labelledby="library-tab-3d" hidden={leftLibraryTab !== "3d"} className="flex-1 overflow-y-auto px-3 py-4 min-h-0 scrollbar-minimal">
+            {leftLibraryTab === "3d" && (
+              <div className="space-y-4">
+                <Link href="/library" className="flex items-center justify-between group mb-2">
+                  <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-widest">3D Assets</h3>
+                  <svg className="w-4 h-4 text-black/60 group-hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </Link>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {libraryLoading ? (
+                    <div className="col-span-2 flex items-center justify-center min-h-[100px]"><div className="w-6 h-6 border-2 border-neutral-300 border-t-black rounded-full animate-spin" /></div>
+                  ) : filtered3DAssets.length === 0 ? (
+                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[100px] rounded-xl bg-neutral-50 border border-dashed border-neutral-200 text-neutral-600 text-xs gap-2">
+                      <svg className="w-8 h-8 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                      <span>No 3D assets yet</span>
+                    </div>
+                  ) : (
+                    filtered3DAssets.map((item) => (
+                      <div key={item.id} onClick={() => handle3DClick(item)} className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center">
+                        {item.previewImageUrl ? (
+                          <img src={item.previewImageUrl} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex flex-col items-center text-black/50">
+                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                            <span className="text-[10px] mt-1 font-medium">3D</span>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
             </div>
             {/* Left resize handle */}
@@ -1194,7 +1273,7 @@ function WorkspacePage() {
                 aria-orientation="vertical"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  resizeStartRef.current = { x: e.clientX, leftW: leftPanelWidth, rightW: rightPanelWidth };
+                  resizeStartRef.current = { x: e.clientX, leftW: leftPanelWidth };
                   setResizingLeft(true);
                 }}
                 className={`w-1 flex-shrink-0 bg-transparent hover:bg-neutral-200 active:bg-black/20 cursor-col-resize transition-colors ${resizingLeft ? "bg-black/20" : ""}`}
@@ -1296,10 +1375,29 @@ function WorkspacePage() {
 
           {centerView.type === "3d" && (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 min-h-0"><ThreeViewer glbUrl={centerView.glbUrl} /></div>
+              <div className={`flex-1 min-h-0 ${fullView ? "flex justify-center items-center" : ""}`}>
+                <div className={fullView ? "w-full h-full min-w-0 min-h-0" : "h-full w-full"}>
+                <ThreeViewer
+                  glbUrl={centerView.glbUrl}
+                  background={envBackground}
+                  grid={envGrid}
+                  shadow={envShadow}
+                  autoRotate={envAutoRotate}
+                  lighting={envLighting}
+                  lightIntensity={lightIntensity}
+                  brightness={brightness}
+                  materialType={materialType}
+                  materialRoughness={materialRoughness}
+                />
+                </div>
+              </div>
               <div className="flex items-center justify-center gap-3 p-3 border-t border-neutral-100 bg-white flex-wrap">
                 <a href={centerView.glbUrl} download className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors">Download GLB</a>
-                <Link href={`/viewer?jobId=${centerView.jobId}`} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Full View</Link>
+                {fullView ? (
+                  <button type="button" onClick={() => { setFullView(false); setLeftPanelOpen(true); setRightPanelOpen(true); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Exit full view</button>
+                ) : (
+                  <button type="button" onClick={() => { setFullView(true); setLeftPanelOpen(false); setRightPanelOpen(false); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Full View</button>
+                )}
                 {selectedJobInfo?.sourceImages?.[0] && (
                   <>
                     <button
@@ -1517,7 +1615,7 @@ function WorkspacePage() {
           <button
             type="button"
             onClick={() => setRightPanelOpen(true)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-6 h-14 flex items-center justify-center bg-white border border-l-0 border-neutral-200 rounded-l-lg shadow-sm hover:bg-neutral-50 transition-colors"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 flex items-center justify-center bg-white border border-l-0 border-neutral-200 rounded-l-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
             title="Open input panel"
             aria-label="Open input panel"
           >
@@ -1525,64 +1623,50 @@ function WorkspacePage() {
           </button>
         )}
 
-        {/* Right resize handle (between main and right panel) */}
-        {rightPanelOpen && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              resizeStartRef.current = { x: e.clientX, leftW: leftPanelWidth, rightW: rightPanelWidth };
-              setResizingRight(true);
-            }}
-            className={`w-1 flex-shrink-0 bg-transparent hover:bg-neutral-200 active:bg-black/20 cursor-col-resize transition-colors ${resizingRight ? "bg-black/20" : ""}`}
-          />
-        )}
-
-        {/* Right Panel - Input & generation (sliding & resizable) */}
+        {/* Right Panel — fixed width, collapsible; when collapsed viewer expands */}
         <aside
-          style={{ width: rightPanelOpen ? rightPanelWidth : 0, minWidth: rightPanelOpen ? rightPanelWidth : 0 }}
+          style={{ width: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0, minWidth: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0 }}
           className="flex-shrink-0 flex flex-col bg-white border-l border-neutral-200 overflow-hidden transition-[width] duration-200 ease-out"
         >
-          <div className="h-full overflow-y-auto min-w-0">
-          <div className="p-4 space-y-4">
-            <div className="flex justify-end -mt-1 -mr-1">
-              <button type="button" onClick={() => setRightPanelOpen(false)} className="p-1 rounded hover:bg-neutral-100 text-neutral-500 hover:text-black transition-colors" title="Close panel" aria-label="Close input panel">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19l7-7-7-7" /></svg>
-              </button>
+          <div className="h-full overflow-y-auto min-w-0 flex flex-col" style={{ tabSize: 4 }}>
+          {/* Right navbar: workspace name, My Library, Profile, Collapse */}
+          <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-neutral-100 flex items-center gap-2 min-w-0">
+            <input
+              type="text"
+              value={workspaceName}
+              onChange={(e) => handleWorkspaceNameChange(e.target.value)}
+              placeholder="Name workspace"
+              className="flex-1 min-w-0 text-base font-semibold text-black bg-transparent border-none outline-none placeholder:text-neutral-400 focus:ring-0 truncate"
+            />
+            <Link href="/library" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            </Link>
+            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-lg"><PremiumUserButton /></div>
+            <button type="button" onClick={() => setRightPanelOpen(false)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors duration-200 shrink-0" title="Collapse panel" aria-label="Collapse panel">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto w-[90%] max-w-full mx-auto hide-scrollbar">
+          <div className="px-3 pt-4 pb-8 space-y-5" style={{ lineHeight: 1.15 }}>
+            {/* Input mode — shadcn-style Tabs (Text | Edit | Combine) */}
+            <div role="tablist" aria-label="Input mode" className="inline-flex h-10 w-full items-center rounded-lg bg-neutral-100 p-1 text-neutral-500">
+              <button type="button" role="tab" onClick={() => setInputMode("text")} title="Text prompt only" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><span className="text-sm font-semibold leading-none">T</span><span>Text</span></button>
+              <button type="button" role="tab" onClick={() => setInputMode("text_1img")} title="Text + 1 image" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text_1img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></button>
+              <button type="button" role="tab" onClick={() => setInputMode("text_2img")} title="Text + 2 images" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text_2img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><div className="flex -space-x-0.5 shrink-0"><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /></div><span>Combine</span></button>
             </div>
 
-            {/* 3 input mode buttons with labels */}
-            <div className="space-y-1.5">
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setInputMode("text")} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${inputMode === "text" ? "bg-black border-black text-white" : "bg-neutral-50 border-neutral-200 text-neutral-500 hover:border-neutral-300"}`} title="Text prompt only">
-                  <span className="text-xl font-bold opacity-80">T</span>
-                  <span className="text-[10px] font-medium mt-1 opacity-90">Text</span>
-                </button>
-                <button type="button" onClick={() => setInputMode("text_1img")} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${inputMode === "text_1img" ? "bg-black border-black text-white" : "bg-neutral-50 border-neutral-200 text-neutral-500 hover:border-neutral-300"}`} title="Text + 1 image">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
-                  <span className="text-[10px] font-medium mt-1 opacity-90">Edit image</span>
-                </button>
-                <button type="button" onClick={() => setInputMode("text_2img")} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${inputMode === "text_2img" ? "bg-black border-black text-white" : "bg-neutral-50 border-neutral-200 text-neutral-500 hover:border-neutral-300"}`} title="Text + 2 images">
-                  <div className="flex -space-x-1"><div className="w-3 h-3 rounded-sm bg-current opacity-80" /><div className="w-3 h-3 rounded-sm bg-current opacity-80" /></div>
-                  <span className="text-[10px] font-medium mt-1 opacity-90">Combine</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-neutral-400 text-center">Start from text, edit one image, or combine two — then generate 3D.</p>
-            </div>
-
-            {/* Image slots */}
+            {/* Image slots — same spacing as reference */}
             {(inputMode === "text_1img" || inputMode === "text_2img") && (
-              <div>
-                <label className="text-sm text-neutral-600 mb-1 block">{inputMode === "text_2img" ? "Image 1 & 2" : "Image"}</label>
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-neutral-800">{inputMode === "text_2img" ? "Image 1 & 2" : "Image"}</label>
                 <div className="flex gap-2">
                   <div className={inputMode === "text_2img" ? "flex-1 min-w-0" : "flex-1"}>
-                    {inputMode === "text_2img" && <span className="text-[10px] text-neutral-400 block mb-0.5">Image 1</span>}
+                    {inputMode === "text_2img" && <span className="text-xs text-neutral-500 block mb-1">Image 1</span>}
                     <ImageDropzone slot={1} image={image1} onDrop={(e) => handleDrop(e, 1)} onPaste={(e) => handlePaste(e, 1)} onFileSelect={(e) => handleFileSelect(e, 1)} onClear={() => handleClearImage(1)} isDragging={isDragging} onDragOver={() => setIsDragging(true)} onDragLeave={() => setIsDragging(false)} />
                   </div>
                   {inputMode === "text_2img" && (
                     <div className="flex-1 min-w-0">
-                      <span className="text-[10px] text-neutral-400 block mb-0.5">Image 2</span>
+                      <span className="text-xs text-neutral-500 block mb-1">Image 2</span>
                       <ImageDropzone slot={2} image={image2} onDrop={(e) => handleDrop(e, 2)} onPaste={(e) => handlePaste(e, 2)} onFileSelect={(e) => handleFileSelect(e, 2)} onClear={() => handleClearImage(2)} isDragging={isDragging} onDragOver={() => setIsDragging(true)} onDragLeave={() => setIsDragging(false)} />
                     </div>
                   )}
@@ -1590,63 +1674,94 @@ function WorkspacePage() {
               </div>
             )}
 
-            {/* Prompt */}
-            <div>
-              <label className="block text-sm text-neutral-600 mb-1">Prompt</label>
-              <textarea
-                ref={promptTextareaRef}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder={inputMode === "text" ? "Describe what you want to create..." : inputMode === "text_1img" ? "Describe how to edit this image..." : "Describe how to combine these images..."}
-                className="w-full h-20 px-3 py-2 rounded-lg bg-white border border-neutral-200 text-black placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black/10 resize-none"
-                rows={3}
-              />
+            {/* Prompt — label row with optional icons, large textarea, character count */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm font-bold text-neutral-800">Prompt</label>
+                <div className="flex items-center gap-1 text-neutral-400">
+                  <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Redo"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                  <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Suggestions"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></button>
+                  <div className="relative">
+                    <button
+                      ref={historyButtonRef}
+                      type="button"
+                      onClick={() => setHistoryDropdownOpen((o) => !o)}
+                      className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
+                      title="Prompt history"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </button>
+                    {historyDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setHistoryDropdownOpen(false)} aria-hidden />
+                        <div className="absolute top-full right-0 mt-1 z-20 w-[min(100vw,320px)] max-h-[280px] overflow-y-auto rounded-xl bg-white border border-neutral-200 shadow-xl py-1">
+                          {promptHistory.length === 0 ? (
+                            <div className="px-3 py-4 text-sm text-neutral-500 text-center">No prompt history yet</div>
+                          ) : (
+                            <ul className="py-0.5">
+                              {promptHistory.map((item, i) => (
+                                <li key={i}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPrompt(item.slice(0, 800));
+                                      setHistoryDropdownOpen(false);
+                                      promptTextareaRef.current?.focus();
+                                    }}
+                                    className="w-full text-left px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-100 transition-colors line-clamp-2"
+                                  >
+                                    {item || "(empty)"}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="relative">
+                <textarea
+                  ref={promptTextareaRef}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value.slice(0, 800))}
+                  maxLength={800}
+                  placeholder={inputMode === "text" ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe." : inputMode === "text_1img" ? "Describe how to edit this image..." : "Describe how to combine these images..."}
+                  className="w-full min-h-[100px] px-3 py-3 rounded-xl bg-neutral-100 border-0 text-neutral-800 placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-200 text-sm resize-y transition-shadow"
+                  rows={4}
+                />
+                <span className="absolute bottom-2.5 right-3 text-[11px] text-neutral-400 tabular-nums">{prompt.length}/800</span>
+              </div>
             </div>
 
             {/* Error */}
             {error && (
-              <div className="px-3 py-2 text-sm bg-red-50 text-red-600 rounded-lg border border-red-200">{error}</div>
+              <div className="px-3 py-2.5 text-sm bg-red-50 text-red-600 rounded-xl border border-red-200">{error}</div>
             )}
 
-            {/* Generate Image - same for all 3 modes */}
-            <button
-              type="button"
-              onClick={() => handleGenerateImage()}
-              disabled={isGenerating}
-              className={`w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-colors ${isGenerating ? "bg-neutral-400 cursor-not-allowed" : "bg-black hover:bg-neutral-800"}`}
-            >
-              {isGenerating ? (
-                <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-              ) : (
-                <><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>Generate Image</>
-              )}
-            </button>
-
-            {/* AI Model selection — between image and 3D generation */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-neutral-600">
-                AI Model
-                <span title="3D generation model">
-                  <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+            {/* AI Model — reference style: label + (i) left, white rounded dropdown right */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+              <div className="flex items-center gap-1.5">
+                <label className="text-sm font-semibold text-neutral-800">AI Model</label>
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="3D generation model" aria-label="Info">
+                  <span className="text-[10px] font-bold leading-none">i</span>
                 </span>
-              </label>
-              <div className="relative">
+              </div>
+              <div className="relative min-w-[80px]">
                 <button
                   type="button"
                   onClick={() => setModelDropdownOpen((o) => !o)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-neutral-50 border border-neutral-200 text-left text-sm text-black hover:border-neutral-300 transition-colors"
+                  className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-md bg-white border border-neutral-200 text-left text-xs text-neutral-800 hover:bg-neutral-50 transition-colors duration-150"
                 >
-                  <span>{modelOptions.find((m) => m.id === selectedModel)?.label ?? selectedModel}</span>
-                  <svg className={`w-4 h-4 text-neutral-400 shrink-0 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <span className="truncate">{modelOptions.find((m) => m.id === selectedModel)?.label ?? selectedModel}</span>
+                  <svg className={`w-3.5 h-3.5 shrink-0 text-neutral-500 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
                 {modelDropdownOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setModelDropdownOpen(false)} aria-hidden />
-                    <div className="absolute top-full left-0 right-0 mt-1 z-20 py-1 rounded-lg bg-white border border-neutral-200 shadow-lg">
+                    <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden transition-opacity duration-150">
                       {modelOptions.map((opt) => (
                         <button
                           key={opt.id}
@@ -1658,18 +1773,16 @@ function WorkspacePage() {
                               setModelDropdownOpen(false);
                             }
                           }}
-                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors ${opt.comingSoon ? "text-neutral-400 cursor-not-allowed" : "text-black hover:bg-neutral-50"}`}
+                          className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 text-xs text-left transition-colors duration-200 ${opt.comingSoon ? "text-neutral-400 cursor-not-allowed" : selectedModel === opt.id ? "bg-neutral-100 text-neutral-800 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}
                         >
                           <span className="flex items-center gap-2">
                             {opt.label}
                             {opt.comingSoon && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Coming soon</span>
+                              <span title="Locked"><svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></span>
                             )}
                           </span>
                           {!opt.comingSoon && selectedModel === opt.id && (
-                            <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <svg className="w-3.5 h-3.5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                           )}
                         </button>
                       ))}
@@ -1679,22 +1792,179 @@ function WorkspacePage() {
               </div>
             </div>
 
-            {/* Generate 3D Model - always shown; with preview runs 3D, without preview generates image then 3D */}
-            <div>
-              <button
-                type="button"
-                onClick={handleGenerate3D}
-                disabled={isGenerating}
-                title={lastPreviewImageUrl ? "Turn this image into a 3D model." : "Generate an image from your prompt (or edit/combine), then create a 3D model."}
-                className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors border ${!isGenerating ? "bg-neutral-100 text-black border-neutral-200 hover:bg-neutral-200" : "bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed"}`}
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                Generate 3D Model
-              </button>
-              <p className="text-[10px] text-neutral-400 mt-1 text-center">
-                {lastPreviewImageUrl ? "Turn this image into a 3D model." : "Generate an image from your prompt (or edit/combine), then create a 3D model."}
-              </p>
+            {/* Number of Generations — reference style row */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+              <div className="flex items-center gap-1.5">
+                <label className="text-sm font-semibold text-neutral-800">Number of Generations</label>
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="How many variants to generate" aria-label="Info">
+                  <span className="text-[10px] font-bold leading-none">i</span>
+                </span>
+              </div>
+              <div className="flex items-center rounded-lg bg-white border border-neutral-200 overflow-hidden">
+                <button type="button" onClick={() => setNumGenerations((n) => Math.max(1, n - 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                <span className="min-w-[2ch] text-center text-sm text-neutral-800 py-1.5">{numGenerations}</span>
+                <button type="button" onClick={() => setNumGenerations((n) => Math.min(10, n + 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                </button>
+              </div>
             </div>
+
+            {/* Credits — professional icon + remaining/total */}
+            <div className="flex items-center justify-center gap-2 text-sm text-neutral-600">
+              <span className="tabular-nums">~1 min</span>
+              <span className="flex items-center gap-1.5 font-medium text-neutral-800">
+                <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span className="tabular-nums">— / 500</span>
+                <span className="text-neutral-500 font-normal">credits</span>
+              </span>
+            </div>
+
+            {/* Generate — primary action, premium black button with vectorized icon */}
+            <button
+              type="button"
+              onClick={() => handleGenerateImage()}
+              disabled={isGenerating}
+              className={`w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2.5 transition-all duration-200 ${isGenerating ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-black text-white hover:bg-neutral-800 shadow-sm hover:shadow-md active:scale-[0.99]"}`}
+            >
+              {isGenerating ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
+              ) : (
+                <>
+                  <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-90" style={{ filter: "invert(1) brightness(1.15)" }} />
+                  <span className="tracking-tight font-semibold">Generate</span>
+                </>
+              )}
+            </button>
+
+            {/* Environment — Lighting, sliders, toggles */}
+            <div className="space-y-3 pt-1 border-t border-neutral-100">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">Environment</span>
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="Viewer environment" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
+              </div>
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Lighting</label>
+                  <div className="relative min-w-[100px]">
+                    <button
+                      type="button"
+                      onClick={() => setLightingDropdownOpen((o) => !o)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 text-left text-sm font-medium text-neutral-800 hover:bg-neutral-50 transition-colors duration-200 capitalize"
+                    >
+                      <span>{envLighting}</span>
+                      <svg className={`w-4 h-4 shrink-0 text-neutral-400 transition-transform duration-200 ${lightingDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {lightingDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setLightingDropdownOpen(false)} aria-hidden />
+                        <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
+                          {(["neutral", "studio", "outdoor"] as const).map((opt) => (
+                            <button key={opt} type="button" onClick={() => { setEnvLighting(opt); setLightingDropdownOpen(false); }} className={`w-full px-3 py-2 text-sm text-left capitalize transition-colors ${envLighting === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Light intensity</label>
+                  <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
+                    <Slider value={lightIntensity} onValueChange={setLightIntensity} min={0.3} max={2} step={0.1} className="min-w-0 flex-1" aria-label="Light intensity" />
+                    <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{lightIntensity.toFixed(1)}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Brightness</label>
+                  <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
+                    <Slider value={brightness} onValueChange={setBrightness} min={0.5} max={2} step={0.05} className="min-w-0 flex-1" aria-label="Brightness" />
+                    <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{brightness.toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Background</label>
+                  <button type="button" role="switch" aria-checked={envBackground} onClick={() => setEnvBackground((b) => !b)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envBackground ? "bg-neutral-800" : "bg-neutral-200"}`} title={envBackground ? "Transparent background" : "Solid background"}>
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envBackground ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Grid</label>
+                  <button type="button" role="switch" aria-checked={envGrid} onClick={() => setEnvGrid((g) => !g)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envGrid ? "bg-neutral-800" : "bg-neutral-200"}`} title={envGrid ? "Hide grid" : "Show grid"}>
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envGrid ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Shadow</label>
+                  <button type="button" role="switch" aria-checked={envShadow} onClick={() => setEnvShadow((s) => !s)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envShadow ? "bg-neutral-800" : "bg-neutral-200"}`} title={envShadow ? "Hide shadows" : "Show shadows"}>
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envShadow ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Auto rotate</label>
+                  <button type="button" role="switch" aria-checked={envAutoRotate} onClick={() => setEnvAutoRotate((r) => !r)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envAutoRotate ? "bg-neutral-800" : "bg-neutral-200"}`} title={envAutoRotate ? "Pause rotation" : "Auto rotate"}>
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envAutoRotate ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Materials — PBR, Matcap, Toon, Depth, Lambert, Normal + Roughness for PBR */}
+            <div className="space-y-3 pt-1 border-t border-neutral-100">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">Material</span>
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="3D material type" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { id: "standard" as const, label: "PBR" },
+                  { id: "matcap" as const, label: "Matcap" },
+                  { id: "toon" as const, label: "Toon" },
+                  { id: "depth" as const, label: "Depth" },
+                  { id: "lambert" as const, label: "Lambert" },
+                  { id: "normal" as const, label: "Normal" },
+                ].map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMaterialType(id)}
+                    className={`inline-flex items-center justify-center rounded-md px-2 py-2 text-xs font-medium transition-all duration-200 ${materialType === id ? "bg-neutral-900 text-white shadow-sm ring-1 ring-neutral-700" : "text-neutral-600 bg-neutral-100 hover:bg-neutral-200 hover:text-neutral-900"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {materialType === "standard" && (
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pt-1" style={{ lineHeight: 1.15 }}>
+                  <label className="text-sm font-medium text-neutral-800">Roughness</label>
+                  <div className="relative min-w-[90px]">
+                    <button
+                      type="button"
+                      onClick={() => setRoughnessDropdownOpen((o) => !o)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 text-left text-sm font-medium text-neutral-800 hover:bg-neutral-50 transition-colors duration-200 capitalize"
+                    >
+                      <span>{materialRoughness}</span>
+                      <svg className={`w-4 h-4 shrink-0 text-neutral-400 transition-transform duration-200 ${roughnessDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {roughnessDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setRoughnessDropdownOpen(false)} aria-hidden />
+                        <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
+                          {(["smooth", "medium", "rough"] as const).map((opt) => (
+                            <button key={opt} type="button" onClick={() => { setMaterialRoughness(opt); setRoughnessDropdownOpen(false); }} className={`w-full px-3 py-2 text-sm text-left capitalize transition-colors ${materialRoughness === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           </div>
           </div>
         </aside>
