@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@clerk/nextjs";
+import { SignUpButton } from "@clerk/nextjs";
 
 export interface UseCaseFeature {
   title: string;
@@ -42,7 +44,10 @@ const stagger = {
   show: { transition: { staggerChildren: 0.1 } },
 };
 
+const CAL_DEMO_URL = "https://cal.com/hydrilla";
+
 export default function UseCasePage({ data }: { data: UseCaseData }) {
+  const { isSignedIn } = useAuth();
   const accent = data.accentColor ?? "#3b8ee8";
   const heroSources = data.heroImages?.length
     ? data.heroImages
@@ -191,28 +196,56 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
                 marginTop: "0.25rem",
               }}
             >
-              <Link
-                href="/generate"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "0.875rem 1.75rem",
-                  minHeight: "48px",
-                  borderRadius: "100px",
-                  backgroundColor: "#fff",
-                  color: "#111",
-                  fontSize: "0.9375rem",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  letterSpacing: "-0.01em",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Start Creating
-              </Link>
-              <Link
-                href="/earlyaccess"
+              {isSignedIn ? (
+                <Link
+                  href="/app/studio"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0.875rem 1.75rem",
+                    minHeight: "48px",
+                    borderRadius: "100px",
+                    backgroundColor: "#fff",
+                    color: "#111",
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    letterSpacing: "-0.01em",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Start Creating
+                </Link>
+              ) : (
+                <SignUpButton mode="modal" forceRedirectUrl="/app/studio">
+                  <button
+                    type="button"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0.875rem 1.75rem",
+                      minHeight: "48px",
+                      borderRadius: "100px",
+                      backgroundColor: "#fff",
+                      color: "#111",
+                      fontSize: "0.9375rem",
+                      fontWeight: 600,
+                      letterSpacing: "-0.01em",
+                      whiteSpace: "nowrap",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Start Creating
+                  </button>
+                </SignUpButton>
+              )}
+              <a
+                href={CAL_DEMO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -231,7 +264,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
                 }}
               >
                 Book Demo
-              </Link>
+              </a>
             </motion.div>
           </motion.div>
 
@@ -552,26 +585,52 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
             Start generating production-ready 3D assets today or book a demo to see what&apos;s possible.
           </p>
           <div style={{ display: "flex", gap: "0.875rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link
-              href="/generate"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0.875rem 2rem",
-                borderRadius: "100px",
-                backgroundColor: "#fff",
-                color: "#111",
-                fontSize: "0.9375rem",
-                fontWeight: 600,
-                textDecoration: "none",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Start Creating
-            </Link>
-            <Link
-              href="/earlyaccess"
+            {isSignedIn ? (
+              <Link
+                href="/app/studio"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0.875rem 2rem",
+                  borderRadius: "100px",
+                  backgroundColor: "#fff",
+                  color: "#111",
+                  fontSize: "0.9375rem",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Start Creating
+              </Link>
+            ) : (
+              <SignUpButton mode="modal" forceRedirectUrl="/app/studio">
+                <button
+                  type="button"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0.875rem 2rem",
+                    borderRadius: "100px",
+                    backgroundColor: "#fff",
+                    color: "#111",
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    letterSpacing: "-0.01em",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Start Creating
+                </button>
+              </SignUpButton>
+            )}
+            <a
+              href={CAL_DEMO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -588,7 +647,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
               }}
             >
               Book Demo
-            </Link>
+            </a>
           </div>
         </motion.div>
       </section>
