@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla.co/checkout";
+  process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 
 const PLAN_INFO: Record<string, { label: string; price: string; credits: string; color: string }> = {
   creator: {
