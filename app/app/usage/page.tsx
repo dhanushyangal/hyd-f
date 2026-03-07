@@ -69,7 +69,7 @@ export default function UsagePage() {
             </div>
             {credits.total === 0 && (
               <p className="text-sm text-neutral-500 mb-4">
-                Subscribe to get monthly credits for 3D generations.
+                Subscribe to get monthly credits for 3D generation.
               </p>
             )}
           </>

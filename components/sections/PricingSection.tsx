@@ -122,7 +122,7 @@ const PLANS: Plan[] = [
     popular: true,
     hasYearlyToggle: true,
     cta: "Subscribe Now",
-    ctaHref: "/sign-in?redirect_url=%2Fapp%2Fpricing%3Fplan%3Dcreator",
+    ctaHref: "/checkout?plan=creator",
     features: [
       { text: "Everything in Free, plus:", highlight: true },
       { text: "High-quality textured 3D models" },
@@ -148,7 +148,7 @@ const PLANS: Plan[] = [
     models: "400 Standard · 200 HD · 100 Ultra",
     hasYearlyToggle: true,
     cta: "Subscribe Now",
-    ctaHref: "/sign-in?redirect_url=%2Fapp%2Fpricing%3Fplan%3Dstudio",
+    ctaHref: "/checkout?plan=studio",
     features: [
       { text: "Everything in Creator, plus:", highlight: true },
       { text: "Ultra-quality 3D models with LODs" },
