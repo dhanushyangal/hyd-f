@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { Calendar, Mail, Send } from "lucide-react";
 
 const BOOK_DEMO_URL = "https://cal.com/hydrilla";
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app/";
 
 const USE_CASE_OPTIONS = [
   "Game Development",

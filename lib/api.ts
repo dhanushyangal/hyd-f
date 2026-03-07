@@ -4,7 +4,7 @@ const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.ai";
 const getBackendBase = (): string => {
   const url = process.env.NEXT_PUBLIC_BACKEND_URL;
   if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
-    return "http://localhost:4000"; // Fallback for local dev
+    return "https://hydrilla-backend.vercel.app/"; // Fallback for local dev
   }
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };

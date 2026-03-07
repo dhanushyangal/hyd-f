@@ -19,7 +19,7 @@ import { cn } from "../../lib/utils";
 import { useAppLayout } from "../../context/AppLayoutContext";
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app/";
 
 const navItems = [
   { href: "/app/studio", label: "Studio", icon: LayoutDashboard },
@@ -82,9 +82,10 @@ function CreditsCard() {
       <div
         className="h-1.5 w-full rounded-full overflow-hidden bg-neutral-100"
         role="progressbar"
-        aria-valuenow={used}
+        aria-label="Credits usage"
+        aria-valuenow={loading ? 0 : used}
         aria-valuemin={0}
-        aria-valuemax={total}
+        aria-valuemax={total > 0 ? total : 100}
       >
         <div
           className="h-full rounded-full bg-blue-500 transition-all duration-300"

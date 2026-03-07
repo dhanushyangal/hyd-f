@@ -363,7 +363,7 @@ export default function IndustrySection() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveId(item.id)}
-                  aria-pressed={isActive}
+                  aria-pressed={isActive ? "true" : "false"}
                   style={{
                     flex: 1,
                     minWidth: 0,
