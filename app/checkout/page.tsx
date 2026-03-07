@@ -4,8 +4,12 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 
+// Ensure we never point at the frontend; use production API when env is wrong or unset
+const ENV_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
+  ENV_BACKEND && !ENV_BACKEND.includes("hydrilla.co/checkout") && !ENV_BACKEND.includes("hydrilla.ai/checkout")
+    ? ENV_BACKEND.replace(/\/+$/, "")
+    : "https://hydrilla-backend.vercel.app";
 
 const PLAN_INFO: Record<string, { label: string; price: string; credits: string; color: string }> = {
   creator: {
@@ -70,9 +74,10 @@ function CheckoutContent() {
     setStatus("loading");
     setError(null);
 
+    const url = `${BACKEND_URL}/api/payments/create-checkout`;
     try {
       const token = await getToken();
-      const response = await fetch(`${BACKEND_URL}/api/payments/create-checkout`, {
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -81,7 +86,12 @@ function CheckoutContent() {
         body: JSON.stringify({ plan, email: userEmail }),
       });
 
-      const data = await response.json();
+      let data: { error?: string; checkoutUrl?: string };
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(response.ok ? "Invalid response from server" : `Server error (${response.status}). Try again.`);
+      }
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to create checkout session");
@@ -94,7 +104,13 @@ function CheckoutContent() {
       // Redirect to Dodo Payments hosted checkout
       window.location.href = data.checkoutUrl;
     } catch (err: any) {
-      setError(err.message || "Something went wrong. Please try again.");
+      const msg = err?.message || "";
+      const isNetworkError = msg === "Failed to fetch" || msg === "Load failed" || msg === "NetworkError when attempting to fetch resource";
+      setError(
+        isNetworkError
+          ? "Could not reach the payment server. Check your connection and try again, or contact support if it persists."
+          : msg || "Something went wrong. Please try again."
+      );
       setStatus("error");
     }
   }
