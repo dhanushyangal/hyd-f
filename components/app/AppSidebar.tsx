@@ -18,8 +18,8 @@ import {
 import { cn } from "../../lib/utils";
 import { useAppLayout } from "../../context/AppLayoutContext";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app/";
+const RAW_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
+const BACKEND_URL = RAW_BACKEND.replace(/\/+$/, "");
 
 const navItems = [
   { href: "/app/studio", label: "Studio", icon: LayoutDashboard },
@@ -51,9 +51,11 @@ function CreditsCard() {
           setUsed(credits.used ?? 0);
           setTotal(credits.total ?? 0);
           setPlan(credits.plan ?? null);
+        } else {
+          console.error("[Credits] Backend returned", res.status, res.statusText, "from", BACKEND_URL);
         }
-      } catch {
-        // silent fail – show 0/0
+      } catch (err) {
+        console.error("[Credits] Fetch failed:", err);
       } finally {
         setLoading(false);
       }
