@@ -2,191 +2,196 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import Image from "next/image";
-import Footer from "../../../components/layout/Footer";
-import { checkEarlyAccess } from "../../../lib/api";
 
-// Loading component for Suspense fallback
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
 function LoadingFallback() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-4 border-4 border-gray-300 border-t-black rounded-full animate-spin"></div>
-        <p className="text-gray-600">Loading...</p>
+      <div className="w-12 h-12 rounded-full border-4 border-gray-100 border-t-black animate-spin" />
+    </div>
+  );
+}
+
+function CheckoutSuccessContent() {
+  const { isSignedIn, getToken, isLoaded } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [subscriptionStatus, setSubscriptionStatus] = useState<
+    "checking" | "active" | "pending" | "error"
+  >("checking");
+
+  // Dodo returns different params depending on payment type:
+  //   subscription: ?subscription_id=sub_xxx&status=active&email=...
+  //   one-time:     ?payment_id=pay_xxx
+  const paymentId = searchParams.get("payment_id");
+  const subscriptionIdFromUrl = searchParams.get("subscription_id");
+  const statusFromUrl = searchParams.get("status"); // "active" when Dodo confirms
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    if (!isSignedIn) {
+      setSubscriptionStatus("pending");
+      return;
+    }
+
+    runSyncThenCheck();
+    // Poll for up to 30s so we pick up webhook/sync when it lands
+    const interval = setInterval(runSyncThenCheck, 2000);
+    const stop = setTimeout(() => clearInterval(interval), 30000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(stop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, isSignedIn, paymentId, subscriptionIdFromUrl]);
+
+  async function runSyncThenCheck() {
+    setSubscriptionStatus((prev) => (prev === "active" ? prev : "checking"));
+    try {
+      const token = await getToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // Always call sync when we have any identifier from Dodo (payment_id or subscription_id)
+      if (paymentId || subscriptionIdFromUrl) {
+        try {
+          const syncBody: Record<string, string> = {};
+          if (paymentId) syncBody.payment_id = paymentId;
+          if (subscriptionIdFromUrl) syncBody.subscription_id = subscriptionIdFromUrl;
+
+          await fetch(`${BACKEND_URL}/api/payments/sync`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify(syncBody),
+          });
+        } catch {
+          // ignore sync errors – polling will still pick up once webhook lands
+        }
+      }
+
+      const [subRes, credRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/payments/subscription`, { headers }),
+        fetch(`${BACKEND_URL}/api/payments/credits`, { headers }),
+      ]);
+
+      let hasActiveSubscription = false;
+      if (subRes.ok) {
+        const r = await subRes.json();
+        hasActiveSubscription = !!(r.subscription && (r.subscription.status === "active" || r.subscription.status === "on_hold"));
+      }
+      let hasCredits = false;
+      if (credRes.ok) {
+        const cred = await credRes.json();
+        // Only count as "paid credits" when the plan is set (not free tier)
+        hasCredits = !!(cred.credits && cred.credits.plan && cred.credits.total > 0);
+      }
+
+      setSubscriptionStatus((prev) => {
+        if (prev === "active") return prev;
+        return hasActiveSubscription || hasCredits ? "active" : "pending";
+      });
+    } catch {
+      setSubscriptionStatus("pending");
+    }
+  }
+
+  async function checkSubscription() {
+    await runSyncThenCheck();
+  }
+
+  // Auto-redirect after success
+  useEffect(() => {
+    if (subscriptionStatus === "active") {
+      const t = setTimeout(() => router.push("/app/studio"), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [subscriptionStatus, router]);
+
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center px-4">
+      <div className="max-w-md w-full text-center">
+        <div className="mb-8">
+          <span
+            className="text-2xl font-bold tracking-tight"
+            style={{ fontFamily: "DM Sans, sans-serif" }}
+          >
+            Hydrilla
+          </span>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
+          {subscriptionStatus === "checking" ? (
+            <>
+              <div className="w-16 h-16 mx-auto mb-6 rounded-full border-4 border-gray-100 border-t-black animate-spin" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Verifying your subscription…</h2>
+              <p className="text-sm text-gray-500">This takes just a moment.</p>
+            </>
+          ) : subscriptionStatus === "active" ? (
+            <>
+              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-50 flex items-center justify-center">
+                <svg className="w-9 h-9 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">You&apos;re all set! 🎉</h2>
+              <p className="text-sm text-gray-600 mb-6">
+                Your subscription is active and your credits have been added. Redirecting you to Studio…
+              </p>
+              {(paymentId || subscriptionIdFromUrl) && (
+                <p className="text-xs text-gray-400 mb-4">
+                  {paymentId ? `Payment ID: ${paymentId}` : `Subscription ID: ${subscriptionIdFromUrl}`}
+                </p>
+              )}
+              <Link
+                href="/app/studio"
+                className="inline-flex items-center justify-center w-full py-3 rounded-xl bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors"
+              >
+                Go to Studio
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-yellow-50 flex items-center justify-center">
+                <svg className="w-9 h-9 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Payment received!</h2>
+              <p className="text-sm text-gray-600 mb-6">
+                Your payment was successful. We&apos;re activating your subscription — this can take up to a minute. Please refresh this page shortly.
+              </p>
+              {(paymentId || subscriptionIdFromUrl) && (
+                <p className="text-xs text-gray-400 mb-4">
+                  {paymentId ? `Payment ID: ${paymentId}` : `Subscription ID: ${subscriptionIdFromUrl}`}
+                </p>
+              )}
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={checkSubscription}
+                  className="w-full py-3 rounded-xl bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors"
+                >
+                  Check Again
+                </button>
+                <Link
+                  href="/app/studio"
+                  className="w-full py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200 transition-colors text-center"
+                >
+                  Go to Studio Anyway
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// Main content component that uses useSearchParams
-function CheckoutSuccessContent() {
-  const { isSignedIn, getToken } = useAuth();
-  const { user } = useUser();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
-  const [paymentId, setPaymentId] = useState<string | null>(null);
-
-  const userEmail = user?.emailAddresses?.[0]?.emailAddress || user?.primaryEmailAddress?.emailAddress || null;
-
-  // Check payment status and access
-  useEffect(() => {
-    const checkPayment = async () => {
-      const paymentIdParam = searchParams.get("payment_id");
-      if (paymentIdParam) {
-        setPaymentId(paymentIdParam);
-      }
-
-      if (!isSignedIn || !userEmail) {
-        setHasAccess(false);
-        setIsChecking(false);
-        return;
-      }
-
-      try {
-        const { hasAccess: access } = await checkEarlyAccess(userEmail, getToken);
-        setHasAccess(access);
-      } catch (err) {
-        console.error("Error checking access:", err);
-        setHasAccess(false);
-      } finally {
-        setIsChecking(false);
-      }
-    };
-
-    checkPayment();
-  }, [isSignedIn, userEmail, getToken, searchParams]);
-
-  // Auto-redirect to home after 3 seconds if access is granted
-  useEffect(() => {
-    if (hasAccess === true) {
-      const timer = setTimeout(() => {
-        router.push("/");
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasAccess, router]);
-
-  return (
-    <div className="min-h-screen bg-white">
-      <section className="relative min-h-screen w-full overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/future.jpg"
-            alt="Payment Success"
-            fill
-            className="object-cover"
-            priority
-          />
-          <div className="absolute inset-0 bg-black/30"></div>
-        </div>
-
-        <div className="relative z-10 container mx-auto px-4 sm:px-6 md:px-8 pt-32 sm:pt-40 md:pt-48 pb-12 sm:pb-16 md:pb-20 flex flex-col items-center justify-center min-h-screen">
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="bg-white/95 backdrop-blur-sm rounded-3xl p-8 sm:p-10 md:p-12 shadow-2xl border border-white/20">
-              {/* Success Icon */}
-              <div className="mb-6">
-                <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center">
-                  <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Title */}
-              <h1
-                className="text-3xl sm:text-4xl md:text-5xl font-bold text-black mb-4"
-                style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-              >
-                Payment Successful!
-              </h1>
-
-              {/* Status Message */}
-              {isChecking ? (
-                <p
-                  className="text-lg sm:text-xl text-gray-700 mb-8"
-                  style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
-                >
-                  Verifying your payment...
-                </p>
-              ) : hasAccess === true ? (
-                <>
-                  <p
-                    className="text-lg sm:text-xl text-gray-700 mb-8"
-                    style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
-                  >
-                    🎉 Welcome to Hydrilla Early Access! You now have full access to all premium features.
-                  </p>
-                  <p
-                    className="text-sm sm:text-base text-gray-600 mb-8"
-                    style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
-                  >
-                    Redirecting to home page in 3 seconds...
-                  </p>
-                  {paymentId && (
-                    <p
-                      className="text-xs text-gray-500 mb-4"
-                      style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
-                    >
-                      Payment ID: {paymentId}
-                    </p>
-                  )}
-                  <Link
-                    href="/"
-                    className="inline-flex items-center gap-2 bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg font-bold hover:bg-gray-900 transition-all duration-300 shadow-xl"
-                    style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-                  >
-                    Go to Home
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <p
-                    className="text-lg sm:text-xl text-gray-700 mb-8"
-                    style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
-                  >
-                    Your payment was successful, but we&apos;re still processing your access. Please wait a moment and refresh this page.
-                  </p>
-                  <p
-                    className="text-sm sm:text-base text-gray-600 mb-8"
-                    style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
-                  >
-                    If you continue to see this message, please contact support.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="bg-black text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg font-bold hover:bg-gray-900 transition-all duration-300 shadow-xl"
-                      style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-                    >
-                      Refresh Page
-                    </button>
-                    <Link
-                      href="/"
-                      className="bg-gray-200 text-black px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg font-bold hover:bg-gray-300 transition-all duration-300"
-                      style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-                    >
-                      Go to Home
-                    </Link>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-      <Footer />
-    </div>
-  );
-}
-
-// Main page component with Suspense boundary
 export default function CheckoutSuccessPage() {
   return (
     <Suspense fallback={<LoadingFallback />}>
