@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { SignInButton, SignedIn, SignedOut } from "@clerk/nextjs";
 
 interface ShowcaseItem {
   id: string;
@@ -297,7 +298,18 @@ export default function Showcase() {
   }, []);
 
   return (
-    <section className="relative w-full bg-white py-16 sm:py-20 md:py-24 pb-24 sm:pb-28 md:pb-32">
+    <section className="relative w-full bg-neutral-50 py-16 sm:py-20 md:py-24 pb-24 sm:pb-28 md:pb-32">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 md:px-8">
+        {/* Section heading */}
+        <div className="text-center mb-10 sm:mb-12 md:mb-14">
+          <h2
+            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-[#111] leading-tight tracking-tight"
+            style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+          >
+            The Industry&apos;s Best Generative 3D Models
+          </h2>
+        </div>
+      </div>
       <div className="w-full">
         {/* Carousel Container - Full width, no padding */}
         <div className="relative">
@@ -511,18 +523,28 @@ export default function Showcase() {
                     </p>
                   </div>
 
-                  {/* Create 3D Button - mobile: larger text; subtle hover shade */}
+                  {/* Create 3D Button - Clerk sign-in when signed out; redirect to /app/studio when signed in */}
                   <div className="absolute bottom-0 left-0 z-20 p-4 sm:p-5 md:p-6">
-                    <Link
-                      href="/generate"
-                      className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit no-underline text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out"
-                      style={{
-                        fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif',
-                        lineHeight: '100%',
-                      }}
-                    >
-                      Create 3D
-                    </Link>
+                    <SignedIn>
+                      <Link
+                        href="/app/studio"
+                        className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit no-underline text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out"
+                        style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif', lineHeight: '100%' }}
+                      >
+                        Create 3D
+                      </Link>
+                    </SignedIn>
+                    <SignedOut>
+                      <SignInButton mode="modal" forceRedirectUrl="/app/studio">
+                        <button
+                          type="button"
+                          className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out cursor-pointer"
+                          style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif', lineHeight: '100%' }}
+                        >
+                          Create 3D
+                        </button>
+                      </SignInButton>
+                    </SignedOut>
                   </div>
                 </div>
               </div>

@@ -1,12 +1,19 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import VideoBackground from "./VideoBackground";
 import { PromptBox } from "../PromptBox";
 import Showcase from "./Showcase";
 import IndustrySection from "./IndustrySection";
+import HowItWorks from "./HowItWorks";
+import AppShowcase from "./AppShowcase";
+import FeaturesSection from "./FeaturesSection";
+import WhyHydrilla from "./WhyHydrilla";
+import PricingSection from "./PricingSection";
+import FAQSection from "./FAQSection";
+import { SignUpButton } from "@clerk/nextjs";
 
 const HERO_VIDEO = "/3d-images/73e345f9d334f51cad2509e6e97f85a6_720w.mp4";
 const HERO_POSTER = "/3d-images/hero-sky.jpg";
@@ -158,13 +165,13 @@ export default function Hero() {
                     transition={{ duration: 0.2 }}
                     className="w-full max-w-[min(90vw,720px)]"
                   >
-                    <div className="bg-white rounded-2xl border border-[#11111114] shadow-sm flex flex-col sm:flex-row gap-3 p-4 sm:p-5 min-h-[72px] sm:min-h-[80px] items-center">
+                    <div className="backdrop-blur-xl rounded-2xl pt-5 pb-3 px-6 sm:pt-6 sm:pb-4 sm:px-8 min-h-[72px] bg-white/[0.07] border border-white/20 shadow-none flex flex-col sm:flex-row gap-3 items-center">
                       <input
                         type="email"
                         value={demoEmail}
                         onChange={(e) => setDemoEmail(e.target.value)}
                         placeholder="Enter your business email"
-                        className="flex-1 min-w-0 w-full h-12 rounded-xl border border-[#11111114] bg-white px-4 py-3 text-[15px] sm:text-[17px] font-normal text-[#111] placeholder:text-neutral-500 outline-none focus:border-neutral-300 transition-[border-color] duration-200 font-dm-sans"
+                        className="flex-1 min-w-0 w-full h-12 rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-[15px] sm:text-[17px] font-normal text-white placeholder:text-white/60 outline-none focus:border-white/40 transition-[border-color] duration-200 font-dm-sans"
                         aria-label="Business email"
                       />
                       <motion.button
@@ -173,7 +180,7 @@ export default function Hero() {
                         disabled={!canSubmitDemo}
                         whileHover={canSubmitDemo ? { scale: 1.02 } : {}}
                         whileTap={canSubmitDemo ? { scale: 0.98 } : {}}
-                        className="shrink-0 h-12 px-6 rounded-xl text-sm font-semibold font-dm-sans transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-[#111] text-white hover:bg-neutral-800 active:bg-neutral-700"
+                        className="shrink-0 h-12 px-6 rounded-xl text-sm font-semibold font-dm-sans transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-white/90 text-neutral-900 hover:bg-white active:bg-white/80 border border-white/40"
                       >
                         Request Demo
                       </motion.button>
@@ -186,20 +193,123 @@ export default function Hero() {
         </div>
       </section>
 
-      <IndustrySection />
+      <MissionSection />
+
+      <div id="solutions"><IndustrySection /></div>
+
+      <HowItWorks />
 
       <Showcase />
 
-      <section className="relative w-full bg-gradient-to-b from-neutral-50 to-neutral-100 py-20 sm:py-24 md:py-32 px-4 sm:px-6 md:px-8">
-        <div className="max-w-6xl mx-auto">
-          <p
-            className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-black leading-tight tracking-tight"
+      <AppShowcase />
+
+      <div id="features"><FeaturesSection /></div>
+
+      <WhyHydrilla />
+
+      <div id="pricing"><PricingSection /></div>
+
+      <FAQSection />
+
+      {/* CTA section — light theme, below FAQ */}
+      <section
+        className="relative w-full bg-[#faf9f7] py-16 sm:py-20 md:py-24"
+        style={{ boxSizing: "border-box", WebkitFontSmoothing: "antialiased" }}
+      >
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 text-center">
+          <motion.h2
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.5 }}
+            className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#111] tracking-tight leading-tight mb-6"
+            style={{ fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif" }}
+          >
+            Ready to raise your 3D game?
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.5, delay: 0.08 }}
+            className="text-base sm:text-lg text-neutral-600 mb-10 max-w-2xl mx-auto"
             style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
           >
-            Our mission is to build intelligent workflows that accelerate animation and 3D production.
-          </p>
+            Start creating production-ready 3D assets, or book a demo with our team.
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-5"
+          >
+            <SignUpButton mode="modal" forceRedirectUrl="/app/studio">
+              <button
+                type="button"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-[#111] text-white text-base font-semibold hover:bg-neutral-800 transition-colors cursor-pointer"
+                style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+              >
+                Start creating
+              </button>
+            </SignUpButton>
+            <a
+              href="https://cal.com/hydrilla"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border-2 border-[#111] bg-transparent text-[#111] text-base font-semibold hover:bg-[#111] hover:text-white transition-colors"
+              style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+            >
+              Book Demo
+            </a>
+          </motion.div>
         </div>
       </section>
     </>
+  );
+}
+
+/** Mission: directly below hero. Text fills from grey to black on scroll. */
+function MissionSection() {
+  const ref = useRef<HTMLElement>(null);
+  const [fill, setFill] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const rect = el.getBoundingClientRect();
+      const winH = window.innerHeight;
+      const fullH = rect.height;
+      const visible = Math.min(rect.bottom, winH) - Math.max(rect.top, 0);
+      const progress = fullH > 0 ? Math.min(1, Math.max(0, visible / fullH)) : 0;
+      setFill(progress);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const grey = 115;
+  const black = 17;
+  const r = Math.round(black + (grey - black) * (1 - fill));
+  const color = `rgb(${r},${r},${r})`;
+
+  return (
+    <section
+      ref={ref}
+      className="relative w-full bg-gradient-to-b from-neutral-50 to-neutral-100 py-20 sm:py-24 md:py-32 px-4 sm:px-6 md:px-8"
+    >
+      <div className="max-w-6xl mx-auto">
+        <p
+          className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight tracking-tight transition-colors duration-150"
+          style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif", color }}
+        >
+          Our mission is to build intelligent workflows that accelerate animation and 3D production.
+        </p>
+      </div>
+    </section>
   );
 }

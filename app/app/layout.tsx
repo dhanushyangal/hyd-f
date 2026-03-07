@@ -3,6 +3,7 @@
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { AppLayoutProvider } from "../../context/AppLayoutContext";
 import { AppSidebar } from "../../components/app/AppSidebar";
 import { AppNavbar } from "../../components/app/AppNavbar";
 
@@ -24,15 +25,17 @@ export default function AppLayout({
         <RedirectToHome />
       </SignedOut>
       <SignedIn>
-        <div className="h-screen flex bg-white">
-          <AppSidebar />
-          <div className="flex-1 flex flex-col min-h-0 min-w-0">
-            <AppNavbar />
-            <div className="flex-1 min-h-0 overflow-auto">
-              {children}
+        <AppLayoutProvider>
+          <div className="h-screen flex bg-white">
+            <AppSidebar />
+            <div className="flex-1 flex flex-col min-h-0 min-w-0">
+              <AppNavbar />
+              <div className="flex-1 min-h-0 overflow-auto">
+                {children}
+              </div>
             </div>
           </div>
-        </div>
+        </AppLayoutProvider>
       </SignedIn>
     </>
   );

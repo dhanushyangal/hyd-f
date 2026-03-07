@@ -205,22 +205,22 @@ export default function AssetsPage() {
   return (
     <div className="app-content-page font-dm-sans">
       {/* Page header – big and clear */}
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-semibold text-neutral-900 tracking-tight">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6 flex-wrap min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-neutral-900 tracking-tight truncate">
             3D Objects
           </h1>
-          <p className="text-base text-neutral-500 mt-1">
+          <p className="text-sm sm:text-base text-neutral-500 mt-1">
             Your generated 3D models from Studio.
           </p>
         </div>
-        <div className="flex rounded-full border border-neutral-200 bg-neutral-50/80 p-1.5 gap-0.5">
+        <div className="flex rounded-full border border-neutral-200 bg-neutral-50/80 p-1 sm:p-1.5 gap-0.5 shrink-0">
           {filterTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setFilter(tab.id)}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                 filter === tab.id
                   ? "bg-white text-neutral-900 shadow-sm border border-neutral-200/80"
                   : "text-neutral-600 hover:text-neutral-900"
@@ -234,21 +234,21 @@ export default function AssetsPage() {
 
       {/* Content area */}
       {loading ? (
-        <div className="flex justify-center py-24">
+        <div className="flex justify-center py-16 sm:py-24">
           <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/60 py-24 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-4">
-            <ImageIcon className="w-8 h-8 text-neutral-400" />
+        <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/60 py-16 sm:py-24 text-center">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-3 sm:mb-4">
+            <ImageIcon className="w-7 h-7 sm:w-8 sm:h-8 text-neutral-400" />
           </div>
-          <p className="text-base font-medium text-neutral-600 mb-1">No 3D objects yet</p>
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm sm:text-base font-medium text-neutral-600 mb-1">No 3D objects yet</p>
+          <p className="text-xs sm:text-sm text-neutral-500">
             Generate models in Studio to see them here.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
           {filteredJobs.map((job) => (
             <AssetCard
               key={job.id}

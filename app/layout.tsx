@@ -1,8 +1,6 @@
 import "./globals.css";
 import type { ReactNode } from "react";
-import {
-  ClerkProvider,
-} from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { ClientProviders } from "../components/ClientProviders";
 import { ConditionalNavbar } from "../components/layout/ConditionalNavbar";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
@@ -42,8 +40,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           footerPages: "hidden",
         },
       }}
-      signInFallbackRedirectUrl="/"
-      signUpFallbackRedirectUrl="/"
+      signInFallbackRedirectUrl="/app/studio"
+      signUpFallbackRedirectUrl="/app/studio"
     >
     <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
         <head>

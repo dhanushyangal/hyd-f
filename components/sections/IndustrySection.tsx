@@ -10,16 +10,17 @@ const INDUSTRIES = [
     id: "game",
     title: "Game Development",
     image: "/industrypower/dino.png",
-    leftHeading: "Build game worlds faster",
+    leftHeading: "Assets built for real-time production",
     ctaLabel: "Explore Game Development",
+    ctaHref: "/usecase/gamedev",
     features: [
       {
-        title: "Game-ready assets instantly",
-        body: "Generate characters, props, and environments with clean topology optimized for engines like Unreal and Unity.",
+        title: "Game-engine compatible models",
+        body: "Generate characters, props, and environments with clean geometry suitable for Unreal Engine, Unity, and other real-time pipelines.",
       },
       {
-        title: "Scale your asset pipeline",
-        body: "Produce consistent asset variations quickly so teams can expand game worlds without slowing production.",
+        title: "Consistent asset iteration",
+        body: "Create multiple variations of models while maintaining consistent style and scale across your game world.",
       },
     ],
   },
@@ -27,16 +28,17 @@ const INDUSTRIES = [
     id: "film",
     title: "Film & Animation",
     image: "/industrypower/films%26a.png",
-    leftHeading: "Create cinematic assets faster",
+    leftHeading: "Production assets for cinematic pipelines",
     ctaLabel: "Explore Film & Animation",
+    ctaHref: "/usecase/filmproduction",
     features: [
       {
-        title: "Cinematic-grade models",
-        body: "Generate detailed characters, props, and environments suitable for animation and visual effects pipelines.",
+        title: "High-fidelity asset generation",
+        body: "Create detailed models for characters, props, and environments that integrate into animation and VFX workflows.",
       },
       {
-        title: "Accelerate creative iteration",
-        body: "Explore multiple visual concepts rapidly so artists can focus on storytelling and final refinement.",
+        title: "Faster concept exploration",
+        body: "Generate visual variations early in production to help teams refine direction before final modeling and texturing.",
       },
     ],
   },
@@ -44,16 +46,17 @@ const INDUSTRIES = [
     id: "arc",
     title: "Architecture & Interiors",
     image: "/industrypower/architecture.png",
-    leftHeading: "Design and visualize spaces instantly",
-    ctaLabel: "Explore Architecture Solutions",
+    leftHeading: "Architectural visualization assets",
+    ctaLabel: "Explore Architecture",
+    ctaHref: "/usecase/architecture",
     features: [
       {
-        title: "Architectural assets on demand",
-        body: "Create interiors, furniture, and structural elements for faster concept development and visualization.",
+        title: "Interior and structural elements",
+        body: "Generate furniture, architectural components, and interior objects suitable for visualization workflows.",
       },
       {
-        title: "Improve client presentations",
-        body: "Generate multiple design variations quickly to explore layouts and materials before final production.",
+        title: "Rapid design iteration",
+        body: "Explore layout and design variations quickly before committing to final modeling and rendering.",
       },
     ],
   },
@@ -61,16 +64,17 @@ const INDUSTRIES = [
     id: "arch",
     title: "AR / VR & XR",
     image: "/industrypower/arvr1.png",
-    leftHeading: "Build immersive experiences",
+    leftHeading: "Assets designed for immersive environments",
     ctaLabel: "Explore XR Solutions",
+    ctaHref: "/usecase/arvr",
     features: [
       {
-        title: "Assets optimized for real-time worlds",
-        body: "Generate lightweight 3D models designed for interactive environments and spatial applications.",
+        title: "Real-time optimized models",
+        body: "Create lightweight assets suitable for interactive environments, simulations, and spatial applications.",
       },
       {
-        title: "Prototype immersive ideas faster",
-        body: "Create environments and objects quickly while developing next-generation XR experiences.",
+        title: "Rapid spatial prototyping",
+        body: "Generate objects and environments quickly while developing immersive experiences.",
       },
     ],
   },
@@ -78,16 +82,17 @@ const INDUSTRIES = [
     id: "prop",
     title: "Product Visualization",
     image: "/industrypower/lampprop.png",
-    leftHeading: "Bring products to life in 3D",
+    leftHeading: "Product assets for visualization and marketing",
     ctaLabel: "Explore Product Visualization",
+    ctaHref: "/usecase/productdesign",
     features: [
       {
-        title: "High-quality product renders",
-        body: "Generate photorealistic models for marketing visuals, product showcases, and e-commerce.",
+        title: "Clean product model generation",
+        body: "Create detailed models suitable for product visualization, marketing assets, and e-commerce experiences.",
       },
       {
-        title: "Speed up product storytelling",
-        body: "Transform early concepts into compelling 3D visuals ready for presentations and campaigns.",
+        title: "Flexible concept presentation",
+        body: "Turn early product ideas into visual assets that teams can use across design, marketing, and presentation workflows.",
       },
     ],
   },
@@ -95,7 +100,7 @@ const INDUSTRIES = [
 
 type IndustryId = (typeof INDUSTRIES)[number]["id"];
 
-/* ─────────────────── gradient overlay (GrainGradient-inspired) ──────────── */
+/* ─────────────────── gradient overlay ──────────── */
 function CardGradient({ active }: { active: boolean }) {
   return (
     <div
@@ -121,6 +126,7 @@ function CardGradient({ active }: { active: boolean }) {
 /* ─────────────────────────── component ─────────────────────── */
 export default function IndustrySection() {
   const [activeId, setActiveId] = useState<IndustryId>("game");
+  const [mobileOpenId, setMobileOpenId] = useState<IndustryId | null>(null);
   const activeItem = INDUSTRIES.find((i) => i.id === activeId) ?? INDUSTRIES[0];
 
   return (
@@ -134,6 +140,7 @@ export default function IndustrySection() {
         WebkitFontSmoothing: "antialiased",
         textRendering: "optimizeLegibility",
       }}
+      className="max-sm:px-4 max-sm:py-12"
     >
       <div
         style={{
@@ -144,7 +151,7 @@ export default function IndustrySection() {
           gap: "1.75rem",
         }}
       >
-        {/* ── Heading – outside the box ── */}
+        {/* Heading */}
         <h2
           style={{
             margin: 0,
@@ -158,39 +165,197 @@ export default function IndustrySection() {
           }}
         >
           Built to{" "}
-          <em
-            style={{
-              fontStyle: "italic",
-              fontWeight: 700,
-              letterSpacing: "-0.04em",
-            }}
-          >
+          <em style={{ fontStyle: "italic", fontWeight: 700, letterSpacing: "-0.04em" }}>
             power
           </em>
           <br />
           creators like you
         </h2>
 
-        {/* ── Main card ── */}
+        {/* ── MOBILE accordion ── */}
+        <div className="flex flex-col gap-3 md:hidden">
+          {INDUSTRIES.map((item) => {
+            const isOpen = mobileOpenId === item.id;
+            return (
+              <div
+                key={item.id}
+                style={{
+                  borderRadius: "1rem",
+                  border: `1px solid ${isOpen ? "rgba(17,17,17,0.12)" : "rgba(17,17,17,0.07)"}`,
+                  backgroundColor: isOpen ? "#fff" : "rgba(251,250,249,0.9)",
+                  overflow: "hidden",
+                  transition: "border-color 0.2s, background-color 0.2s",
+                }}
+              >
+                {/* Accordion header */}
+                <button
+                  type="button"
+                  onClick={() => setMobileOpenId(isOpen ? null : item.id)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "1rem 1.125rem",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                      fontSize: "1rem",
+                      fontWeight: 600,
+                      color: "#111",
+                      letterSpacing: "-0.02em",
+                      lineHeight: 1.3,
+                      textAlign: "left",
+                    }}
+                  >
+                    {item.title}
+                  </span>
+                  <span
+                    style={{
+                      width: "28px",
+                      height: "28px",
+                      borderRadius: "50%",
+                      backgroundColor: isOpen ? "#111" : "rgba(17,17,17,0.07)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      transition: "background-color 0.2s",
+                      marginLeft: "0.75rem",
+                    }}
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      style={{
+                        color: isOpen ? "#fff" : "#111",
+                        transform: isOpen ? "rotate(45deg)" : "rotate(0deg)",
+                        transition: "transform 0.2s ease",
+                      }}
+                    >
+                      <path
+                        d="M6 1v10M1 6h10"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                </button>
+
+                {/* Accordion body */}
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                      style={{ overflow: "hidden" }}
+                    >
+                      <div style={{ padding: "0 1.125rem 1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                        {/* Image */}
+                        <div
+                          style={{
+                            position: "relative",
+                            width: "100%",
+                            borderRadius: "0.75rem",
+                            overflow: "hidden",
+                            backgroundColor: "#f0efed",
+                            aspectRatio: "4/3",
+                          }}
+                        >
+                          <Image
+                            src={item.image}
+                            alt={item.title}
+                            fill
+                            style={{ objectFit: "cover", objectPosition: "center" }}
+                            sizes="100vw"
+                            unoptimized
+                          />
+                          <CardGradient active={true} />
+                        </div>
+
+                        {/* Heading */}
+                        <h3
+                          style={{
+                            margin: 0,
+                            fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                            fontSize: "1.125rem",
+                            fontWeight: 700,
+                            color: "#111",
+                            letterSpacing: "-0.025em",
+                            lineHeight: 1.25,
+                          }}
+                        >
+                          {item.leftHeading}
+                        </h3>
+
+                        {/* Feature bullets */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+                          {item.features.map((f, fi) => (
+                            <div key={f.title}>
+                              {fi > 0 && <div style={{ borderTop: "1px solid rgba(17,17,17,0.07)", marginBottom: "0.875rem" }} />}
+                              <h4
+                                style={{
+                                  margin: "0 0 0.3rem",
+                                  fontFamily: "'DM Sans', Arial, sans-serif",
+                                  fontSize: "0.9375rem",
+                                  fontWeight: 600,
+                                  color: "#111",
+                                  letterSpacing: "-0.015em",
+                                }}
+                              >
+                                {f.title}
+                              </h4>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontFamily: "'DM Sans', Arial, sans-serif",
+                                  fontSize: "0.875rem",
+                                  color: "#5e5c5a",
+                                  lineHeight: 1.65,
+                                }}
+                              >
+                                {f.body}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <CtaLink label={item.ctaLabel} href={item.ctaHref} />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── DESKTOP tab card ── */}
+        <div className="hidden md:block">
+
+        {/* Main card */}
         <div
           style={{
             borderRadius: "1rem",
             border: "1px solid rgba(17,17,17,0.06)",
             backgroundColor: "#fbfaf9",
-            boxShadow:
-              "0 1px 4px rgba(17,17,17,0.05), 0 0 0 1px rgba(17,17,17,0.03)",
+            boxShadow: "0 1px 4px rgba(17,17,17,0.05), 0 0 0 1px rgba(17,17,17,0.03)",
             overflow: "hidden",
           }}
         >
-          {/* ── Industry tabs row ── */}
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              padding: "0.625rem",
-              alignItems: "stretch",
-            }}
-          >
+          {/* Industry tabs row */}
+          <div style={{ display: "flex", gap: "0.5rem", padding: "0.625rem", alignItems: "stretch" }}>
             {INDUSTRIES.map((item) => {
               const isActive = item.id === activeId;
               return (
@@ -198,7 +363,7 @@ export default function IndustrySection() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveId(item.id)}
-                  aria-pressed={isActive ? "true" : "false"}
+                  aria-pressed={isActive}
                   style={{
                     flex: 1,
                     minWidth: 0,
@@ -211,7 +376,6 @@ export default function IndustrySection() {
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  {/* Inner styled card */}
                   <div
                     style={{
                       position: "relative",
@@ -222,20 +386,12 @@ export default function IndustrySection() {
                       height: "100%",
                       overflow: "hidden",
                       borderRadius: "0.5rem",
-                      border: `1px solid ${
-                        isActive
-                          ? "rgba(17,17,17,0.10)"
-                          : "rgba(17,17,17,0.055)"
-                      }`,
-                      backgroundColor: isActive
-                        ? "rgba(255,255,255,0.96)"
-                        : "rgba(239,238,230,0.28)",
+                      border: `1px solid ${isActive ? "rgba(17,17,17,0.10)" : "rgba(17,17,17,0.055)"}`,
+                      backgroundColor: isActive ? "rgba(255,255,255,0.96)" : "rgba(239,238,230,0.28)",
                       padding: "0.75rem 0.375rem 1.25rem",
-                      transition:
-                        "background-color 0.25s cubic-bezier(0.215,0.61,0.355,1), border-color 0.25s cubic-bezier(0.215,0.61,0.355,1)",
+                      transition: "background-color 0.25s cubic-bezier(0.215,0.61,0.355,1), border-color 0.25s",
                     }}
                   >
-                    {/* Card label */}
                     <span
                       style={{
                         display: "block",
@@ -250,8 +406,7 @@ export default function IndustrySection() {
                         marginBottom: "0.625rem",
                         position: "relative",
                         zIndex: 10,
-                        transition:
-                          "color 0.25s cubic-bezier(0.215,0.61,0.355,1), font-weight 0.25s",
+                        transition: "color 0.25s cubic-bezier(0.215,0.61,0.355,1), font-weight 0.25s",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -262,7 +417,6 @@ export default function IndustrySection() {
                       {item.title}
                     </span>
 
-                    {/* Image – 161.19×226 crop, height 13rem */}
                     <div
                       style={{
                         position: "relative",
@@ -271,8 +425,8 @@ export default function IndustrySection() {
                         margin: "0 auto",
                         overflow: "hidden",
                         borderRadius: "0.25rem",
-                        height: "13rem",
-                        width: "min(100%, calc(13rem * 161.19 / 226))",
+                        height: "14.5rem",
+                        width: "min(100%, calc(14.5rem * 161.19 / 226))",
                         aspectRatio: "161.19 / 226",
                       }}
                     >
@@ -284,14 +438,13 @@ export default function IndustrySection() {
                           objectFit: "cover",
                           objectPosition: "center",
                           opacity: isActive ? 1 : 0.28,
-                          transition:
-                            "opacity 0.3s cubic-bezier(0.215,0.61,0.355,1)",
+                          transition: "opacity 0.3s cubic-bezier(0.215,0.61,0.355,1)",
                         }}
                         sizes="(max-width: 640px) 22vw, (max-width: 1024px) 18vw, 161px"
+                        unoptimized
                       />
                     </div>
 
-                    {/* Gradient bloom */}
                     <CardGradient active={isActive} />
                   </div>
                 </button>
@@ -299,24 +452,15 @@ export default function IndustrySection() {
             })}
           </div>
 
-          {/* ── Animated bottom content ── */}
-          <div
-            style={{
-              borderTop: "1px solid rgba(17,17,17,0.06)",
-              minHeight: "12rem",
-              overflow: "hidden",
-            }}
-          >
+          {/* Animated bottom content */}
+          <div style={{ borderTop: "1px solid rgba(17,17,17,0.06)", minHeight: "12rem", overflow: "hidden" }}>
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeId}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                transition={{
-                  duration: 0.28,
-                  ease: [0.215, 0.61, 0.355, 1],
-                }}
+                transition={{ duration: 0.28, ease: [0.215, 0.61, 0.355, 1] }}
                 style={{
                   display: "flex",
                   flexDirection: "row",
@@ -326,7 +470,7 @@ export default function IndustrySection() {
                   padding: "2.5rem 2.75rem 2.75rem",
                 }}
               >
-                {/* Left – heading + CTA */}
+                {/* Left */}
                 <div
                   style={{
                     display: "flex",
@@ -340,9 +484,8 @@ export default function IndustrySection() {
                   <h3
                     style={{
                       margin: 0,
-                      fontFamily:
-                        "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                      fontSize: "clamp(1.25rem, 2.4vw, 1.75rem)",
+                      fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                      fontSize: "clamp(1.375rem, 2.4vw, 1.875rem)",
                       fontWeight: 700,
                       color: "#111",
                       letterSpacing: "-0.03em",
@@ -351,33 +494,21 @@ export default function IndustrySection() {
                   >
                     {activeItem.leftHeading}
                   </h3>
-                  <CtaLink label={activeItem.ctaLabel} />
+                  <CtaLink label={activeItem.ctaLabel} href={activeItem.ctaHref} />
                 </div>
 
                 {/* Right – feature bullets */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
                   {activeItem.features.map((f, i) => (
                     <div key={f.title}>
                       {i > 0 && (
-                        <div
-                          style={{
-                            borderTop: "1px solid rgba(17,17,17,0.07)",
-                            margin: "1.25rem 0",
-                          }}
-                        />
+                        <div style={{ borderTop: "1px solid rgba(17,17,17,0.07)", margin: "1.25rem 0" }} />
                       )}
                       <h4
                         style={{
                           margin: "0 0 0.375rem",
                           fontFamily: "'DM Sans', Arial, sans-serif",
-                          fontSize: "0.9375rem",
+                          fontSize: "1.0625rem",
                           fontWeight: 600,
                           color: "#111",
                           letterSpacing: "-0.02em",
@@ -390,7 +521,7 @@ export default function IndustrySection() {
                         style={{
                           margin: 0,
                           fontFamily: "'DM Sans', Arial, sans-serif",
-                          fontSize: "0.8125rem",
+                          fontSize: "0.9375rem",
                           fontWeight: 400,
                           color: "#5e5c5a",
                           letterSpacing: "-0.01em",
@@ -406,17 +537,19 @@ export default function IndustrySection() {
             </AnimatePresence>
           </div>
         </div>
+
+        </div> {/* end hidden md:block desktop wrapper */}
       </div>
     </section>
   );
 }
 
-/* ── small CTA link ── */
-function CtaLink({ label }: { label: string }) {
+/* ── CTA link ── */
+function CtaLink({ label, href }: { label: string; href: string }) {
   const [hovered, setHovered] = useState(false);
   return (
     <a
-      href="/earlyaccess"
+      href={href}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -426,9 +559,7 @@ function CtaLink({ label }: { label: string }) {
         alignSelf: "flex-start",
         padding: "0.5625rem 1.125rem",
         borderRadius: "0.625rem",
-        border: `1px solid ${
-          hovered ? "rgba(17,17,17,0.18)" : "rgba(17,17,17,0.10)"
-        }`,
+        border: `1px solid ${hovered ? "rgba(17,17,17,0.18)" : "rgba(17,17,17,0.10)"}`,
         backgroundColor: hovered ? "rgba(17,17,17,0.04)" : "transparent",
         fontFamily: "'DM Sans', Arial, sans-serif",
         fontSize: "0.8125rem",
@@ -442,14 +573,7 @@ function CtaLink({ label }: { label: string }) {
       }}
     >
       {label}
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 13 13"
-        fill="none"
-        aria-hidden
-        style={{ flexShrink: 0 }}
-      >
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden style={{ flexShrink: 0 }}>
         <path
           d="M2.5 6.5h8M8 4L10.5 6.5 8 9"
           stroke="currentColor"

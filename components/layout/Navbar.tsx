@@ -31,6 +31,7 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   const isThreeDAIPage = pathname === "/3d-ai";
   const isEarlyAccessPage = pathname === "/earlyaccess";
   const isHomePage = pathname === "/";
+  const isContactPage = pathname === "/contact";
   const useHeroStyling = isHero || isTeamPage || isFAQPage || isCaseStudyPage || isThreeDAIPage || isEarlyAccessPage || isHomePage;
   
   // For FAQ, case study, 3D & AI, early access, and home pages, treat them the same as team page
@@ -47,13 +48,12 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     const handleScroll = () => {
       const scrollY = window.scrollY;
       setIsScrolled(scrollY > 50);
-      
+
       // For team page, FAQ, case study, 3D & AI, early access, and home pages, detect if we're in the second section
       if (isTeamPage || isFAQPage || isCaseStudyPage || isThreeDAIPage || isEarlyAccessPage || isHomePage) {
         const heroSection = document.querySelector('section[class*="min-h-screen"]');
         if (heroSection) {
           const heroBottom = heroSection.getBoundingClientRect().bottom;
-          // Check if we've scrolled past the hero section
           setIsInSecondSection(heroBottom <= 100);
         }
       }
@@ -93,12 +93,12 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   
   // Home page hero is light (white bg) → use black nav; other hero pages use white until second section
   const isLightHeroPage = pathname === "/";
-  const textColor = (useHeroStyling && !isLightHeroPage && !(isTeamPage && isInSecondSection) && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection) ? "text-white" : "text-black";
+  const textColor = (useHeroStyling && !isLightHeroPage && !isContactPage && !(isTeamPage && isInSecondSection) && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection) ? "text-white" : "text-black";
   const logoClasses = `text-2xl font-bold ${textColor} tracking-tight transition-colors duration-500`;
   
   // Adjust button classes: light hero (home) uses dark buttons; other hero pages use white until second section
   const isTeamPageInSecondSection = isTeamPage && isInSecondSection;
-  const shouldUseWhiteButtons = (useHeroStyling && !isLightHeroPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection);
+  const shouldUseWhiteButtons = (useHeroStyling && !isLightHeroPage && !isContactPage && !isTeamPageInSecondSection && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isEarlyAccessPageInSecondSection && !isHomePageInSecondSection);
   const generateButtonClasses = shouldUseWhiteButtons
     ? "px-4 py-2 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-xs font-semibold text-white uppercase tracking-wider hover:bg-white/30 transition-all duration-500 ease-out shadow-sm"
     : "px-4 py-2 rounded-lg bg-gray-100 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-200 transition-all duration-500 ease-out";
@@ -153,7 +153,10 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     : "rounded-xl md:rounded-2xl";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 md:pt-4 px-4 md:px-0" data-site-navbar>
+    <header
+      className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 md:pt-4 px-4 md:px-0"
+      data-site-navbar
+    >
       {/* Ultra-Clear Liquid Glass Navbar */}
       <div ref={menuRef} className={`${dynamicContainerClasses} ${dynamicRounded} relative overflow-visible w-full ${shouldShrink ? 'max-w-2xl' : 'max-w-7xl'} before:absolute before:inset-0 ${shouldShrink ? 'before:rounded-full' : 'before:rounded-2xl'} before:bg-gradient-to-br ${useHeroStyling ? 'before:from-white/20 before:via-white/5 before:to-transparent' : 'before:from-white/50 before:via-transparent before:to-transparent'} before:pointer-events-none transition-all duration-500 ease-out`}>
         {/* Ultra-clear liquid glass effects - minimal layers for maximum clarity */}
@@ -203,32 +206,38 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
             </span>
           </Link>
 
-          {/* Navigation Links - Show on Landing Page, Team Page, FAQ Page, Case Study, 3D & AI, Early Access, and Signed-In Page */}
-          {(pathname === "/" || pathname === "/team" || pathname === "/faq" || pathname === "/case-study" || pathname === "/3d-ai" || pathname === "/earlyaccess") && !shouldShrink && (
+          {/* Navigation Links - same on all pages; hidden when scrolled so only logo + Get Started show */}
+          {!shouldShrink && (
             <nav className="hidden lg:flex items-center gap-6 md:gap-8">
-              <Link 
-                href="/team"
+              <Link
+                href="/#solutions"
                 className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
               >
-                Our Team
+                Solutions
               </Link>
-              <Link 
-                href="/case-study"
+              <Link
+                href="/#features"
                 className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
               >
-                Case Study
+                Features
               </Link>
-              <Link 
+              <Link
+                href="/#pricing"
+                className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
+              >
+                Pricing
+              </Link>
+              <Link
                 href="/faq"
                 className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
               >
                 FAQ
               </Link>
-              <Link 
-                href="/3d-ai"
+              <Link
+                href="/contact"
                 className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
               >
-                3D & AI
+                Contact
               </Link>
             </nav>
           )}
@@ -316,39 +325,14 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
         {mobileMenuOpen && (
           <div className={`${mobileMenuClasses} absolute top-full left-0 right-0 w-full mt-2 rounded-lg`}>
             <div className="px-4 sm:px-6 py-4 space-y-2">
-              {/* Navigation Links - Show on Landing Page, Team Page, FAQ Page, Case Study, 3D & AI, Early Access, and Signed-In Page */}
-              {(pathname === "/" || pathname === "/team" || pathname === "/faq" || pathname === "/case-study" || pathname === "/3d-ai" || pathname === "/earlyaccess") && (
-                <div className={`space-y-2 pb-3 border-b ${mobileMenuDivider}`}>
-                  <Link
-                    href="/team"
-                    className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Our Team
-                  </Link>
-                  <Link
-                    href="/case-study"
-                    className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Case Study
-                  </Link>
-                  <Link
-                    href="/faq"
-                    className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    FAQ
-                  </Link>
-                  <Link
-                    href="/3d-ai"
-                    className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    3D & AI
-                  </Link>
-                </div>
-              )}
+              {/* Navigation Links - mobile */}
+              <div className={`space-y-2 pb-3 border-b ${mobileMenuDivider}`}>
+                <Link href="/#solutions" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Solutions</Link>
+                <Link href="/#features" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Features</Link>
+                <Link href="/#pricing" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
+                <Link href="/faq" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>FAQ</Link>
+                <Link href="/contact" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+              </div>
               
               <SignedIn>
                 <Link

@@ -90,9 +90,6 @@ export default async function Home() {
         <Hero />
       </SignedOut>
       
-      {/* Early Access Card Section - Above Footer */}
-      <EarlyAccessCard />
-      
       {/* Footer */}
       <Footer />
     </>

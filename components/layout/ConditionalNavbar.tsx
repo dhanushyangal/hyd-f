@@ -6,8 +6,8 @@ import Navbar from "./Navbar";
 export function ConditionalNavbar() {
   const pathname = usePathname();
   
-  // Don't show navbar on app shell, generate, workspace, sign-in, and sign-up pages
-  if (pathname?.startsWith("/app") || pathname === "/generate" || pathname === "/workspace" || pathname?.startsWith("/sign-in") || pathname?.startsWith("/sign-up")) {
+  // Don't show navbar on app shell, generate, workspace, generations (mobile library), sign-in, and sign-up pages
+  if (pathname?.startsWith("/app") || pathname === "/generate" || pathname === "/workspace" || pathname === "/generations" || pathname?.startsWith("/sign-in") || pathname?.startsWith("/sign-up")) {
     return null;
   }
   

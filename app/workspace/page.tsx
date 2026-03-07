@@ -30,7 +30,11 @@ import {
   QueueInfo,
   LineageItem,
 } from "../../lib/api";
-import { setCurrentWorkspaceId, getCurrentWorkspaceId } from "../../lib/utils";
+import { setCurrentWorkspaceId, getCurrentWorkspaceId, cn } from "../../lib/utils";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+const CREDITS_IMAGE = 2;
+const CREDITS_3D = 10;
 
 // Lazy-load ThreeViewer (Three.js is heavy; load only when 3D is shown)
 const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m) => ({ default: m.ThreeViewer })), {
@@ -162,7 +166,33 @@ function WorkspacePage() {
   const [selectedJobInfo, setSelectedJobInfo] = useState<BackendJob | null>(null);
   const [jobLineage, setJobLineage] = useState<LineageItem[]>([]);
   const [genInfoExpanded, setGenInfoExpanded] = useState(true);
+  const [mobileGenInfoOpen, setMobileGenInfoOpen] = useState(false);
+  const [mobileGeneratedToast, setMobileGeneratedToast] = useState(false);
   const [lineagePreviewItem, setLineagePreviewItem] = useState<LineageItem | null>(null);
+  const mobileGeneratedToastRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Credits (from /api/payments/credits) – header + cost line (image 2, 3D 10)
+  const [creditsTotal, setCreditsTotal] = useState<number>(0);
+  const [creditsUsed, setCreditsUsed] = useState<number>(0);
+  const [creditsLoading, setCreditsLoading] = useState(false);
+  const refreshCredits = useCallback(async () => {
+    if (!isSignedIn || !getToken) return;
+    setCreditsLoading(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/api/payments/credits`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (res.ok) {
+        const data = await res.json();
+        const c = data.credits || {};
+        setCreditsUsed(c.used ?? 0);
+        setCreditsTotal(c.total ?? 0);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCreditsLoading(false);
+    }
+  }, [isSignedIn, getToken]);
 
   // AI Model selection for 3D generation (Trilles only selectable; Hunyuan 3D and Hanuman coming soon)
   type ModelId = "trilles" | "hunyuan3d" ;
@@ -207,6 +237,10 @@ function WorkspacePage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (isSignedIn && workspaceId) refreshCredits();
+  }, [isSignedIn, workspaceId, refreshCredits]);
+
   const savePromptToHistory = useCallback((text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -240,6 +274,9 @@ function WorkspacePage() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(300);
   const [resizingLeft, setResizingLeft] = useState(false);
   const resizeStartRef = useRef({ x: 0, leftW: 0 });
+
+  // Mobile: bottom two sections — Canvas (output) | Create (library + form)
+  const [mobileTab, setMobileTab] = useState<"canvas" | "create">("create");
 
   const MIN_PANEL = 200;
   const MAX_LEFT = 500;
@@ -429,7 +466,10 @@ function WorkspacePage() {
             glbUrl: glbUrl || getProxyGlbUrl(currentGenerating.jobId),
             jobId: currentGenerating.jobId,
           });
+          setMobileTab("canvas"); // on mobile, switch to Canvas to show result
+          setMobileGeneratedToast(true); // mobile: show "Generated" alert
           refreshLibrary();
+          refreshCredits();
 
           // Update generation info panel for the completed 3D job
           const completed3DJob: BackendJob = {
@@ -477,6 +517,22 @@ function WorkspacePage() {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentGenerating?.jobId, currentGenerating?.status]);
+
+  // Mobile "Generated" toast: auto-dismiss after 2.5s
+  useEffect(() => {
+    if (!mobileGeneratedToast) return;
+    if (mobileGeneratedToastRef.current) clearTimeout(mobileGeneratedToastRef.current);
+    mobileGeneratedToastRef.current = setTimeout(() => {
+      setMobileGeneratedToast(false);
+      mobileGeneratedToastRef.current = null;
+    }, 2500);
+    return () => {
+      if (mobileGeneratedToastRef.current) {
+        clearTimeout(mobileGeneratedToastRef.current);
+        mobileGeneratedToastRef.current = null;
+      }
+    };
+  }, [mobileGeneratedToast]);
 
   // ──────────── File handling ────────────
   const handleDrop = useCallback(
@@ -622,6 +678,8 @@ function WorkspacePage() {
         setCurrentParentJobId(result.preview_id); // This new image becomes parent for next iteration
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.preview_id });
         setGeneratingPreview(false);
+        setMobileTab("canvas");
+        setMobileGeneratedToast(true);
 
         // Auto-select the new image in the right panel for next action
         setInputMode("text_1img");
@@ -709,6 +767,8 @@ function WorkspacePage() {
         setCurrentParentJobId(result.edit_id); // This new edit becomes parent for next iteration
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.edit_id });
         setGeneratingPreview(false);
+        setMobileTab("canvas");
+        setMobileGeneratedToast(true);
 
         // Auto-select the new image in the right panel for next action
         setInputMode("text_1img");
@@ -797,6 +857,8 @@ function WorkspacePage() {
         setCurrentParentJobId(result.combined_id); // This new combined image becomes parent for next iteration
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.combined_id });
         setGeneratingPreview(false);
+        setMobileTab("canvas");
+        setMobileGeneratedToast(true);
 
         // Auto-select the new image in the right panel for next action
         setInputMode("text_1img");
@@ -982,6 +1044,19 @@ function WorkspacePage() {
   const isGenerating = loading || generatingPreview || (currentGenerating?.status === "generating");
   const showGenerate3DButton = centerView.type === "preview" && lastPreviewImageUrl && !isGenerating;
 
+  // Mobile: open 3D from /generations via ?open3d=jobId — show in canvas and switch to Canvas tab
+  useEffect(() => {
+    const open3dId = searchParams.get("open3d");
+    if (!open3dId || libraryLoading) return;
+    const job = library3DAssets.find((j) => j.id === open3dId);
+    if (job?.resultGlbUrl) {
+      setCenterView({ type: "3d", glbUrl: getProxyGlbUrl(job.id), jobId: job.id });
+      loadJobInfo(job);
+      setMobileTab("canvas");
+      window.history.replaceState(null, "", "/workspace");
+    }
+  }, [searchParams, libraryLoading, library3DAssets, loadJobInfo]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-neutral-50 text-black">
       {/* No top navbar — left nav in left sidebar, right nav (name, My Library, profile, collapse) in right sidebar */}
@@ -1099,14 +1174,56 @@ function WorkspacePage() {
         </div>
       )}
 
-      {/* 3-panel layout */}
-      <div className="flex-1 flex min-h-0 overflow-hidden relative">
-        {/* Left panel toggle tab when collapsed */}
+      {/* Mobile-only: top bar — back + Hydrilla + Assets icon (right) */}
+      <header className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200 bg-white/95 backdrop-blur-md shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            href="/app/studio"
+            className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
+            aria-label="Back to Studio"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          </Link>
+          <Link href="/" className="text-xl font-bold text-black tracking-tight hover:opacity-80 transition-opacity truncate min-w-0" title={workspaceName.trim() ? workspaceName : "Hydrilla"}>
+            {workspaceName.trim() ? workspaceName : "Hydrilla"}
+          </Link>
+        </div>
+        <Link
+          href="/generations"
+          className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/12 text-blue-600 hover:bg-blue-500/20 transition-colors shrink-0"
+          aria-label="Workspace generations"
+          title="Generations"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+        </Link>
+      </header>
+
+      {/* Mobile-only: small top alerts — generating token and generated toast */}
+      {centerView.type === "generating" && (
+        <div className="md:hidden fixed left-0 right-0 top-[65px] z-30 flex justify-center px-3 py-2 pointer-events-none">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black text-white text-xs font-medium shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
+            {centerView.message} {Math.round(centerView.progress)}%
+          </span>
+        </div>
+      )}
+      {mobileGeneratedToast && (
+        <div className="md:hidden fixed left-0 right-0 top-[65px] z-30 flex justify-center px-3 py-2 pointer-events-none">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-600 text-white text-xs font-medium shadow-lg">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            Generated
+          </span>
+        </div>
+      )}
+
+      {/* 3-panel layout — on mobile: single column, show canvas OR (library + form) based on bottom tab */}
+      <div className="flex-1 flex min-h-0 overflow-hidden relative flex-col md:flex-row">
+        {/* Left panel toggle — desktop only */}
         {!leftPanelOpen && (
           <button
             type="button"
             onClick={() => setLeftPanelOpen(true)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 flex items-center justify-center bg-white border border-r-0 border-neutral-200 rounded-r-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 hidden md:flex items-center justify-center bg-white border border-r-0 border-neutral-200 rounded-r-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
             title="Open library"
             aria-label="Open library panel"
           >
@@ -1114,16 +1231,19 @@ function WorkspacePage() {
           </button>
         )}
 
-        {/* Left Panel - Library (sliding & resizable) */}
+        {/* Left Panel - Library (sliding & resizable); on mobile: hidden — use Assets icon to open /app/assets */}
         <aside
           ref={libraryPanelRef}
           style={{ width: leftPanelOpen ? leftPanelWidth : 0, minWidth: leftPanelOpen ? leftPanelWidth : 0 }}
-          className="flex-shrink-0 flex flex-col bg-white border-r border-neutral-200 overflow-hidden transition-[width] duration-200 ease-out"
+          className={cn(
+            "flex-shrink-0 flex flex-col bg-white border-r border-neutral-200 overflow-hidden transition-[width] duration-200 ease-out",
+            "max-md:hidden"
+          )}
         >
           <div className="flex h-full min-w-0">
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Left navbar: Logo only (larger) + New Workspace */}
-          <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between gap-2">
+          {/* Left navbar: Logo only (larger) + New Workspace — hidden on mobile (use global header) */}
+          <div className="hidden md:flex px-4 py-3 border-b border-neutral-100 items-center justify-between gap-2">
             <Link href="/" className="text-2xl font-bold text-black tracking-tight shrink-0 hover:opacity-80 transition-opacity">
               Hydrilla
             </Link>
@@ -1137,7 +1257,7 @@ function WorkspacePage() {
               <span>New Workspace</span>
             </button>
           </div>
-          <div className="px-3 py-2.5 border-b border-neutral-100 flex items-center gap-2">
+          <div className="hidden md:flex px-3 py-2.5 border-b border-neutral-100 items-center gap-2">
             <button type="button" onClick={() => setLeftPanelOpen(false)} className="p-2 rounded-xl hover:bg-neutral-100 text-black hover:bg-neutral-200 transition-colors shrink-0" title="Close library" aria-label="Close library panel">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
@@ -1154,7 +1274,7 @@ function WorkspacePage() {
               />
             </div>
           </div>
-          {/* Tab bar — Images | 3D (shadcn-style Tabs) */}
+          {/* Tab bar — Images | 3D */}
           <div className="px-2.5 pt-2 pb-1">
             <div
               role="tablist"
@@ -1266,7 +1386,7 @@ function WorkspacePage() {
             )}
           </div>
             </div>
-            {/* Left resize handle */}
+            {/* Left resize handle — desktop only */}
             {leftPanelOpen && (
               <div
                 role="separator"
@@ -1276,14 +1396,14 @@ function WorkspacePage() {
                   resizeStartRef.current = { x: e.clientX, leftW: leftPanelWidth };
                   setResizingLeft(true);
                 }}
-                className={`w-1 flex-shrink-0 bg-transparent hover:bg-neutral-200 active:bg-black/20 cursor-col-resize transition-colors ${resizingLeft ? "bg-black/20" : ""}`}
+                className={`hidden md:block w-1 flex-shrink-0 bg-transparent hover:bg-neutral-200 active:bg-black/20 cursor-col-resize transition-colors ${resizingLeft ? "bg-black/20" : ""}`}
               />
             )}
           </div>
         </aside>
 
-        {/* Center - Preview / 3D / generating */}
-        <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-neutral-50 overflow-y-auto">
+        {/* Center - Preview / 3D / generating; on mobile: visible only when Canvas tab */}
+        <main className={cn("flex-1 flex flex-col min-w-0 min-h-0 bg-neutral-50 overflow-y-auto", mobileTab === "canvas" ? "max-md:flex" : "max-md:hidden")}>
           {centerView.type === "empty" && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <div className="w-24 h-24 mb-6 grid grid-cols-2 gap-1 text-black/70">
@@ -1374,7 +1494,7 @@ function WorkspacePage() {
           )}
 
           {centerView.type === "3d" && (
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 max-md:min-h-[50vh]">
               <div className={`flex-1 min-h-0 ${fullView ? "flex justify-center items-center" : ""}`}>
                 <div className={fullView ? "w-full h-full min-w-0 min-h-0" : "h-full w-full"}>
                 <ThreeViewer
@@ -1391,52 +1511,181 @@ function WorkspacePage() {
                 />
                 </div>
               </div>
+              {/* Actions: mobile = Download + info icon; desktop = Download + Full View + optional Create another 3D / Edit */}
+              <div className="relative">
               <div className="flex items-center justify-center gap-3 p-3 border-t border-neutral-100 bg-white flex-wrap">
-                <a href={centerView.glbUrl} download className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors">Download GLB</a>
-                {fullView ? (
-                  <button type="button" onClick={() => { setFullView(false); setLeftPanelOpen(true); setRightPanelOpen(true); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Exit full view</button>
-                ) : (
-                  <button type="button" onClick={() => { setFullView(true); setLeftPanelOpen(false); setRightPanelOpen(false); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Full View</button>
+                <a href={centerView.glbUrl} download className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors">
+                  <span className="md:hidden">Download</span>
+                  <span className="hidden md:inline">Download GLB</span>
+                </a>
+                {/* Mobile-only: info icon to open generation info popover above */}
+                {selectedJobInfo && (
+                  <button
+                    type="button"
+                    onClick={() => setMobileGenInfoOpen((v) => !v)}
+                    className="md:hidden p-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors"
+                    aria-label="Generation info"
+                  >
+                    <svg className="w-5 h-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </button>
                 )}
-                {selectedJobInfo?.sourceImages?.[0] && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const src = selectedJobInfo!.sourceImages![0];
-                        setLastPreviewImageUrl(src);
-                        setLastPreviewId(null);
-                        setCenterView({ type: "preview", imageUrl: src });
-                      }}
-                      className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors"
-                    >
-                      Create another 3D
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const src = selectedJobInfo!.sourceImages![0];
-                        setLastPreviewImageUrl(src);
-                        setLastPreviewId(null);
-                        setCenterView({ type: "preview", imageUrl: src });
-                        setInputMode("text_1img");
-                        setModeStates((prev) => ({
-                          ...prev,
-                          text_1img: {
-                            ...prev.text_1img,
-                            image1: src,
-                            file1: null,
-                            jobId1: null,
-                            prompt: prev.text_1img.prompt || "",
-                          },
-                        }));
-                      }}
-                      className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors"
-                    >
-                      Edit this image
-                    </button>
-                  </>
-                )}
+                <span className="hidden md:inline-flex items-center gap-3 flex-wrap">
+                  {fullView ? (
+                    <button type="button" onClick={() => { setFullView(false); setLeftPanelOpen(true); setRightPanelOpen(true); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Exit full view</button>
+                  ) : (
+                    <button type="button" onClick={() => { setFullView(true); setLeftPanelOpen(false); setRightPanelOpen(false); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Full View</button>
+                  )}
+                  {selectedJobInfo?.sourceImages?.[0] && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const src = selectedJobInfo!.sourceImages![0];
+                          setLastPreviewImageUrl(src);
+                          setLastPreviewId(null);
+                          setCenterView({ type: "preview", imageUrl: src });
+                        }}
+                        className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors"
+                      >
+                        Create another 3D
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const src = selectedJobInfo!.sourceImages![0];
+                          setLastPreviewImageUrl(src);
+                          setLastPreviewId(null);
+                          setCenterView({ type: "preview", imageUrl: src });
+                          setInputMode("text_1img");
+                          setModeStates((prev) => ({
+                            ...prev,
+                            text_1img: {
+                              ...prev.text_1img,
+                              image1: src,
+                              file1: null,
+                              jobId1: null,
+                              prompt: prev.text_1img.prompt || "",
+                            },
+                          }));
+                        }}
+                        className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors"
+                      >
+                        Edit this image
+                      </button>
+                    </>
+                  )}
+                </span>
+              </div>
+              {/* Mobile-only: popover above the action row with generation info */}
+              {mobileGenInfoOpen && selectedJobInfo && (
+                <>
+                  <div className="fixed inset-0 z-40 md:hidden" aria-hidden onClick={() => setMobileGenInfoOpen(false)} />
+                  <div className="absolute bottom-full left-0 right-0 z-50 md:hidden mb-1 mx-2 max-h-[60vh] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100 bg-neutral-50">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Generation Info</span>
+                      <button type="button" onClick={() => setMobileGenInfoOpen(false)} className="p-1 rounded hover:bg-neutral-200" aria-label="Close">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                    <div className="p-3 space-y-3 max-h-[50vh] overflow-y-auto">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                        <div className="text-neutral-400 font-medium">Type</div>
+                        <div className="text-neutral-700 capitalize">{selectedJobInfo.generateType?.replace(/_/g, " ") || "Image"}</div>
+                        <div className="text-neutral-400 font-medium">Status</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${selectedJobInfo.status === "DONE" ? "bg-green-500" : selectedJobInfo.status === "FAIL" ? "bg-red-500" : "bg-yellow-500"}`} />
+                          <span className="text-neutral-700 capitalize">{{ DONE: "Completed", FAIL: "Failed", RUN: "Processing", WAIT: "Pending" }[selectedJobInfo.status] || selectedJobInfo.status || "Unknown"}</span>
+                        </div>
+                        {selectedJobInfo.resultGlbUrl && selectedJobInfo.sourceImages?.[0] && (
+                          <>
+                            <div className="text-neutral-400 font-medium">Source image</div>
+                            <div className="flex items-center gap-1.5">
+                              <img src={selectedJobInfo.sourceImages[0]} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
+                            </div>
+                          </>
+                        )}
+                        {selectedJobInfo.prompt && (
+                          <>
+                            <div className="text-neutral-400 font-medium">Prompt</div>
+                            <div className="text-neutral-700 truncate" title={selectedJobInfo.prompt}>{selectedJobInfo.prompt}</div>
+                          </>
+                        )}
+                        <div className="text-neutral-400 font-medium">Created</div>
+                        <div className="text-neutral-700">{selectedJobInfo.createdAt ? new Date(selectedJobInfo.createdAt).toLocaleString() : "—"}</div>
+                        <div className="text-neutral-400 font-medium">Job ID</div>
+                        <div className="text-neutral-700 font-mono text-[10px] truncate" title={selectedJobInfo.id}>{selectedJobInfo.id}</div>
+                      </div>
+                      {jobLineage.length >= 1 && (
+                        <div className="pt-2 border-t border-neutral-100">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">Creation Lineage</p>
+                          <div className="relative pl-4">
+                            <div className="absolute left-[7px] top-1 bottom-1 w-px bg-neutral-200" />
+                            {jobLineage.map((item, idx) => {
+                              const isCurrent = item.id === selectedJobInfo.id;
+                              const parentCount = (item.parentJobIds && item.parentJobIds.length > 0) ? item.parentJobIds.length : (item.parentJobId ? 1 : 0);
+                              const sourceCount = item.sourceImages?.length ?? 0;
+                              const isMerge = parentCount > 1 || (item.generateType === "Combined" && sourceCount >= 2);
+                              const showSourceImages = isMerge && sourceCount > 0;
+                              const show3DSourceImage = item.resultGlbUrl && sourceCount >= 1 && item.sourceImages?.[0];
+                              const mergeLabel = parentCount > 1 ? `${parentCount} parents` : sourceCount >= 2 ? "2 sources" : null;
+                              const isSingleCombined = jobLineage.length === 1 && item.generateType === "Combined";
+                              const stepLabel = isSingleCombined ? "Step 1" : idx === 0 ? "Origin" : `Step ${idx}`;
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => { setLineagePreviewItem(item); setMobileGenInfoOpen(false); }}
+                                  className={`relative flex items-start gap-2.5 pb-2.5 last:pb-0 w-full text-left cursor-pointer rounded px-1 -mx-1 hover:bg-neutral-50 transition-colors ${isCurrent ? "opacity-100" : "opacity-70"}`}
+                                >
+                                  {isMerge ? (
+                                    <div className={`absolute -left-[18px] top-0 w-3.5 h-3.5 rotate-45 border-2 flex-shrink-0 ${isCurrent ? "border-black bg-black" : "border-neutral-400 bg-white"}`} />
+                                  ) : (
+                                    <div className={`absolute -left-4 top-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 ${isCurrent ? "border-black bg-black" : "border-neutral-300 bg-white"}`} />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className={`text-[10px] font-semibold ${isCurrent ? "text-black" : "text-neutral-500"}`}>{stepLabel}</span>
+                                      <span className="text-[10px] text-neutral-400 capitalize">{item.generateType?.replace(/_/g, " ") || "image"}</span>
+                                      {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">{mergeLabel}</span>}
+                                      {item.resultGlbUrl && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-500">3D</span>}
+                                    </div>
+                                    {item.prompt && <p className="text-[10px] text-neutral-500 truncate mt-0.5" title={item.prompt}>{item.prompt}</p>}
+                                    {showSourceImages && item.sourceImages && (
+                                      <div className="flex gap-1 mt-1">
+                                        {item.sourceImages.map((src, i) => (
+                                          <img key={i} src={src} alt={`Source ${i + 1}`} className="w-5 h-5 rounded object-cover border border-neutral-200" />
+                                        ))}
+                                      </div>
+                                    )}
+                                    {show3DSourceImage && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <span className="text-[10px] text-neutral-400">Source image</span>
+                                        <img src={item.sourceImages![0]} alt="Source" className="w-5 h-5 rounded object-cover border border-neutral-200" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  {item.previewImageUrl ? (
+                                    <img src={item.previewImageUrl} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-neutral-200" />
+                                  ) : item.resultGlbUrl ? (
+                                    <div className="w-7 h-7 rounded flex-shrink-0 border border-neutral-200 bg-neutral-100 flex items-center justify-center">
+                                      <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                    </div>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {jobLineage.length === 0 && (
+                        <div className="pt-2 border-t border-neutral-100">
+                          <p className="text-[10px] text-neutral-400 italic">No iterative history — this is an original generation.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
               </div>
             </div>
           )}
@@ -1466,9 +1715,9 @@ function WorkspacePage() {
             </div>
           )}
 
-          {/* ──────────── Generation Info Panel (header always visible when job selected; content toggles) ──────────── */}
+          {/* ──────────── Generation Info Panel (header always visible when job selected; content toggles) — hidden on mobile; use info icon + popover there ──────────── */}
           {selectedJobInfo && centerView.type !== "empty" && (
-            <div className="flex-shrink-0 border-t border-neutral-200 bg-white min-h-[44px]">
+            <div className="flex-shrink-0 border-t border-neutral-200 bg-white min-h-[44px] max-md:hidden">
               {/* Toggle header - always visible so user can expand again */}
               <button
                 type="button"
@@ -1615,7 +1864,7 @@ function WorkspacePage() {
           <button
             type="button"
             onClick={() => setRightPanelOpen(true)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 flex items-center justify-center bg-white border border-l-0 border-neutral-200 rounded-l-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 hidden md:flex items-center justify-center bg-white border border-l-0 border-neutral-200 rounded-l-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
             title="Open input panel"
             aria-label="Open input panel"
           >
@@ -1623,14 +1872,18 @@ function WorkspacePage() {
           </button>
         )}
 
-        {/* Right Panel — fixed width, collapsible; when collapsed viewer expands */}
+        {/* Right Panel — fixed width, collapsible; on mobile: full width when Create tab */}
         <aside
           style={{ width: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0, minWidth: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0 }}
-          className="flex-shrink-0 flex flex-col bg-white border-l border-neutral-200 overflow-hidden transition-[width] duration-200 ease-out"
+          className={cn(
+            "flex-shrink-0 flex flex-col bg-white border-l border-neutral-200 overflow-hidden transition-[width] duration-200 ease-out",
+            "max-md:border-l-0 max-md:border-t max-md:border-neutral-200",
+            mobileTab === "create" ? "max-md:!w-full max-md:!min-w-0 max-md:flex-1 max-md:min-h-0 max-md:overflow-auto" : "max-md:hidden"
+          )}
         >
           <div className="h-full overflow-y-auto min-w-0 flex flex-col" style={{ tabSize: 4 }}>
-          {/* Right navbar: workspace name, My Library, Profile, Collapse */}
-          <div className="flex-shrink-0 px-3 pt-3 pb-2 border-b border-neutral-100 flex items-center gap-2 min-w-0">
+          {/* Right navbar: workspace name, credits, My Library, Profile, Collapse — hidden on mobile */}
+          <div className="hidden md:flex flex-shrink-0 px-3 pt-3 pb-2 border-b border-neutral-100 items-center gap-2 min-w-0">
             <input
               type="text"
               value={workspaceName}
@@ -1638,6 +1891,10 @@ function WorkspacePage() {
               placeholder="Name workspace"
               className="flex-1 min-w-0 text-base font-semibold text-black bg-transparent border-none outline-none placeholder:text-neutral-400 focus:ring-0 truncate"
             />
+            <div className="flex items-center gap-1.5 shrink-0 px-2 py-1.5 rounded-lg bg-neutral-50 border border-neutral-100" title="Credits remaining">
+              <svg className="w-4 h-4 text-neutral-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span className="text-sm font-semibold text-neutral-800 tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
+            </div>
             <Link href="/library" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
             </Link>
@@ -1811,15 +2068,22 @@ function WorkspacePage() {
               </div>
             </div>
 
-            {/* Credits — professional icon + remaining/total */}
-            <div className="flex items-center justify-center gap-2 text-sm text-neutral-600">
-              <span className="tabular-nums">~1 min</span>
-              <span className="flex items-center gap-1.5 font-medium text-neutral-800">
-                <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span className="tabular-nums">— / 500</span>
-                <span className="text-neutral-500 font-normal">credits</span>
-              </span>
-            </div>
+            {/* Credits — cost per action: image 2, 3D 10; show total */}
+            {(() => {
+              const isImageOrEdit = inputMode === "text" || (prompt.trim().length > 0 && (image1 || image2));
+              const cost = isImageOrEdit ? CREDITS_IMAGE : CREDITS_3D;
+              const total = creditsLoading ? 0 : creditsTotal;
+              return (
+                <div className="flex items-center justify-center gap-2 text-sm text-neutral-600">
+                  <span className="tabular-nums">{isImageOrEdit ? "~30s" : "~1 min"}</span>
+                  <span className="flex items-center gap-1.5 font-medium text-neutral-800">
+                    <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span className="tabular-nums">{cost} / {total}</span>
+                    <span className="text-neutral-500 font-normal">credits</span>
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Generate — primary action, premium black button with vectorized icon */}
             <button
@@ -1968,6 +2232,38 @@ function WorkspacePage() {
           </div>
           </div>
         </aside>
+      </div>
+
+      {/* Mobile-only: bottom bar — Canvas | Create (blue highlight, big text & icons, smooth) */}
+      <div className="md:hidden flex items-center justify-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/90 backdrop-blur-xl border-t border-neutral-200/80 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.08)]">
+        <div className="inline-flex h-14 w-full max-w-[340px] items-center rounded-2xl bg-neutral-100/95 p-2 shadow-inner border border-neutral-200/70">
+          <button
+            type="button"
+            onClick={() => setMobileTab("canvas")}
+            className={cn(
+              "flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl h-full text-base font-bold transition-all duration-300 ease-out",
+              mobileTab === "canvas"
+                ? "bg-blue-500 text-white shadow-md border-2 border-blue-500"
+                : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50 border-2 border-transparent"
+            )}
+          >
+            <svg className="w-6 h-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+            Canvas
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("create")}
+            className={cn(
+              "flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl h-full text-base font-bold transition-all duration-300 ease-out",
+              mobileTab === "create"
+                ? "bg-blue-500 text-white shadow-md border-2 border-blue-500"
+                : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50 border-2 border-transparent"
+            )}
+          >
+            <svg className="w-6 h-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16m8-8H4" /></svg>
+            Create
+          </button>
+        </div>
       </div>
     </div>
   );

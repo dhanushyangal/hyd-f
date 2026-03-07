@@ -143,31 +143,31 @@ export default function StudioPage() {
   return (
     <div className="app-content-page font-dm-sans">
       {/* My Workspace section – reference layout */}
-      <section className="flex flex-col gap-6">
-        <div className="flex items-center justify-between gap-6 flex-wrap">
-          <div>
-            <h2 className="text-sm font-medium text-neutral-500 uppercase tracking-wider">
+      <section className="flex flex-col gap-4 sm:gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
+          <div className="min-w-0">
+            <h2 className="text-xs sm:text-sm font-medium text-neutral-500 uppercase tracking-wider">
               My Workspace
             </h2>
-            <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight mt-0.5">
+            <h1 className="text-xl sm:text-3xl font-bold text-neutral-900 tracking-tight mt-0.5 truncate">
               {getGreeting()}{userName ? `, ${userName}` : ""}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center">
-              <Search className="absolute left-3 w-4 h-4 text-neutral-400 pointer-events-none" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 min-w-0">
+            <div className="relative flex items-center min-w-0">
+              <Search className="absolute left-3 w-4 h-4 text-neutral-400 pointer-events-none shrink-0" />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-44 py-2.5 pl-10 pr-4 text-sm bg-neutral-50 border border-neutral-200 rounded-xl text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-300 focus:ring-1 focus:ring-neutral-300/30 outline-none transition-all"
+                className="w-full min-w-0 sm:w-44 py-2.5 pl-10 pr-4 text-sm bg-neutral-50 border border-neutral-200 rounded-xl text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-300 focus:ring-1 focus:ring-neutral-300/30 outline-none transition-all"
               />
             </div>
             <button
               type="button"
               onClick={() => { setNewName(""); setShowNewModal(true); }}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-xl transition-colors shrink-0"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-xl transition-colors shrink-0"
             >
               <Plus className="w-4 h-4" />
               New
@@ -192,7 +192,7 @@ export default function StudioPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
             {filtered.map((ws) => (
               <div
                 key={ws.id}
@@ -203,9 +203,9 @@ export default function StudioPage() {
                 <button
                   type="button"
                   onClick={() => handleOpenWorkspace(ws.id)}
-                  className="flex flex-col flex-1 p-6 sm:p-7 text-left min-h-0"
+                  className="flex flex-col flex-1 p-4 sm:p-7 text-left min-h-0"
                 >
-                  <div className="w-full aspect-square max-h-[200px] sm:max-h-[220px] rounded-xl overflow-hidden bg-neutral-100 flex items-center justify-center mb-5">
+                  <div className="w-full aspect-square max-h-[160px] sm:max-h-[220px] rounded-xl overflow-hidden bg-neutral-100 flex items-center justify-center mb-3 sm:mb-5">
                     {ws.firstJobPreviewImageUrl ? (
                       <img
                         src={ws.firstJobPreviewImageUrl}
@@ -226,7 +226,7 @@ export default function StudioPage() {
 
                 {/* Bottom bar: 3-dot menu inside card */}
                 <div
-                  className="flex items-center justify-end gap-2 px-6 pb-5 pt-0 shrink-0"
+                  className="flex items-center justify-end gap-2 px-4 sm:px-6 pb-4 sm:pb-5 pt-0 shrink-0"
                   ref={menuOpenId === ws.id ? menuRef : null}
                 >
                   <button
@@ -278,20 +278,20 @@ export default function StudioPage() {
       </section>
 
       {/* Quick start – bottom, clearly separated */}
-      <section className="mt-auto pt-8 border-t border-neutral-200">
-        <h2 className="text-sm font-medium text-neutral-700 uppercase tracking-wider mb-4">
+      <section className="mt-auto pt-6 sm:pt-8 border-t border-neutral-200">
+        <h2 className="text-xs sm:text-sm font-medium text-neutral-700 uppercase tracking-wider mb-3 sm:mb-4">
           Quick start
         </h2>
         <Link
           href="/generate"
-          className="group inline-flex items-center gap-4 w-full max-w-[280px] p-5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:shadow-md hover:border-neutral-300 transition-all duration-200"
+          className="group inline-flex items-center gap-3 sm:gap-4 w-full max-w-[280px] p-4 sm:p-5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:shadow-md hover:border-neutral-300 transition-all duration-200"
         >
-          <div className="w-12 h-12 rounded-xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
-            <MessageSquare className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
+            <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0 text-left">
-            <p className="font-semibold text-neutral-900 text-base">Chat</p>
-            <p className="text-sm text-neutral-500 mt-0.5">Generate in a conversation</p>
+            <p className="font-semibold text-neutral-900 text-sm sm:text-base">Chat</p>
+            <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">Generate in a conversation</p>
           </div>
         </Link>
       </section>
