@@ -202,7 +202,7 @@ export default function FAQSection() {
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "#888",
+              color: "#666",
             }}
           >
             FAQ

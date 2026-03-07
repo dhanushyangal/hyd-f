@@ -1,19 +1,25 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@clerk/nextjs";
 import {
   Zap,
   Sparkles,
   Layers,
   Building2,
   Check,
+  CheckCircle2,
   ChevronRight,
   Info,
 } from "lucide-react";
 
-/** Inline toggle (replaces shadcn Switch where not installed) */
+const BACKEND_URL = (
+  process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app"
+).replace(/\/+$/, "");
+
+/** Inline toggle */
 function YearlySwitch({
   id,
   checked,
@@ -189,13 +195,7 @@ const PLANS: Plan[] = [
   },
 ];
 
-function CreditsBox({
-  plan,
-  yearly,
-}: {
-  plan: Plan;
-  yearly: boolean;
-}) {
+function CreditsBox({ plan, yearly }: { plan: Plan; yearly: boolean }) {
   const [showLegend, setShowLegend] = useState(false);
 
   return (
@@ -217,7 +217,6 @@ function CreditsBox({
         userSelect: "none",
       }}
     >
-      {/* Yearly badge - top right, only when yearly; leaves room for content */}
       {plan.hasYearlyToggle && yearly && (
         <span
           style={{
@@ -251,11 +250,7 @@ function CreditsBox({
         >
           {plan.credits}
         </p>
-        <Info
-          size={13}
-          strokeWidth={2}
-          style={{ color: plan.popular ? "#3b8ee8" : "#aaa", flexShrink: 0 }}
-        />
+        <Info size={13} strokeWidth={2} style={{ color: plan.popular ? "#3b8ee8" : "#aaa", flexShrink: 0 }} />
       </div>
       <p
         style={{
@@ -269,7 +264,6 @@ function CreditsBox({
         {plan.models}
       </p>
 
-      {/* Credit legend tooltip */}
       <AnimatePresence>
         {showLegend && (
           <motion.div
@@ -315,23 +309,10 @@ function CreditsBox({
                   padding: "0.3rem 0",
                 }}
               >
-                <span
-                  style={{
-                    fontFamily: "'DM Sans', Arial, sans-serif",
-                    fontSize: "0.8125rem",
-                    color: "rgba(255,255,255,0.65)",
-                  }}
-                >
+                <span style={{ fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.8125rem", color: "rgba(255,255,255,0.65)" }}>
                   1 {c.label}
                 </span>
-                <span
-                  style={{
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    fontWeight: 700,
-                    color: "#6cbcf5",
-                    fontSize: "0.8125rem",
-                  }}
-                >
+                <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: "#6cbcf5", fontSize: "0.8125rem" }}>
                   {c.credits}
                 </span>
               </div>
@@ -343,16 +324,55 @@ function CreditsBox({
   );
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+type UserPlan = "free" | "creator" | "studio" | null;
+
+function PlanCard({ plan, userPlan, planLoading }: { plan: Plan; userPlan: UserPlan; planLoading: boolean }) {
   const [yearly, setYearly] = useState(false);
   const [hovered, setHovered] = useState(false);
 
   const displayPrice =
-    plan.enterprise
-      ? plan.monthlyPrice
-      : yearly
-      ? plan.yearlyPrice
-      : plan.monthlyPrice;
+    plan.enterprise ? plan.monthlyPrice : yearly ? plan.yearlyPrice : plan.monthlyPrice;
+
+  // Determine CTA state
+  const isCurrentPlan = !planLoading && userPlan !== null && (
+    plan.id === userPlan ||
+    (plan.id === "free" && userPlan === null)
+  );
+  // Actually handle free separately — free is current only if signed in with no paid plan
+  const isCurrentFreePlan = !planLoading && userPlan === null && plan.id === "free";
+  const isCurrentPaidPlan = !planLoading && userPlan !== null && plan.id === userPlan;
+  const isCurrentAny = isCurrentFreePlan || isCurrentPaidPlan;
+
+  const canUpgrade = !planLoading && userPlan === "creator" && plan.id === "studio";
+  // If on studio, creator is a downgrade — show as disabled with note
+  const isLowerPlan = !planLoading && userPlan === "studio" && (plan.id === "creator" || plan.id === "free");
+
+  let ctaLabel = plan.cta;
+  let ctaEnabled = true;
+
+  if (isCurrentAny) {
+    ctaLabel = "Current Plan";
+    ctaEnabled = false;
+  } else if (canUpgrade) {
+    ctaLabel = "Upgrade to Studio";
+    ctaEnabled = true;
+  } else if (isLowerPlan) {
+    ctaLabel = plan.id === "creator" ? "On Studio Plan" : plan.cta;
+    ctaEnabled = false;
+  }
+
+  const ctaBg = isCurrentAny
+    ? "#16a34a"
+    : plan.popular
+    ? "#111"
+    : "transparent";
+
+  const ctaColor = isCurrentAny ? "#fff" : plan.popular ? "#fff" : "#111";
+  const ctaBorder = isCurrentAny
+    ? "none"
+    : plan.popular
+    ? "none"
+    : "1.5px solid rgba(17,17,17,0.15)";
 
   return (
     <motion.div
@@ -371,7 +391,9 @@ function PlanCard({ plan }: { plan: Plan }) {
         boxSizing: "border-box",
         width: "100%",
         borderRadius: "1.25rem",
-        border: plan.popular
+        border: isCurrentPaidPlan
+          ? "1.5px solid rgba(22,163,74,0.5)"
+          : plan.popular
           ? `1.5px solid ${hovered ? "rgba(59,142,232,0.6)" : "rgba(59,142,232,0.35)"}`
           : `1px solid ${hovered ? "rgba(17,17,17,0.14)" : "rgba(17,17,17,0.08)"}`,
         backgroundColor: "#ffffff",
@@ -384,8 +406,37 @@ function PlanCard({ plan }: { plan: Plan }) {
         transform: hovered ? "translateY(-3px)" : "translateY(0px)",
       }}
     >
-      {/* Popular badge */}
-      {plan.popular && (
+      {/* Current plan badge */}
+      {isCurrentPaidPlan && (
+        <div
+          style={{
+            position: "absolute",
+            top: "-13px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "0.25rem 1rem",
+            borderRadius: "100px",
+            backgroundColor: "#16a34a",
+            color: "#fff",
+            fontFamily: "'Space Grotesk', sans-serif",
+            fontSize: "0.625rem",
+            fontWeight: 700,
+            letterSpacing: "0.07em",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+            boxShadow: "0 2px 10px rgba(22,163,74,0.4)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.3rem",
+          }}
+        >
+          <CheckCircle2 size={10} strokeWidth={2.5} />
+          Your Current Plan
+        </div>
+      )}
+
+      {/* Popular badge (only if not current plan) */}
+      {plan.popular && !isCurrentPaidPlan && (
         <div
           style={{
             position: "absolute",
@@ -409,7 +460,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         </div>
       )}
 
-      {/* Icon + name + yearly switch (if applicable) */}
+      {/* Icon + name + yearly switch */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span
@@ -417,11 +468,11 @@ function PlanCard({ plan }: { plan: Plan }) {
               width: "34px",
               height: "34px",
               borderRadius: "9px",
-              backgroundColor: plan.iconBg,
+              backgroundColor: isCurrentPaidPlan ? "rgba(22,163,74,0.1)" : plan.iconBg,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: plan.popular ? "#3b8ee8" : "#444",
+              color: isCurrentPaidPlan ? "#16a34a" : plan.popular ? "#3b8ee8" : "#444",
               flexShrink: 0,
             }}
           >
@@ -440,8 +491,7 @@ function PlanCard({ plan }: { plan: Plan }) {
           </span>
         </div>
 
-        {/* Per-card yearly switch */}
-        {plan.hasYearlyToggle && (
+        {plan.hasYearlyToggle && !isCurrentAny && (
           <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", flexShrink: 0 }}>
             <label
               htmlFor={`yearly-${plan.id}`}
@@ -483,40 +533,17 @@ function PlanCard({ plan }: { plan: Plan }) {
             {displayPrice}
           </span>
           {!plan.enterprise && (
-            <span
-              style={{
-                fontFamily: "'DM Sans', Arial, sans-serif",
-                fontSize: "0.8125rem",
-                color: "#999",
-                fontWeight: 400,
-              }}
-            >
+            <span style={{ fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.8125rem", color: "#999", fontWeight: 400 }}>
               /month
             </span>
           )}
         </div>
-        {plan.hasYearlyToggle && !yearly && (
-          <p
-            style={{
-              margin: "0.3rem 0 0",
-              fontFamily: "'DM Sans', Arial, sans-serif",
-              fontSize: "0.75rem",
-              color: "#3b8ee8",
-              fontWeight: 500,
-            }}
-          >
+        {plan.hasYearlyToggle && !yearly && !isCurrentAny && (
+          <p style={{ margin: "0.3rem 0 0", fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.75rem", color: "#3b8ee8", fontWeight: 500 }}>
             Save with yearly · {plan.yearlyPrice}/month
           </p>
         )}
-        <p
-          style={{
-            margin: "0.5rem 0 0",
-            fontFamily: "'DM Sans', Arial, sans-serif",
-            fontSize: "0.875rem",
-            color: "#6b6966",
-            lineHeight: 1.55,
-          }}
-        >
+        <p style={{ margin: "0.5rem 0 0", fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.875rem", color: "#6b6966", lineHeight: 1.55 }}>
           {plan.tagline}
         </p>
       </div>
@@ -525,33 +552,11 @@ function PlanCard({ plan }: { plan: Plan }) {
       <CreditsBox plan={plan} yearly={yearly} />
 
       {/* Features */}
-      <ul
-        style={{
-          listStyle: "none",
-          margin: 0,
-          padding: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.625rem",
-          flex: 1,
-          width: "100%",
-        }}
-      >
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.625rem", flex: 1, width: "100%" }}>
         {plan.features.map((f, i) => (
-          <li
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "0.5rem",
-            }}
-          >
+          <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
             <div style={{ marginTop: "2px", flexShrink: 0 }}>
-              <Check
-                size={14}
-                strokeWidth={2.5}
-                style={{ color: f.highlight ? "#3b8ee8" : "#bbb" }}
-              />
+              <Check size={14} strokeWidth={2.5} style={{ color: f.highlight ? "#3b8ee8" : "#bbb" }} />
             </div>
             <span
               style={{
@@ -571,57 +576,120 @@ function PlanCard({ plan }: { plan: Plan }) {
 
       {/* CTA */}
       <div style={{ paddingTop: "0.25rem" }}>
-        <Link
-          href={plan.ctaHref}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.375rem",
-            width: "100%",
-            padding: "0.875rem 1.5rem",
-            borderRadius: "0.875rem",
-            backgroundColor: plan.popular ? "#111" : "transparent",
-            border: plan.popular ? "none" : "1.5px solid rgba(17,17,17,0.15)",
-            color: plan.popular ? "#fff" : "#111",
-            fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-            fontSize: "0.9375rem",
-            fontWeight: 600,
-            textDecoration: "none",
-            letterSpacing: "-0.01em",
-            minHeight: "48px",
-            boxSizing: "border-box",
-            transition: "background-color 0.2s ease, opacity 0.2s ease, transform 0.18s ease",
-          }}
-          className="pricing-cta-btn"
-        >
-          {plan.cta}
-          <ChevronRight size={15} strokeWidth={2.5} />
-        </Link>
+        {ctaEnabled ? (
+          <Link
+            href={plan.ctaHref}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.375rem",
+              width: "100%",
+              padding: "0.875rem 1.5rem",
+              borderRadius: "0.875rem",
+              backgroundColor: ctaBg,
+              border: ctaBorder,
+              color: ctaColor,
+              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              textDecoration: "none",
+              letterSpacing: "-0.01em",
+              minHeight: "48px",
+              boxSizing: "border-box",
+              transition: "background-color 0.2s ease, opacity 0.2s ease, transform 0.18s ease",
+            }}
+            className="pricing-cta-btn"
+          >
+            {ctaLabel}
+            <ChevronRight size={15} strokeWidth={2.5} />
+          </Link>
+        ) : (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.375rem",
+              width: "100%",
+              padding: "0.875rem 1.5rem",
+              borderRadius: "0.875rem",
+              backgroundColor: isCurrentAny ? "#16a34a" : "rgba(17,17,17,0.05)",
+              border: isCurrentAny ? "none" : "1.5px solid rgba(17,17,17,0.10)",
+              color: isCurrentAny ? "#fff" : "#999",
+              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              letterSpacing: "-0.01em",
+              minHeight: "48px",
+              boxSizing: "border-box",
+              cursor: "default",
+            }}
+          >
+            {isCurrentAny && <CheckCircle2 size={15} strokeWidth={2.5} />}
+            {ctaLabel}
+          </div>
+        )}
+
+        {/* Upgrade hint for creator plan users on creator card */}
+        {isCurrentPaidPlan && plan.id === "creator" && (
+          <p
+            style={{
+              margin: "0.625rem 0 0",
+              textAlign: "center",
+              fontFamily: "'DM Sans', Arial, sans-serif",
+              fontSize: "0.75rem",
+              color: "#6b7280",
+              lineHeight: 1.5,
+            }}
+          >
+            Need more?{" "}
+            <Link href="/checkout?plan=studio" style={{ color: "#3b8ee8", fontWeight: 600, textDecoration: "none" }}>
+              Upgrade to Studio →
+            </Link>
+          </p>
+        )}
       </div>
     </motion.div>
   );
 }
 
 export default function PricingSection() {
+  const { getToken, isSignedIn } = useAuth();
+  const [userPlan, setUserPlan] = useState<UserPlan>(null);
+  const [planLoading, setPlanLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setPlanLoading(false);
+      return;
+    }
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${BACKEND_URL}/api/payments/subscription`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const { subscription } = await res.json();
+          setUserPlan((subscription?.plan as UserPlan) ?? null);
+        }
+      } catch {
+        // silent fail
+      } finally {
+        setPlanLoading(false);
+      }
+    })();
+  }, [isSignedIn, getToken]);
+
   return (
     <section
-      style={{
-        width: "100%",
-        backgroundColor: "#faf9f7",
-        boxSizing: "border-box",
-        WebkitFontSmoothing: "antialiased",
-      }}
+      style={{ width: "100%", backgroundColor: "#faf9f7", boxSizing: "border-box", WebkitFontSmoothing: "antialiased" }}
       className="px-6 py-24 pb-28 max-md:px-4 max-md:pt-10 max-md:pb-12 max-sm:px-4 max-sm:pt-6 max-sm:pb-8"
     >
       <style>{`
-        .pricing-cta-btn:hover {
-          opacity: 0.88;
-          transform: scale(1.01);
-        }
-        .pricing-cta-btn:active {
-          transform: scale(0.985);
-        }
+        .pricing-cta-btn:hover { opacity: 0.88; transform: scale(1.01); }
+        .pricing-cta-btn:active { transform: scale(0.985); }
       `}</style>
 
       <div style={{ maxWidth: "80rem", margin: "0 auto" }} className="max-sm:px-0 max-sm:w-full w-full min-w-0">
@@ -642,7 +710,7 @@ export default function PricingSection() {
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "#888",
+              color: "#666",
             }}
           >
             Our Pricing
@@ -660,29 +728,46 @@ export default function PricingSection() {
           >
             Flexible plans that grow with you
           </h2>
-          <p
-            style={{
-              margin: "0 auto",
-              fontFamily: "'DM Sans', Arial, sans-serif",
-              fontSize: "1.0625rem",
-              color: "#6b6966",
-              lineHeight: 1.65,
-            }}
-          >
+          <p style={{ margin: "0 auto", fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "1.0625rem", color: "#6b6966", lineHeight: 1.65 }}>
             Start for free, upgrade when you&apos;re ready.
           </p>
+
+          {/* Active plan banner */}
+          {isSignedIn && userPlan && !planLoading && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginTop: "1.25rem",
+                padding: "0.5rem 1.25rem",
+                borderRadius: "100px",
+                backgroundColor: "rgba(22,163,74,0.08)",
+                border: "1px solid rgba(22,163,74,0.2)",
+                fontFamily: "'DM Sans', Arial, sans-serif",
+                fontSize: "0.875rem",
+                color: "#15803d",
+                fontWeight: 500,
+              }}
+            >
+              <CheckCircle2 size={15} strokeWidth={2} />
+              You are on the <strong style={{ fontWeight: 700, textTransform: "capitalize" }}>{userPlan}</strong> plan
+            </motion.div>
+          )}
         </motion.div>
 
-        {/* Plan cards — desktop 4 cols; tablet/mobile single column (flex-like, same as landing) */}
+        {/* Plan cards */}
         <div
           className="w-full grid grid-cols-4 max-lg:grid-cols-2 max-md:grid-cols-1 items-stretch gap-[18px] pt-6 max-md:gap-4 max-md:pt-4 max-sm:gap-4 max-sm:px-0 max-sm:pt-4 min-w-0"
           style={{ boxSizing: "border-box" }}
         >
           {PLANS.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} />
+            <PlanCard key={plan.id} plan={plan} userPlan={isSignedIn ? userPlan : null} planLoading={planLoading} />
           ))}
         </div>
-
       </div>
     </section>
   );

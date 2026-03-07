@@ -86,7 +86,7 @@ const headingStyle = {
   fontWeight: 600,
   letterSpacing: "0.1em",
   textTransform: "uppercase" as const,
-  color: "rgba(17,17,17,0.55)",
+  color: "rgba(17,17,17,0.65)",
 };
 const linkStyle = {
   fontFamily: "'DM Sans', Arial, sans-serif",
@@ -260,7 +260,7 @@ export default function Footer() {
         }}
         className="max-sm:flex-col max-sm:items-center max-sm:justify-center max-sm:gap-4 max-sm:px-4 max-sm:pb-8 max-sm:text-center"
       >
-        <p style={{ margin: 0, fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.875rem", color: "rgba(17,17,17,0.5)", letterSpacing: "-0.01em" }}>
+        <p style={{ margin: 0, fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.875rem", color: "rgba(17,17,17,0.65)", letterSpacing: "-0.01em" }}>
           © 2026 Hydrilla. All rights reserved.
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }} className="max-sm:justify-center">
@@ -269,7 +269,7 @@ export default function Footer() {
             { label: "Terms of Service", href: "/terms-and-conditions" },
             { label: "Cookie Policy", href: "/cookie-policy" },
           ].map((l) => (
-            <Link key={l.label} href={l.href} style={{ ...linkStyle, fontSize: "0.875rem", color: "rgba(17,17,17,0.5)" }} className="footer-link">
+            <Link key={l.label} href={l.href} style={{ ...linkStyle, fontSize: "0.875rem", color: "rgba(17,17,17,0.65)" }} className="footer-link">
               {l.label}
             </Link>
           ))}

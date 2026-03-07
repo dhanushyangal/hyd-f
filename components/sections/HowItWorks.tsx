@@ -62,7 +62,7 @@ export default function HowItWorks() {
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "#888",
+              color: "#666",
             }}
           >
             Process
@@ -110,7 +110,6 @@ export default function HowItWorks() {
                     fill
                     className="object-contain object-center"
                     sizes="(max-width: 768px) 100vw, 50vw"
-                    unoptimized
                   />
                 </motion.div>
               </AnimatePresence>
@@ -153,13 +152,13 @@ export default function HowItWorks() {
                         fill
                         className="object-contain object-center"
                         sizes="100vw"
-                        unoptimized
+                        loading="lazy"
                       />
                     </div>
                     {/* Text content */}
                     <div className="flex flex-col gap-3 p-5">
                       <span
-                        className="block text-xs font-bold tracking-widest uppercase text-neutral-400"
+                        className="block text-xs font-bold tracking-widest uppercase text-neutral-500"
                         style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', Arial, sans-serif" }}
                       >
                         Step {step.number}
@@ -185,7 +184,7 @@ export default function HowItWorks() {
                         className="block text-xs md:text-sm font-medium uppercase tracking-widest transition-colors"
                         style={{
                           fontFamily: "'DM Sans', Arial, sans-serif",
-                          color: isActive ? "#111" : "#aaa",
+                          color: isActive ? "#111" : "#777",
                         }}
                       >
                         Step {step.number}
@@ -194,7 +193,7 @@ export default function HowItWorks() {
                         className="block mt-1 text-base md:text-lg font-semibold leading-snug transition-colors"
                         style={{
                           fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif",
-                          color: isActive ? "#111" : "#999",
+                          color: isActive ? "#111" : "#888",
                         }}
                       >
                         {step.title}

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import SeeWorkspaceButton from "../SeeWorkspaceButton";
 
@@ -29,6 +29,8 @@ const positionClasses: Record<string, string> = {
 };
 
 export default function AppShowcase() {
+  const [imgLoaded, setImgLoaded] = useState(false);
+
   return (
     <section className="relative w-full bg-neutral-50 py-16 sm:py-20 md:py-24 overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8">
@@ -44,8 +46,8 @@ export default function AppShowcase() {
 
         {/* Main visual: back.gif with floating tags + center screenshot */}
         <div className="relative w-full min-h-[480px] sm:min-h-[540px] md:min-h-[600px] rounded-2xl overflow-hidden bg-neutral-100">
-          {/* Background: back.gif */}
-          <div className="absolute inset-0">
+          {/* Background: back.gif — keep unoptimized for animation, lazy load since below fold */}
+          <div className="absolute inset-0 bg-neutral-100">
             <Image
               src="/workflow/back.gif"
               alt=""
@@ -53,6 +55,7 @@ export default function AppShowcase() {
               className="object-cover object-center"
               sizes="(max-width: 1280px) 100vw, 1152px"
               unoptimized
+              loading="lazy"
             />
           </div>
 
@@ -96,14 +99,25 @@ export default function AppShowcase() {
                 outlineOffset: -1,
               }}
             >
+              {/* Skeleton shimmer shown while image loads */}
+              {!imgLoaded && (
+                <div
+                  className="absolute inset-0 z-10"
+                  style={{
+                    background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
+                    backgroundSize: "200% 100%",
+                    animation: "shimmer 1.4s infinite",
+                  }}
+                />
+              )}
               <Image
                 src="/workflow/image.png"
                 alt="Hydrilla workspace"
                 fill
                 className="object-contain object-top"
                 sizes="(max-width: 640px) 82vw, (max-width: 1024px) 100vw, 960px"
-                priority={false}
-                unoptimized
+                loading="lazy"
+                onLoad={() => setImgLoaded(true)}
               />
             </div>
           </div>
@@ -117,6 +131,10 @@ export default function AppShowcase() {
                 aspect-ratio: 1 / 1;
                 max-width: 82vw;
               }
+            }
+            @keyframes shimmer {
+              0% { background-position: -200% 0; }
+              100% { background-position: 200% 0; }
             }
           `}</style>
         </div>

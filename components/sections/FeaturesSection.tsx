@@ -168,7 +168,7 @@ export default function FeaturesSection() {
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: "#888",
+              color: "#666",
             }}
           >
             Platform Capabilities

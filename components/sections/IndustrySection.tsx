@@ -279,7 +279,7 @@ export default function IndustrySection() {
                             fill
                             style={{ objectFit: "cover", objectPosition: "center" }}
                             sizes="100vw"
-                            unoptimized
+                            loading="lazy"
                           />
                           <CardGradient active={true} />
                         </div>
@@ -441,7 +441,7 @@ export default function IndustrySection() {
                           transition: "opacity 0.3s cubic-bezier(0.215,0.61,0.355,1)",
                         }}
                         sizes="(max-width: 640px) 22vw, (max-width: 1024px) 18vw, 161px"
-                        unoptimized
+                        loading="lazy"
                       />
                     </div>
 
