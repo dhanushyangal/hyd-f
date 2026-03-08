@@ -88,10 +88,21 @@ export default function AppShowcase() {
             </div>
           ))}
 
-          {/* Center: full-sized workspace screenshot (floating card) */}
+          {/* Center: mobile = square mbworkflow image; desktop = workspace screenshot in card */}
           <div className="absolute inset-0 flex items-center justify-center p-6 sm:p-8 md:p-10">
+            {/* Mobile only: square workflow image (no card), on top */}
+            <div className="md:hidden relative w-full max-w-[82vw] aspect-square rounded-lg overflow-hidden z-20">
+              <Image
+                src="/workflow/mbworkflow.png"
+                alt="Hydrilla workflow across industries"
+                fill
+                className="object-cover object-center"
+                sizes="82vw"
+              />
+            </div>
+            {/* Desktop: workspace screenshot in card */}
             <div
-              className="app-showcase-img relative w-full max-w-[min(100%,960px)] rounded-lg overflow-hidden bg-white flex items-center justify-center"
+              className="hidden md:flex app-showcase-img relative w-full max-w-[min(100%,960px)] rounded-lg overflow-hidden bg-white items-center justify-center"
               style={{
                 boxShadow:
                   "0 26px 60px -6px rgba(25,34,35,0.12), 0 28px 28px -14px rgba(25,34,35,0.04), 0 6px 6px -3px rgba(25,34,35,0.06), 0 1px 1px -0.5px rgba(25,34,35,0.06)",
@@ -99,7 +110,6 @@ export default function AppShowcase() {
                 outlineOffset: -1,
               }}
             >
-              {/* Skeleton shimmer shown while image loads */}
               {!imgLoaded && (
                 <div
                   className="absolute inset-0 z-10"
@@ -115,7 +125,7 @@ export default function AppShowcase() {
                 alt="Hydrilla workspace"
                 fill
                 className="object-contain object-top"
-                sizes="(max-width: 640px) 82vw, (max-width: 1024px) 100vw, 960px"
+                sizes="(max-width: 1024px) 100vw, 960px"
                 loading="lazy"
                 onLoad={() => setImgLoaded(true)}
               />
