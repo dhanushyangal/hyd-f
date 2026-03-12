@@ -745,6 +745,30 @@ export async function getCredits(getToken: () => Promise<string | null>): Promis
 }
 
 /**
+ * Check if the user has early/premium access (e.g. active subscription).
+ * Used by EarlyAccessBadge. Returns { hasAccess: true } if user has an active subscription.
+ */
+export async function checkEarlyAccess(
+  _email: string | undefined,
+  getToken?: () => Promise<string | null>
+): Promise<{ hasAccess: boolean }> {
+  if (!getToken) return { hasAccess: false };
+  try {
+    const token = await getToken();
+    if (!token) return { hasAccess: false };
+    const res = await fetch(`${backendBase}/api/payments/subscription`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { hasAccess: false };
+    const data = (await res.json()) as { subscription?: unknown };
+    return { hasAccess: !!data.subscription };
+  } catch {
+    return { hasAccess: false };
+  }
+}
+
+/**
  * Upload image file to backend and get URL (backend may use local uploads or S3).
  */
 export async function uploadImage(file: File, getToken?: () => Promise<string | null>): Promise<string> {
