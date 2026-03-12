@@ -4,8 +4,7 @@ import dynamic from "next/dynamic";
 import { Suspense, useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
-import PremiumUserButton from "../../components/PremiumUserButton";
+import { useAuth, UserButton } from "@clerk/nextjs";
 import { Slider } from "../../components/ui/slider";
 import {
   submitImageTo3D,
@@ -26,6 +25,8 @@ import {
   getProxyGlbUrl,
   notifyGpuOffline,
   cancelJob,
+  isPrimaryUp,
+  onHealthChange,
   BackendJob,
   QueueInfo,
   LineageItem,
@@ -138,6 +139,21 @@ function WorkspacePage() {
   const [inputMode, setInputMode] = useState<InputMode>("text");
   const [modeStates, setModeStates] = useState<Record<InputMode, ModeState>>(defaultModeStates);
   const [centerView, setCenterView] = useState<CenterView>({ type: "empty" });
+
+  // Primary API health — Edit & Combine require primary; when down only Text & Image-to-3D are available.
+  // Initialize to true so server and client first paint match (avoids hydration error). Updated after mount.
+  const [primaryApiUp, setPrimaryApiUp] = useState(true);
+  useEffect(() => {
+    setPrimaryApiUp(isPrimaryUp());
+    return onHealthChange(setPrimaryApiUp);
+  }, []);
+
+  // When primary goes down, force back to "text" mode if on Edit/Combine
+  useEffect(() => {
+    if (!primaryApiUp && (inputMode === "text_1img" || inputMode === "text_2img")) {
+      setInputMode("text");
+    }
+  }, [primaryApiUp, inputMode]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
@@ -175,6 +191,10 @@ function WorkspacePage() {
   const [creditsTotal, setCreditsTotal] = useState<number>(0);
   const [creditsUsed, setCreditsUsed] = useState<number>(0);
   const [creditsLoading, setCreditsLoading] = useState(false);
+  const [clientMounted, setClientMounted] = useState(false);
+  useEffect(() => {
+    setClientMounted(true);
+  }, []);
   const refreshCredits = useCallback(async () => {
     if (!isSignedIn || !getToken) return;
     setCreditsLoading(true);
@@ -1898,7 +1918,9 @@ function WorkspacePage() {
             <Link href="/library" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
             </Link>
-            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-lg"><PremiumUserButton /></div>
+            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-lg">
+              {clientMounted ? <UserButton afterSignOutUrl="/" /> : <div className="w-8 h-8 rounded-lg bg-neutral-200 animate-pulse" aria-hidden />}
+            </div>
             <button type="button" onClick={() => setRightPanelOpen(false)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors duration-200 shrink-0" title="Collapse panel" aria-label="Collapse panel">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
             </button>
@@ -1908,8 +1930,8 @@ function WorkspacePage() {
             {/* Input mode — shadcn-style Tabs (Text | Edit | Combine) */}
             <div role="tablist" aria-label="Input mode" className="inline-flex h-10 w-full items-center rounded-lg bg-neutral-100 p-1 text-neutral-500">
               <button type="button" role="tab" onClick={() => setInputMode("text")} title="Text prompt only" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><span className="text-sm font-semibold leading-none">T</span><span>Text</span></button>
-              <button type="button" role="tab" onClick={() => setInputMode("text_1img")} title="Text + 1 image" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text_1img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></button>
-              <button type="button" role="tab" onClick={() => setInputMode("text_2img")} title="Text + 2 images" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text_2img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><div className="flex -space-x-0.5 shrink-0"><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /></div><span>Combine</span></button>
+              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_1img")} title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_1img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></button>
+              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_2img")} title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_2img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><div className="flex -space-x-0.5 shrink-0"><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /></div><span>Combine</span></button>
             </div>
 
             {/* Image slots — same spacing as reference */}

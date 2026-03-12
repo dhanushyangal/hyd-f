@@ -11,6 +11,7 @@ const BACKEND_URL =
     ? ENV_BACKEND.replace(/\/+$/, "")
     : "https://hydrilla-backend.vercel.app";
 
+// Plan display info. Credits are placeholder copy until backend exposes real credits/subscription API (e.g. getCredits(), getSubscription()).
 const PLAN_INFO: Record<string, { label: string; price: string; credits: string; color: string }> = {
   creator: {
     label: "Creator",

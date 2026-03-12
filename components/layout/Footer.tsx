@@ -32,7 +32,7 @@ const FOOTER_NAV = [
   {
     heading: "Company",
     links: [
-      { label: "About", href: "/about" },
+      { label: "About", href: "/team" },
       { label: "Contact", href: "/contact" },
       { label: "Careers", href: "/careers" },
     ],

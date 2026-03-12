@@ -1,18 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   SignInButton,
   SignUpButton,
   SignedIn,
   SignedOut,
+  UserButton,
+  useAuth,
+  useUser,
 } from "@clerk/nextjs";
-import PremiumUserButton from "./PremiumUserButton";
-import EarlyAccessBadge from "./EarlyAccessBadge";
-
+import Link from "next/link";
+import { getCredits, type CreditsInfo } from "@/lib/api";
 
 export function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [credits, setCredits] = useState<CreditsInfo | null>(null);
+  const { getToken } = useAuth();
+  const { isSignedIn } = useUser();
+
+  useEffect(() => {
+    if (!isSignedIn || !getToken) {
+      setCredits(null);
+      return;
+    }
+    let cancelled = false;
+    getCredits(getToken)
+      .then((c) => {
+        if (!cancelled) setCredits(c);
+      })
+      .catch(() => {
+        if (!cancelled) setCredits(null);
+      });
+    return () => { cancelled = true; };
+  }, [isSignedIn, getToken]);
 
   return (
     <header className="border-b border-neutral-100 bg-white sticky top-0 z-50">
@@ -44,16 +65,24 @@ export function Navigation() {
             >
               Library
             </a>
+            {credits !== null && (
+              <div className="flex items-center gap-2">
+                {credits.remaining === 0 ? (
+                  <Link
+                    href="/checkout"
+                    className="text-sm font-medium text-amber-600 hover:text-amber-700 transition-colors"
+                  >
+                    You&apos;ve used all your credits
+                  </Link>
+                ) : (
+                  <span className="text-sm text-neutral-500">
+                    {credits.remaining} credits
+                  </span>
+                )}
+              </div>
+            )}
             <div className="h-4 w-px bg-neutral-200"></div>
-            <EarlyAccessBadge />
-            <PremiumUserButton
-              afterSignOutUrl="/"
-              appearance={{
-                elements: {
-                  avatarBox: "w-8 h-8",
-                },
-              }}
-            />
+            <UserButton afterSignOutUrl="/" />
           </SignedIn>
 
           <SignedOut>
@@ -73,15 +102,7 @@ export function Navigation() {
         {/* Mobile Menu Button */}
         <div className="flex md:hidden items-center gap-2">
           <SignedIn>
-            <EarlyAccessBadge />
-            <PremiumUserButton
-              afterSignOutUrl="/"
-              appearance={{
-                elements: {
-                  avatarBox: "w-8 h-8",
-                },
-              }}
-            />
+            <UserButton afterSignOutUrl="/" />
           </SignedIn>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -120,6 +141,19 @@ export function Navigation() {
               >
                 Library
               </a>
+              {credits !== null && (credits.remaining === 0 ? (
+                <Link
+                  href="/checkout"
+                  className="block px-4 py-3 text-base font-medium text-amber-600 hover:bg-amber-50 rounded-xl transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  You&apos;ve used all your credits — Get more
+                </Link>
+              ) : (
+                <div className="px-4 py-3 text-sm text-neutral-500">
+                  {credits.remaining} credits remaining
+                </div>
+              ))}
             </SignedIn>
 
             <SignedOut>

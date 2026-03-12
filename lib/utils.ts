@@ -19,6 +19,9 @@ export function getCurrentWorkspaceId(): string | null {
     return window.sessionStorage.getItem(WORKSPACE_CURRENT_ID_KEY);
   }
   return null;
+
+
+  
 }
 
 

@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useAuth, SignInButton, SignedIn } from "@clerk/nextjs";
-import PremiumUserButton from "../../components/PremiumUserButton";
-import EarlyAccessCard from "../../components/sections/EarlyAccessCard";
+import { useAuth, SignInButton, SignedIn, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, cancelJob, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
 import { setCurrentWorkspaceId } from "../../lib/utils";
@@ -1617,7 +1615,20 @@ export default function GeneratePage() {
               </div>
             );
           }
-          
+          // Insufficient credits – show link to checkout
+          if (content.toLowerCase().includes("credit") || content.includes("Insufficient")) {
+            return (
+              <div>
+                <p>{content}</p>
+                <p className="text-xs text-red-700 mt-2">
+                  <Link href="/checkout" className="underline font-medium hover:text-red-900">
+                    Get more credits →
+                  </Link>
+                </p>
+              </div>
+            );
+          }
+
           return content;
         };
         
@@ -1647,9 +1658,6 @@ export default function GeneratePage() {
               Hydrilla
             </span>
           </Link>
-          
-          {/* Early Access Card - shows when user has pass */}
-          <EarlyAccessCard showWhenHasAccess={true} compact={true} />
           
           {/* My Library Section */}
           <div className="mb-4">
@@ -1910,9 +1918,6 @@ export default function GeneratePage() {
         </div>
         
         <div className={`flex-1 overflow-y-auto p-4 space-y-3 ${!sidebarOpen ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}>
-          {/* Early Access Card - shows when user has pass */}
-          <EarlyAccessCard showWhenHasAccess={true} compact={true} />
-          
           {/* My Library Section */}
           <div className="mb-4">
             <Link 
@@ -2251,7 +2256,7 @@ export default function GeneratePage() {
             >
               My Library
             </Link>
-            <PremiumUserButton />
+            <UserButton afterSignOutUrl="/" />
           </div>
         </div>
         

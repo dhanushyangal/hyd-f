@@ -1,4 +1,16 @@
-const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.ai";
+import {
+  getPrimaryUrl,
+  getAlternativeUrl,
+  getFallbackCapableUrl,
+  isPrimaryUp,
+  markPrimaryDown,
+  onHealthChange,
+} from "./apiHealth";
+
+// Re-export health utilities for UI components
+export { isPrimaryUp, onHealthChange };
+
+const apiBase = getPrimaryUrl();
 
 // Backend URL - must be set in Vercel environment variables as NEXT_PUBLIC_BACKEND_URL
 const getBackendBase = (): string => {
@@ -286,13 +298,15 @@ export async function registerJobWithPreview(
  */
 async function pollGatewayStatusUntilCompleted(
   jobId: string,
+  baseUrl?: string,
   options?: { maxWaitMs?: number; intervalMs?: number }
 ): Promise<{ status: string; result?: { image_url?: string }; image_url?: string; error?: string }> {
+  const base = baseUrl || apiBase;
   const maxWaitMs = options?.maxWaitMs ?? 120_000; // 2 min
   const intervalMs = options?.intervalMs ?? 2000;
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
-    const res = await fetch(`${apiBase}/status/${jobId}`);
+    const res = await fetch(`${base}/status/${jobId}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error((err as { error?: string }).error || "Failed to fetch status");
@@ -319,6 +333,8 @@ function resolveImageUrl(url: string): string {
 
 /**
  * Generate preview image from text prompt.
+ * When getToken is provided, uses backend /api/3d/text-to-image so credits are deducted (2).
+ * Otherwise calls gateway directly (no deduction).
  * Gateway may return immediately (sync) with image_url, or async (pending) — we poll until completed.
  */
 export async function generatePreviewImage(prompt: string, getToken?: () => Promise<string | null>): Promise<{ 
@@ -326,54 +342,99 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
   preview_id: string;
   queue?: QueueInfo;
 }> {
-  const formData = new FormData();
-  formData.append("prompt", prompt);
+  const parseErrorResponse = async (res: Response): Promise<string> => {
+    try {
+      const data = await res.json();
+      return data.error || "Failed to generate preview image";
+    } catch {
+      return (await res.text()) || "Failed to generate preview image";
+    }
+  };
 
-  const headers: HeadersInit = {};
+  const handleResult = async (result: any, baseUrl: string) => {
+    const previewId = result.preview_id ?? result.job_id;
+    const resolve = (url: string) => {
+      if (!url || !url.startsWith("/")) return url;
+      const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+      return `${base}${url}`;
+    };
+
+    if (result.status === "pending" || (result.image_url == null && previewId)) {
+      const statusData = await pollGatewayStatusUntilCompleted(previewId, baseUrl);
+      const imageUrl = statusData.image_url ?? statusData.result?.image_url ?? "";
+      return { image_url: resolve(imageUrl), preview_id: previewId, queue: result.queue };
+    }
+
+    return { image_url: resolve(result.image_url ?? ""), preview_id: previewId, queue: result.queue };
+  };
+
+  // Use backend when authenticated so credits are deducted (2 per text-to-image)
   if (getToken) {
     const token = await getToken();
     if (token) {
-      formData.append("user_id", ""); // Can be extracted from token if needed
+      try {
+        const res = await fetch(`${backendBase}/api/3d/text-to-image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ prompt: prompt.trim() }),
+        });
+        if (res.status === 402) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
+        }
+        if (!res.ok) throw new Error(await parseErrorResponse(res));
+        const result = await res.json();
+        // Backend proxies gateway response; polling still uses gateway URL
+        return await handleResult(result, getFallbackCapableUrl());
+      } catch (err: any) {
+        if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
+        if (isApiUnavailableError(err)) {
+          if (shouldNotifyGpuOffline(err)) notifyGpuOffline(err.message || "API unavailable", getToken);
+          throw new Error(getGpuOfflineErrorMessage());
+        }
+        throw err;
+      }
     }
   }
+
+  // No token: call gateway directly (no credit deduction)
+  const buildFormData = (): FormData => {
+    const fd = new FormData();
+    fd.append("prompt", prompt);
+    return fd;
+  };
+  const targetUrl = getFallbackCapableUrl();
 
   try {
-  const res = await fetch(`${apiBase}/text-to-image`, {
-    method: "POST",
-    body: formData,
-  });
+    const res = await fetch(`${targetUrl}/text-to-image`, {
+      method: "POST",
+      body: buildFormData(),
+    });
 
-  if (!res.ok) {
-    let errorText: string;
-    try {
-      const errorData = await res.json();
-      errorText = errorData.error || "Failed to generate preview image";
-    } catch {
-      errorText = (await res.text()) || "Failed to generate preview image";
-    }
-    throw new Error(errorText);
-  }
+    if (!res.ok) throw new Error(await parseErrorResponse(res));
 
-  const result = await res.json();
-  const previewId = result.preview_id ?? result.job_id;
-
-  // Async gateway: status "pending" → poll until completed
-  if (result.status === "pending" || (result.image_url == null && previewId)) {
-    const statusData = await pollGatewayStatusUntilCompleted(previewId);
-    const imageUrl = statusData.image_url ?? statusData.result?.image_url ?? "";
-    return {
-      image_url: resolveImageUrl(imageUrl),
-      preview_id: previewId,
-      queue: result.queue,
-    };
-  }
-
-  return {
-    image_url: resolveImageUrl(result.image_url ?? ""),
-    preview_id: previewId,
-    queue: result.queue,
-  };
+    return await handleResult(await res.json(), targetUrl);
   } catch (err: any) {
+    if (isApiUnavailableError(err) && targetUrl === getPrimaryUrl()) {
+      markPrimaryDown();
+
+      try {
+        const altRes = await fetch(`${getAlternativeUrl()}/text-to-image`, {
+          method: "POST",
+          body: buildFormData(),
+        });
+
+        if (!altRes.ok) throw new Error(await parseErrorResponse(altRes));
+
+        return await handleResult(await altRes.json(), getAlternativeUrl());
+      } catch (altErr: any) {
+        if (shouldNotifyGpuOffline(altErr)) {
+          notifyGpuOffline(altErr.message || "Both APIs unavailable", getToken);
+        }
+        throw new Error(getGpuOfflineErrorMessage());
+      }
+    }
+
     if (isApiUnavailableError(err)) {
       if (shouldNotifyGpuOffline(err)) {
         notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
@@ -404,12 +465,12 @@ export async function editImage(
     throw new Error("Either image file or image URL is required");
   }
 
-  try {
-    const res = await fetch(`${apiBase}/edit-image`, {
-      method: "POST",
-      body: formData,
-    });
-
+  const doRequest = async (url: string, headers: HeadersInit) => {
+    const res = await fetch(url, { method: "POST", headers, body: formData });
+    if (res.status === 402) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
+    }
     if (!res.ok) {
       let errorText: string;
       try {
@@ -420,11 +481,40 @@ export async function editImage(
       }
       throw new Error(errorText);
     }
+    return res.json();
+  };
 
-    const result = await res.json();
+  try {
+    // Use backend when authenticated so credits are deducted (3 per edit)
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        const result = await doRequest(`${backendBase}/api/3d/edit-image`, {
+          Authorization: `Bearer ${token}`,
+        });
+        const editId = result.edit_id ?? result.job_id;
+        if (result.status === "pending" || (result.image_url == null && editId)) {
+          const statusData = await pollGatewayStatusUntilCompleted(editId);
+          const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
+          return {
+            edit_id: editId,
+            image_url: resolveImageUrl(imageUrlFromStatus),
+            prompt: result.prompt || prompt,
+            strength: result.strength ?? 0.6,
+          };
+        }
+        return {
+          edit_id: editId,
+          image_url: resolveImageUrl(result.image_url || ""),
+          prompt: result.prompt || prompt,
+          strength: result.strength ?? 0.6,
+        };
+      }
+    }
+
+    const result = await doRequest(`${apiBase}/edit-image`, {});
     const editId = result.edit_id ?? result.job_id;
 
-    // Async gateway: status "pending" → poll until completed
     if (result.status === "pending" || (result.image_url == null && editId)) {
       const statusData = await pollGatewayStatusUntilCompleted(editId);
       const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
@@ -443,7 +533,9 @@ export async function editImage(
       strength: result.strength ?? 0.6,
     };
   } catch (err: any) {
+    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
     if (isApiUnavailableError(err)) {
+      markPrimaryDown();
       if (shouldNotifyGpuOffline(err)) {
         notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       }
@@ -492,12 +584,12 @@ export async function combinedEdit(
   formData.append("image_1", file1);
   formData.append("image_2", file2);
 
-  try {
-    const res = await fetch(`${apiBase}/combined-edit`, {
-      method: "POST",
-      body: formData,
-    });
-
+  const doRequest = async (url: string, headers: HeadersInit) => {
+    const res = await fetch(url, { method: "POST", headers, body: formData });
+    if (res.status === 402) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
+    }
     if (!res.ok) {
       let errorText: string;
       try {
@@ -508,8 +600,23 @@ export async function combinedEdit(
       }
       throw new Error(errorText);
     }
+    return res.json();
+  };
 
-    const result = await res.json();
+  try {
+    // Use backend when authenticated so credits are deducted (4 per combined edit)
+    let result: any;
+    if (getToken) {
+      const token = await getToken();
+      if (token) {
+        result = await doRequest(`${backendBase}/api/3d/combined-edit`, { Authorization: `Bearer ${token}` });
+      } else {
+        result = await doRequest(`${apiBase}/combined-edit`, {});
+      }
+    } else {
+      result = await doRequest(`${apiBase}/combined-edit`, {});
+    }
+
     const combinedId = result.combined_id ?? result.job_id;
 
     // Async gateway: status "pending" → poll until completed
@@ -531,7 +638,9 @@ export async function combinedEdit(
       prompt_used: result.prompt_used || prompt,
     };
   } catch (err: any) {
+    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
     if (isApiUnavailableError(err)) {
+      markPrimaryDown();
       if (shouldNotifyGpuOffline(err)) {
         notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       }
@@ -542,69 +651,97 @@ export async function combinedEdit(
 }
 
 /**
- * Submit text-to-3D job
+ * Submit text-to-3D job via backend (deducts credits, then submits to Python API).
+ * Returns job_id. Throws on 402 (insufficient credits) with error message.
  */
 export async function submitTextTo3D(prompt: string, getToken?: () => Promise<string | null>, chatId?: string | null, workspaceId?: string | null): Promise<{ job_id: string }> {
-  const formData = new FormData();
-  formData.append("prompt", prompt);
-
-  try {
-  const res = await fetch(`${apiBase}/text-to-3d`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    let errorText: string;
-    try {
-      const errorData = await res.json();
-      errorText = errorData.error || "Failed to submit job";
-    } catch {
-      errorText = (await res.text()) || "Failed to submit job";
-    }
-    throw new Error(errorText);
-  }
-
-  const result = await res.json();
-
-  // Register job in backend with auth token
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
     if (getToken) {
       const token = await getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
+      if (token) headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const registerBody: any = { job_id: result.job_id, prompt };
-    if (chatId) {
-      registerBody.chatId = chatId;
-    }
-    if (workspaceId) {
-      registerBody.workspaceId = workspaceId;
-    }
-
-    await fetch(`${backendBase}/api/3d/register-job`, {
+    const res = await fetch(`${backendBase}/api/3d/generate`, {
       method: "POST",
       headers,
-      body: JSON.stringify(registerBody),
-    }).catch(() => {});
-  } catch {}
+      body: JSON.stringify({ prompt }),
+    });
 
-  return result;
+    if (res.status === 402) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
+    }
+
+    if (!res.ok) {
+      let errorText: string;
+      try {
+        const errorData = await res.json();
+        errorText = errorData.error || "Failed to submit job";
+      } catch {
+        errorText = (await res.text()) || "Failed to submit job";
+      }
+      throw new Error(errorText);
+    }
+
+    const data = (await res.json()) as { jobId?: string };
+    const jobId = data.jobId;
+
+    // Attach chat/workspace by registering the job (backend already created it with user_id and credits)
+    if (jobId && (chatId || workspaceId)) {
+      try {
+        const registerBody: Record<string, unknown> = { job_id: jobId, prompt };
+        if (chatId) registerBody.chatId = chatId;
+        if (workspaceId) registerBody.workspaceId = workspaceId;
+        await fetch(`${backendBase}/api/3d/register-job`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(registerBody),
+        }).catch(() => {});
+      } catch {}
+    }
+
+    return { job_id: jobId ?? "" };
   } catch (err: any) {
-    // Check if it's a network error indicating API is unavailable
+    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
     if (isApiUnavailableError(err)) {
-      // Send notification to founders (non-blocking)
+      markPrimaryDown();
       if (shouldNotifyGpuOffline(err)) {
         notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       }
       throw new Error(getGpuOfflineErrorMessage());
     }
-    // Re-throw other errors
     throw err;
   }
+}
+
+/** Credits info from GET /api/payments/credits */
+export interface CreditsInfo {
+  used: number;
+  total: number;
+  remaining: number;
+  plan: string | null;
+  resetAt?: string | null;
+}
+
+/**
+ * Fetch current user credits (requires auth). Backend creates free-tier row if missing.
+ */
+export async function getCredits(getToken: () => Promise<string | null>): Promise<CreditsInfo> {
+  const token = await getToken();
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${backendBase}/api/payments/credits`, { method: "GET", headers });
+  if (!res.ok) {
+    const fallback = { used: 0, total: 200, remaining: 200, plan: null };
+    try {
+      const data = await res.json();
+      if (data.credits) return data.credits as CreditsInfo;
+    } catch {}
+    return fallback;
+  }
+  const data = (await res.json()) as { credits?: CreditsInfo };
+  return (data.credits ?? { used: 0, total: 200, remaining: 200, plan: null }) as CreditsInfo;
 }
 
 /**
@@ -681,7 +818,9 @@ export async function uploadImageViaApi(file: File, getToken?: () => Promise<str
 }
 
 /**
- * Submit image-to-3D job
+ * Submit image-to-3D job via backend (deducts credits, then submits to Python API).
+ * If imageFile is provided, uploads first to get imageUrl. Returns job_id.
+ * Throws on 402 (insufficient credits) with error message.
  */
 export async function submitImageTo3D(
   imageUrl: string | null,
@@ -692,90 +831,203 @@ export async function submitImageTo3D(
   workspaceId?: string | null,
   parentJobId?: string | null
 ): Promise<{ job_id: string }> {
-  const formData = new FormData();
-
-  // Resolve source image URL: upload file to get S3 URL so source_images is always a real URL
   let sourceImageUrl: string | null = imageUrl || null;
+
   if (imageFile) {
-    try {
-      sourceImageUrl = await uploadImageViaApi(imageFile, getToken);
-      formData.append("image_url", sourceImageUrl);
-    } catch (uploadErr) {
-      // Fallback: send file directly (register-job won't have a source image URL)
-      formData.append("image_file", imageFile);
-      sourceImageUrl = null;
+    if (isPrimaryUp()) {
+      try {
+        sourceImageUrl = await uploadImageViaApi(imageFile, getToken);
+      } catch {
+        sourceImageUrl = null;
+      }
     }
-  } else if (imageUrl) {
-    formData.append("image_url", imageUrl);
-  } else {
+    if (!sourceImageUrl) {
+      try {
+        sourceImageUrl = await uploadImage(imageFile, getToken);
+      } catch {
+        throw new Error("Failed to upload image. Please try again.");
+      }
+    }
+  } else if (!imageUrl) {
     throw new Error("Either imageUrl or imageFile must be provided");
   }
 
-  try {
-  const res = await fetch(`${apiBase}/image-to-3d`, {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    let errorText: string;
-    try {
-      const errorData = await res.json();
-      errorText = errorData.error || "Failed to submit job";
-    } catch {
-      errorText = (await res.text()) || "Failed to submit job";
-    }
-    throw new Error(errorText);
+  const urlToSend = sourceImageUrl || imageUrl!;
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (getToken) {
+    const token = await getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const result = await res.json();
-
-  // Register job in backend with auth token and source image for lineage
   try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      const token = await getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    const registerBody: any = { job_id: result.job_id, imageUrl: sourceImageUrl || imageUrl || "uploaded_file" };
-    if (sourceImageUrl) {
-      registerBody.sourceImages = [sourceImageUrl];
-    }
-    if (previewJobId) {
-      registerBody.previewJobId = previewJobId;
-    }
-    if (chatId) {
-      registerBody.chatId = chatId;
-    }
-    if (workspaceId) {
-      registerBody.workspaceId = workspaceId;
-    }
-    if (parentJobId || previewJobId) {
-      registerBody.parentJobId = parentJobId || previewJobId;
-    }
-
-    await fetch(`${backendBase}/api/3d/register-job`, {
+    const res = await fetch(`${backendBase}/api/3d/generate`, {
       method: "POST",
       headers,
-      body: JSON.stringify(registerBody),
-    }).catch(() => {});
-  } catch {}
+      body: JSON.stringify({ imageUrl: urlToSend }),
+    });
 
-  return result;
+    if (res.status === 402) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
+    }
+
+    if (!res.ok) {
+      let errorText: string;
+      try {
+        const errorData = await res.json();
+        errorText = errorData.error || "Failed to submit job";
+      } catch {
+        errorText = (await res.text()) || "Failed to submit job";
+      }
+      throw new Error(errorText);
+    }
+
+    const data = (await res.json()) as { jobId?: string };
+    const jobId = data.jobId;
+
+    if (jobId && (chatId || workspaceId || previewJobId || parentJobId)) {
+      try {
+        const body: Record<string, unknown> = {
+          job_id: jobId,
+          imageUrl: urlToSend,
+        };
+        if (sourceImageUrl) body.sourceImages = [sourceImageUrl];
+        if (previewJobId) body.previewJobId = previewJobId;
+        if (chatId) body.chatId = chatId;
+        if (workspaceId) body.workspaceId = workspaceId;
+        if (parentJobId || previewJobId) body.parentJobId = parentJobId || previewJobId;
+        await fetch(`${backendBase}/api/3d/register-job`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        }).catch(() => {});
+      } catch {}
+    }
+
+    return { job_id: jobId ?? "" };
   } catch (err: any) {
-    // Check if it's a network error indicating API is unavailable
+    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
     if (isApiUnavailableError(err)) {
-      // Send notification to founders (non-blocking)
+      markPrimaryDown();
       if (shouldNotifyGpuOffline(err)) {
         notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       }
       throw new Error(getGpuOfflineErrorMessage());
     }
-    // Re-throw other errors
     throw err;
+  }
+}
+
+/** @deprecated Used only when falling back to gateway for image-to-3d (e.g. if backend generate fails). */
+async function submitImageTo3DViaGateway(
+  imageUrl: string | null,
+  imageFile: File | null,
+  getToken?: () => Promise<string | null>,
+  previewJobId?: string | null,
+  chatId?: string | null,
+  workspaceId?: string | null,
+  parentJobId?: string | null
+): Promise<{ job_id: string }> {
+  let sourceImageUrl: string | null = imageUrl || null;
+  if (imageFile && isPrimaryUp()) {
+    try {
+      sourceImageUrl = await uploadImageViaApi(imageFile, getToken);
+    } catch {
+      sourceImageUrl = null;
+    }
+  }
+  if (!sourceImageUrl && !imageUrl) throw new Error("Either imageUrl or imageFile must be provided");
+
+  const buildFormData = (): FormData => {
+    const fd = new FormData();
+    if (sourceImageUrl) fd.append("image_url", sourceImageUrl);
+    else if (imageFile) fd.append("image_file", imageFile);
+    else if (imageUrl) fd.append("image_url", imageUrl);
+    return fd;
+  };
+  const parseErrorResponse = async (res: Response): Promise<string> => {
+    try {
+      const data = await res.json();
+      return data.error || "Failed to submit job";
+    } catch {
+      return (await res.text()) || "Failed to submit job";
+    }
+  };
+  const registerJob = async (result: { job_id: string }): Promise<void> => {
+    try {
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (getToken) {
+        const token = await getToken();
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+      }
+      const body: Record<string, unknown> = {
+        job_id: result.job_id,
+        imageUrl: sourceImageUrl || imageUrl || "uploaded_file",
+      };
+      if (sourceImageUrl) body.sourceImages = [sourceImageUrl];
+      if (previewJobId) body.previewJobId = previewJobId;
+      if (chatId) body.chatId = chatId;
+      if (workspaceId) body.workspaceId = workspaceId;
+      if (parentJobId || previewJobId) body.parentJobId = parentJobId || previewJobId;
+      await fetch(`${backendBase}/api/3d/register-job`, { method: "POST", headers, body: JSON.stringify(body) }).catch(() => {});
+    } catch {}
+  };
+
+  const targetUrl = getFallbackCapableUrl();
+  const res = await fetch(`${targetUrl}/image-to-3d`, { method: "POST", body: buildFormData() });
+  if (!res.ok) throw new Error(await parseErrorResponse(res));
+  const result = await res.json();
+  await registerJob(result);
+  return result;
+}
+
+function _submitImageTo3DGatewayFallback(
+  imageUrl: string | null,
+  imageFile: File | null,
+  getToken?: () => Promise<string | null>,
+  previewJobId?: string | null,
+  chatId?: string | null,
+  workspaceId?: string | null,
+  parentJobId?: string | null
+): Promise<{ job_id: string }> {
+  return submitImageTo3DViaGateway(imageUrl, imageFile, getToken, previewJobId, chatId, workspaceId, parentJobId);
+}
+
+export async function _unusedSubmitImageTo3DGateway(
+  imageUrl: string | null,
+  imageFile: File | null,
+  getToken?: () => Promise<string | null>,
+  previewJobId?: string | null,
+  chatId?: string | null,
+  workspaceId?: string | null,
+  parentJobId?: string | null
+): Promise<{ job_id: string }> {
+  try {
+    const altRes = await fetch(`${getAlternativeUrl()}/image-to-3d`, {
+      method: "POST",
+      body: (() => {
+        const fd = new FormData();
+        if (imageUrl) fd.append("image_url", imageUrl);
+        else if (imageFile) fd.append("image_file", imageFile);
+        return fd;
+      })(),
+    });
+    if (!altRes.ok) throw new Error(await altRes.json().then((d: any) => d.error).catch(() => "Failed"));
+    const result = await altRes.json();
+    if (getToken) {
+      const token = await getToken();
+      await fetch(`${backendBase}/api/3d/register-job`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ job_id: result.job_id, imageUrl: imageUrl || "uploaded_file", chatId, workspaceId, parentJobId: parentJobId || previewJobId }),
+      }).catch(() => {});
+    }
+    return result;
+  } catch (altErr: any) {
+    if (shouldNotifyGpuOffline(altErr)) {
+      notifyGpuOffline(altErr.message || "Both APIs unavailable", getToken);
+    }
+    throw new Error(getGpuOfflineErrorMessage());
   }
 }
 
@@ -1394,124 +1646,6 @@ export async function getCurrentUser(getToken: () => Promise<string | null>): Pr
     return null;
   }
 }
-
-/**
- * Create early access payment link
- */
-export async function createEarlyAccessPayment(
-  email: string,
-  getToken?: () => Promise<string | null>
-): Promise<{ paymentId: string; paymentLink: string; status: string }> {
-  const headers: HeadersInit = { "Content-Type": "application/json" };
-  
-  if (getToken) {
-    const token = await getToken();
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-
-  const url = `${backendBase}/api/payments/early-access/create`;
-  console.log("🔗 Creating payment link:", { url, email, backendBase });
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ email }),
-    });
-
-    console.log("📡 Backend response:", { status: res.status, statusText: res.statusText, ok: res.ok });
-
-    if (!res.ok) {
-      let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
-      let errorData: any = null;
-      
-      // Clone response so we can try JSON first, then text if that fails
-      const responseText = await res.text();
-      
-      try {
-        errorData = JSON.parse(responseText);
-        errorMessage = errorData.error || errorData.message || errorMessage;
-      } catch {
-        // Response is not JSON, use the text directly
-        if (responseText) errorMessage = responseText;
-      }
-      
-      // Handle ALREADY_HAS_ACCESS status (409 Conflict)
-      if (res.status === 409 || errorData?.status === "ALREADY_HAS_ACCESS" || errorData?.error === "ALREADY_HAS_ACCESS") {
-        const error = new Error(errorData?.message || errorData?.error || "This email already has early access");
-        (error as any).status = "ALREADY_HAS_ACCESS";
-        (error as any).payment = errorData?.payment;
-        throw error;
-      }
-      
-      console.error("❌ Payment creation failed:", { 
-        status: res.status, 
-        statusText: res.statusText, 
-        errorMessage,
-        responseText: responseText.substring(0, 500),
-        backendUrl: backendBase
-      });
-      throw new Error(errorMessage || "Failed to create payment record");
-    }
-
-    const data = await res.json();
-    console.log("Payment link created:", { sessionId: data.sessionId, hasLink: !!data.paymentLink });
-    
-    // Handle new response format (no paymentId, only paymentLink)
-    return {
-      paymentId: data.sessionId || data.paymentLink || "pending",
-      paymentLink: data.paymentLink,
-      status: data.status || "pending",
-    };
-  } catch (err: any) {
-    console.error("Network error creating payment:", err);
-    // Re-throw with more context
-    if (err.name === "TypeError" && err.message.includes("fetch")) {
-      throw new Error(`Cannot connect to backend at ${backendBase}. Please check if the server is running.`);
-    }
-    throw err;
-  }
-}
-
-/**
- * Check if user has early access (paid)
- */
-export async function checkEarlyAccess(
-  email?: string,
-  getToken?: () => Promise<string | null>
-): Promise<{ hasAccess: boolean; accessInfo: any }> {
-  const headers: HeadersInit = { "Content-Type": "application/json" };
-  
-  if (getToken) {
-    const token = await getToken();
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-
-  const url = email 
-    ? `${backendBase}/api/payments/early-access/check?email=${encodeURIComponent(email)}`
-    : `${backendBase}/api/payments/early-access/check`;
-
-  try {
-    const res = await fetch(url, { headers });
-
-    if (!res.ok) {
-      return { hasAccess: false, accessInfo: null };
-    }
-
-    const data = await res.json();
-    return { 
-      hasAccess: data.hasAccess || false, 
-      accessInfo: data.accessInfo || null 
-    };
-  } catch {
-    return { hasAccess: false, accessInfo: null };
-  }
-}
-
 
 // ============================================
 // WORKSPACE API
