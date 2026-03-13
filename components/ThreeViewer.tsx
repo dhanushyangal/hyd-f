@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 export type ViewerEnvLighting = "studio" | "outdoor" | "neutral";
-export type ViewerMaterialType = "standard" | "matcap" | "toon" | "depth" | "lambert" | "normal";
+export type ViewerMaterialType = "standard" | "matcap" | "toon" | "lambert" | "normal";
 export type ViewerMaterialRoughness = "smooth" | "medium" | "rough";
 
 type Props = {
@@ -20,6 +20,9 @@ type Props = {
   brightness?: number;
   materialType?: ViewerMaterialType;
   materialRoughness?: ViewerMaterialRoughness;
+  /** When provided, wireframe is controlled from parent (e.g. workspace top bar) */
+  wireframeMode?: boolean;
+  onWireframeChange?: (on: boolean) => void;
 };
 
 // Default neutral matcap texture (baked sphere lighting)
@@ -122,6 +125,8 @@ export function ThreeViewer({
   brightness = 1,
   materialType = "standard",
   materialRoughness = "medium",
+  wireframeMode: wireframeModeProp,
+  onWireframeChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -140,61 +145,55 @@ export function ThreeViewer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
-  const [wireframeMode, setWireframeMode] = useState(false); // Wireframe toggle state
+  const [internalWireframeMode, setInternalWireframeMode] = useState(false);
   const [modelReady, setModelReady] = useState(false); // Triggers material sync when model has loaded
 
-  // Function to toggle wireframe overlay on top of the model
-  const toggleWireframe = () => {
-    if (!modelRef.current || !sceneRefForWireframe.current) return;
-    
-    const newWireframeMode = !wireframeMode;
-    setWireframeMode(newWireframeMode);
+  const isControlledWireframe = wireframeModeProp !== undefined;
+  const wireframeMode = isControlledWireframe ? wireframeModeProp : internalWireframeMode;
 
-    if (newWireframeMode) {
-      // Clone the entire model structure
+  // Apply or remove wireframe overlay (used by both controlled and uncontrolled)
+  const applyWireframe = useCallback((show: boolean) => {
+    if (!modelRef.current || !sceneRefForWireframe.current) return;
+    if (show) {
+      if (wireframeOverlayRef.current) return; // already on
       const wireframeGroup = modelRef.current.clone();
-      
-      // Replace all materials with wireframe materials
       wireframeGroup.traverse((child) => {
         if (child instanceof THREE.Mesh && child.geometry) {
-          // Create wireframe material
           const wireframeMaterial = new THREE.MeshBasicMaterial({
             color: 0x000000,
             wireframe: true,
             transparent: true,
             opacity: 0.8,
-            depthWrite: false, // Allow wireframe to render on top
+            depthWrite: false,
           });
-          
-          // Replace material with wireframe
           child.material = wireframeMaterial;
         }
       });
-      
       wireframeOverlayRef.current = wireframeGroup;
       sceneRefForWireframe.current.add(wireframeGroup);
     } else {
-      // Remove wireframe overlay
-      if (wireframeOverlayRef.current && sceneRefForWireframe.current) {
-        // Cleanup wireframe materials only (geometries are shared with original model)
-        wireframeOverlayRef.current.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            // Don't dispose geometry - it's shared with the original model
-            if (child.material) {
-              if (Array.isArray(child.material)) {
-                child.material.forEach((mat) => mat.dispose());
-              } else {
-                child.material.dispose();
-              }
-            }
-          }
-        });
-        
-        sceneRefForWireframe.current.remove(wireframeOverlayRef.current);
-        wireframeOverlayRef.current = null;
-      }
+      if (!wireframeOverlayRef.current || !sceneRefForWireframe.current) return;
+      wireframeOverlayRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+          else child.material.dispose();
+        }
+      });
+      sceneRefForWireframe.current.remove(wireframeOverlayRef.current);
+      wireframeOverlayRef.current = null;
     }
-  };
+  }, []);
+
+  // Sync overlay when controlled wireframeMode or model readiness changes
+  useEffect(() => {
+    if (modelRef.current && sceneRefForWireframe.current) applyWireframe(wireframeMode);
+  }, [wireframeMode, modelReady, applyWireframe]);
+
+  const toggleWireframe = useCallback(() => {
+    const next = !wireframeMode;
+    if (isControlledWireframe) onWireframeChange?.(next);
+    else setInternalWireframeMode(next);
+  }, [wireframeMode, isControlledWireframe, onWireframeChange]);
 
   useEffect(() => {
     if (!containerRef.current || !glbUrl) return;
@@ -211,7 +210,7 @@ export function ThreeViewer({
     }
 
     // Reset wireframe state and overlay when model changes
-    setWireframeMode(false);
+    setInternalWireframeMode(false);
     if (wireframeOverlayRef.current && sceneRef.current) {
       // Cleanup wireframe overlay (materials only, geometries are shared)
       wireframeOverlayRef.current.traverse((child) => {
@@ -520,144 +519,140 @@ export function ThreeViewer({
     const r = roughnessMap[materialRoughness];
     const matcapTex = getDefaultMatcap();
 
-    model.traverse((child) => {
-      if (!(child instanceof THREE.Mesh) || !child.geometry) return;
-      const mesh = child;
-      const orig = (mesh.userData as { originalMaterial?: THREE.Material }).originalMaterial;
-      if (!orig) return;
+    // Defer heavy material updates to next frame so UI (material/wireframe buttons) feels instant like wireframe
+    const rafId = requestAnimationFrame(() => {
+      if (!modelRef.current) return;
+      const m = modelRef.current;
+      m.traverse((child) => {
+        if (!(child instanceof THREE.Mesh) || !child.geometry) return;
+        const mesh = child;
+        const orig = (mesh.userData as { originalMaterial?: THREE.Material }).originalMaterial;
+        if (!orig) return;
 
-      const current = mesh.material;
-      const currentSingle = Array.isArray(current) ? current[0] : current;
-      const isReplacement =
-        current !== orig && !(Array.isArray(orig) && (orig as THREE.Material[]).includes(currentSingle as THREE.Material));
+          const current = mesh.material;
+        const currentSingle = Array.isArray(current) ? current[0] : current;
+        const isReplacement =
+          current !== orig && !(Array.isArray(orig) && (orig as THREE.Material[]).includes(currentSingle as THREE.Material));
 
-      const alreadyStandard = currentSingle instanceof THREE.MeshStandardMaterial && (current === orig || (Array.isArray(orig) && orig.includes(currentSingle)));
-      const alreadyMatcap = currentSingle instanceof THREE.MeshMatcapMaterial;
-      const alreadyToon = currentSingle instanceof THREE.MeshToonMaterial;
-      const alreadyDepth = currentSingle instanceof THREE.MeshDepthMaterial;
-      const alreadyLambert = currentSingle instanceof THREE.MeshLambertMaterial;
-      const alreadyNormal = currentSingle instanceof THREE.MeshNormalMaterial;
+        const alreadyStandard = currentSingle instanceof THREE.MeshStandardMaterial && (current === orig || (Array.isArray(orig) && orig.includes(currentSingle)));
+        const alreadyMatcap = currentSingle instanceof THREE.MeshMatcapMaterial;
+        const alreadyToon = currentSingle instanceof THREE.MeshToonMaterial;
+        const alreadyLambert = currentSingle instanceof THREE.MeshLambertMaterial;
+        const alreadyNormal = currentSingle instanceof THREE.MeshNormalMaterial;
 
-      if (materialType === "standard") {
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        const allStandard = mats.every((m) => m instanceof THREE.MeshStandardMaterial);
-        const sameAsOrig =
-          current === orig || (Array.isArray(current) && Array.isArray(orig) && (current as THREE.Material[]).length === orig.length);
-        if (allStandard && sameAsOrig) {
-          mats.forEach((m) => {
-            if (m instanceof THREE.MeshStandardMaterial) {
-              m.roughness = r;
-              m.envMapIntensity = 0.8;
+        if (materialType === "standard") {
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          const allStandard = mats.every((m) => m instanceof THREE.MeshStandardMaterial);
+          const sameAsOrig =
+            current === orig || (Array.isArray(current) && Array.isArray(orig) && (current as THREE.Material[]).length === orig.length);
+          if (allStandard && sameAsOrig) {
+            mats.forEach((m) => {
+              if (m instanceof THREE.MeshStandardMaterial) {
+                m.roughness = r;
+                m.envMapIntensity = 0.8;
+              }
+            });
+            return;
+          }
+          if (isReplacement && current) {
+            if (Array.isArray(current)) current.forEach((m) => m.dispose());
+            else (current as THREE.Material).dispose();
+          }
+          if (Array.isArray(orig)) {
+            const clones = orig.map((o) => (o as THREE.Material).clone());
+            mesh.material = clones.length === 1 ? clones[0] : clones;
+            (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) => {
+              if (m instanceof THREE.MeshStandardMaterial) {
+                m.roughness = r;
+                m.envMapIntensity = 0.8;
+              }
+            });
+          } else {
+            const origMat = orig as THREE.Material;
+            if (origMat instanceof THREE.MeshStandardMaterial) {
+              const base = origMat.clone();
+              mesh.material = base;
+              base.roughness = r;
+              base.envMapIntensity = 0.8;
+            } else {
+              // GLB may use MeshBasicMaterial or other; use MeshStandardMaterial for PBR
+              const color = origMat instanceof THREE.MeshBasicMaterial ? (origMat as THREE.MeshBasicMaterial).color.clone() : new THREE.Color(0xcccccc);
+              if ("color" in origMat && origMat.color) color.copy((origMat as { color: THREE.Color }).color);
+              mesh.material = new THREE.MeshStandardMaterial({ color, roughness: r, metalness: 0.1, envMapIntensity: 0.8 });
             }
+          }
+          return;
+        }
+
+        if (materialType === "matcap") {
+          if (alreadyMatcap) return;
+          if (isReplacement && current) {
+            if (Array.isArray(current)) current.forEach((m) => m.dispose());
+            else (current as THREE.Material).dispose();
+          }
+          const color = new THREE.Color(0xcccccc);
+          if (Array.isArray(orig) && orig[0] && "color" in orig[0]) color.copy((orig[0] as { color: THREE.Color }).color);
+          else if (orig && "color" in orig) color.copy((orig as { color: THREE.Color }).color);
+          mesh.material = new THREE.MeshMatcapMaterial({ matcap: matcapTex, color });
+          return;
+        }
+
+        if (materialType === "toon") {
+          if (alreadyToon) return;
+          if (isReplacement && current) {
+            if (Array.isArray(current)) current.forEach((m) => m.dispose());
+            else (current as THREE.Material).dispose();
+          }
+          const colorToon = new THREE.Color(0xcccccc);
+          if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorToon.copy((orig[0] as { color: THREE.Color }).color);
+          else if (orig && "color" in orig) colorToon.copy((orig as { color: THREE.Color }).color);
+          const gradientMap = getToonGradientMap();
+          const origMat = Array.isArray(orig) ? orig[0] : orig;
+          const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
+          mesh.material = new THREE.MeshToonMaterial({
+            color: colorToon,
+            gradientMap,
+            map: map || undefined,
           });
           return;
         }
-        if (isReplacement && current) {
-          if (Array.isArray(current)) current.forEach((m) => m.dispose());
-          else (current as THREE.Material).dispose();
-        }
-        if (Array.isArray(orig)) {
-          const clones = orig.map((o) => (o as THREE.Material).clone());
-          mesh.material = clones.length === 1 ? clones[0] : clones;
-          (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) => {
-            if (m instanceof THREE.MeshStandardMaterial) {
-              m.roughness = r;
-              m.envMapIntensity = 0.8;
-            }
-          });
-        } else {
-          const origMat = orig as THREE.Material;
-          if (origMat instanceof THREE.MeshStandardMaterial) {
-            const base = origMat.clone();
-            mesh.material = base;
-            base.roughness = r;
-            base.envMapIntensity = 0.8;
-          } else {
-            // GLB may use MeshBasicMaterial or other; use MeshStandardMaterial for PBR
-            const color = origMat instanceof THREE.MeshBasicMaterial ? (origMat as THREE.MeshBasicMaterial).color.clone() : new THREE.Color(0xcccccc);
-            if ("color" in origMat && origMat.color) color.copy((origMat as { color: THREE.Color }).color);
-            mesh.material = new THREE.MeshStandardMaterial({ color, roughness: r, metalness: 0.1, envMapIntensity: 0.8 });
+
+        if (materialType === "lambert") {
+          if (alreadyLambert) return;
+          if (isReplacement && current) {
+            if (Array.isArray(current)) current.forEach((m) => m.dispose());
+            else (current as THREE.Material).dispose();
           }
+          const colorLambert = new THREE.Color(0xcccccc);
+          if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorLambert.copy((orig[0] as { color: THREE.Color }).color);
+          else if (orig && "color" in orig) colorLambert.copy((orig as { color: THREE.Color }).color);
+          const origMat = Array.isArray(orig) ? orig[0] : orig;
+          const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
+          mesh.material = new THREE.MeshLambertMaterial({ color: colorLambert, map: map || undefined });
+          return;
         }
-        return;
-      }
 
-      if (materialType === "matcap") {
-        if (alreadyMatcap) return;
-        if (isReplacement && current) {
-          if (Array.isArray(current)) current.forEach((m) => m.dispose());
-          else (current as THREE.Material).dispose();
+        if (materialType === "normal") {
+          if (alreadyNormal) return;
+          if (isReplacement && current) {
+            if (Array.isArray(current)) current.forEach((m) => m.dispose());
+            else (current as THREE.Material).dispose();
+          }
+          mesh.material = new THREE.MeshNormalMaterial({ flatShading: false });
+          return;
         }
-        const color = new THREE.Color(0xcccccc);
-        if (Array.isArray(orig) && orig[0] && "color" in orig[0]) color.copy((orig[0] as { color: THREE.Color }).color);
-        else if (orig && "color" in orig) color.copy((orig as { color: THREE.Color }).color);
-        mesh.material = new THREE.MeshMatcapMaterial({ matcap: matcapTex, color });
-        return;
-      }
-
-      if (materialType === "toon") {
-        if (alreadyToon) return;
-        if (isReplacement && current) {
-          if (Array.isArray(current)) current.forEach((m) => m.dispose());
-          else (current as THREE.Material).dispose();
-        }
-        const colorToon = new THREE.Color(0xcccccc);
-        if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorToon.copy((orig[0] as { color: THREE.Color }).color);
-        else if (orig && "color" in orig) colorToon.copy((orig as { color: THREE.Color }).color);
-        const gradientMap = getToonGradientMap();
-        const origMat = Array.isArray(orig) ? orig[0] : orig;
-        const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
-        mesh.material = new THREE.MeshToonMaterial({
-          color: colorToon,
-          gradientMap,
-          map: map || undefined,
-        });
-        return;
-      }
-
-      if (materialType === "depth") {
-        if (alreadyDepth) return;
-        if (isReplacement && current) {
-          if (Array.isArray(current)) current.forEach((m) => m.dispose());
-          else (current as THREE.Material).dispose();
-        }
-        mesh.material = new THREE.MeshDepthMaterial();
-        return;
-      }
-
-      if (materialType === "lambert") {
-        if (alreadyLambert) return;
-        if (isReplacement && current) {
-          if (Array.isArray(current)) current.forEach((m) => m.dispose());
-          else (current as THREE.Material).dispose();
-        }
-        const colorLambert = new THREE.Color(0xcccccc);
-        if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorLambert.copy((orig[0] as { color: THREE.Color }).color);
-        else if (orig && "color" in orig) colorLambert.copy((orig as { color: THREE.Color }).color);
-        const origMat = Array.isArray(orig) ? orig[0] : orig;
-        const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
-        mesh.material = new THREE.MeshLambertMaterial({ color: colorLambert, map: map || undefined });
-        return;
-      }
-
-      if (materialType === "normal") {
-        if (alreadyNormal) return;
-        if (isReplacement && current) {
-          if (Array.isArray(current)) current.forEach((m) => m.dispose());
-          else (current as THREE.Material).dispose();
-        }
-        mesh.material = new THREE.MeshNormalMaterial({ flatShading: false });
-        return;
-      }
+      });
     });
+
+    return () => cancelAnimationFrame(rafId);
   }, [background, showGrid, showShadow, autoRotate, lighting, lightIntensity, brightness, materialType, materialRoughness, modelReady]);
 
   return (
-    <div className="relative h-full min-h-[400px]">
-      <div ref={containerRef} className="h-full w-full" />
+    <div className="relative h-full min-h-[400px] isolate">
+      <div ref={containerRef} className="h-full w-full relative z-0" />
       
-      {/* Wireframe Toggle Button - Shows wireframe overlay on top of model */}
-      {!loading && !error && modelRef.current && (
+      {/* Wireframe Toggle Button - only when not controlled by parent (e.g. workspace has its own in top bar) */}
+      {!loading && !error && modelRef.current && !isControlledWireframe && (
         <button
           onClick={toggleWireframe}
           className={`absolute top-4 right-4 z-10 p-2.5 rounded-lg transition-all duration-200 ${
@@ -683,13 +678,13 @@ export function ThreeViewer({
         </button>
       )}
       
-      {/* Controls hint */}
-      <div className="absolute bottom-4 left-4 text-xs text-neutral-500 bg-white/80 px-3 py-1.5 rounded-lg">
+      {/* Controls hint — z-10 so it stays above canvas when model is loaded */}
+      <div className="absolute bottom-4 left-4 z-10 text-xs text-neutral-500 bg-white/80 px-3 py-1.5 rounded-lg pointer-events-none">
         Drag to rotate • Scroll to zoom
       </div>
       
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-white">
           <div className="text-center">
             <div className="w-10 h-10 mx-auto mb-4">
               <div className="w-10 h-10 spinner"></div>

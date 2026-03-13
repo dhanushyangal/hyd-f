@@ -45,6 +45,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
     <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
         <head>
+          {/* Preload LCP image (hero poster) for faster First Contentful Paint / Largest Contentful Paint */}
+          <link rel="preload" href="/3d-images/hero-sky.jpg" as="image" />
           {/* Preconnect to external domains for faster resource loading */}
           <link rel="preconnect" href="https://img.icons8.com" />
           <link rel="preconnect" href="https://www.googletagmanager.com" />

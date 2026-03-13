@@ -210,7 +210,12 @@ export default function StudioPage() {
                       <img
                         src={ws.firstJobPreviewImageUrl}
                         alt=""
+                        width={220}
+                        height={220}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
+                        sizes="(max-width: 640px) 50vw, 220px"
                       />
                     ) : (
                       <FolderOpen className="w-16 h-16 sm:w-20 sm:h-20 text-neutral-400" />

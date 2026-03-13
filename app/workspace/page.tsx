@@ -126,6 +126,23 @@ function WorkspacePage() {
         setWorkspaceName(name);
         setLibraryImages(jobs.filter((j) => (j.previewImageUrl || j.imageUrl) && !j.resultGlbUrl).slice(0, 50));
         setLibrary3DAssets(jobs.filter((j) => j.resultGlbUrl).slice(0, 50));
+        // If DB shows a job as RUN (e.g. 3D still generating), show generating UI and start polling
+        const runJob = jobs.find((j) => j.status === "RUN" && !j.resultGlbUrl);
+        if (runJob) {
+          setLeftLibraryTab("3d"); // Show 3D tab when resuming a running 3D job
+          setCurrentGenerating({
+            jobId: runJob.id,
+            status: "generating",
+            progress: 0,
+            estimatedTotalSeconds: 300,
+            startTime: Date.now(),
+          });
+          setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
+          if (runJob.previewImageUrl) {
+            setLastPreviewImageUrl(runJob.previewImageUrl);
+            setLastPreviewId(runJob.id);
+          }
+        }
       })
       .catch(() => {})
       .finally(() => setLibraryLoading(false));
@@ -224,16 +241,17 @@ function WorkspacePage() {
   ];
 
   // 3D viewer options (Environment, Material, lighting intensity/brightness)
-  const [envLighting, setEnvLighting] = useState<"studio" | "outdoor" | "neutral">("neutral");
+  const [envLighting, setEnvLighting] = useState<"studio" | "outdoor" | "neutral">("studio");
   const [lightingDropdownOpen, setLightingDropdownOpen] = useState(false);
   const [roughnessDropdownOpen, setRoughnessDropdownOpen] = useState(false);
+  const [wireframeMode, setWireframeMode] = useState(false);
   const [lightIntensity, setLightIntensity] = useState(1); // 0.3–2, default 1
   const [brightness, setBrightness] = useState(1);         // 0.5–2, tone mapping exposure
   const [envBackground, setEnvBackground] = useState(true);
   const [envGrid, setEnvGrid] = useState(false);
   const [envShadow, setEnvShadow] = useState(true);
   const [envAutoRotate, setEnvAutoRotate] = useState(false);
-  const [materialType, setMaterialType] = useState<"standard" | "matcap" | "toon" | "depth" | "lambert" | "normal">("standard");
+  const [materialType, setMaterialType] = useState<"standard" | "matcap" | "toon" | "lambert" | "normal">("standard");
   const [materialRoughness, setMaterialRoughness] = useState<"smooth" | "medium" | "rough">("medium");
   const [numGenerations, setNumGenerations] = useState(1);
 
@@ -415,6 +433,25 @@ function WorkspacePage() {
     };
   }, []);
 
+  // Restore "generating" UI when workspace jobs include a job that is RUN in DB (e.g. after refresh or open)
+  const restoreRunning3DJobIfAny = useCallback((jobs: BackendJob[]) => {
+    const runJob = jobs.find((j) => j.status === "RUN" && !j.resultGlbUrl);
+    if (!runJob) return;
+    setLeftLibraryTab("3d");
+    setCurrentGenerating({
+      jobId: runJob.id,
+      status: "generating",
+      progress: 0,
+      estimatedTotalSeconds: 300,
+      startTime: Date.now(),
+    });
+    setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
+    if (runJob.previewImageUrl) {
+      setLastPreviewImageUrl(runJob.previewImageUrl);
+      setLastPreviewId(runJob.id);
+    }
+  }, []);
+
   // ──────────── Refresh library helper ────────────
   // Only show images/3D assets that belong to this workspace (never show all user history here)
   const refreshLibrary = useCallback(async () => {
@@ -428,8 +465,9 @@ function WorkspacePage() {
       const jobs = await fetchWorkspaceJobs(workspaceId, tokenGetter);
       setLibraryImages(jobs.filter((j) => (j.previewImageUrl || j.imageUrl) && !j.resultGlbUrl).slice(0, 50));
       setLibrary3DAssets(jobs.filter((j) => j.resultGlbUrl).slice(0, 50));
+      restoreRunning3DJobIfAny(jobs);
     } catch { /* ignore */ }
-  }, [getToken, workspaceId]);
+  }, [getToken, workspaceId, restoreRunning3DJobIfAny]);
 
   // Workspace + jobs are loaded in the same effect that resolves workspaceId (above)
   // so we don't wait an extra render. refreshLibrary() is still used for manual refresh.
@@ -486,6 +524,7 @@ function WorkspacePage() {
             glbUrl: glbUrl || getProxyGlbUrl(currentGenerating.jobId),
             jobId: currentGenerating.jobId,
           });
+          setLeftLibraryTab("3d"); // Switch to 3D tab so new model appears in library below search
           setMobileTab("canvas"); // on mobile, switch to Canvas to show result
           setMobileGeneratedToast(true); // mobile: show "Generated" alert
           refreshLibrary();
@@ -615,6 +654,7 @@ function WorkspacePage() {
   const start3DFromImage = useCallback(
     async (imageUrl: string, previewId: string | null) => {
       const tokenGetter = async () => await getToken();
+      setLeftLibraryTab("3d"); // Switch to 3D tab so result will show in 3D section below search
       setLoading(true);
       setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
       let queueInfo: QueueInfo | null = null;
@@ -696,6 +736,7 @@ function WorkspacePage() {
         setLastPreviewImageUrl(result.image_url);
         setLastPreviewId(result.preview_id);
         setCurrentParentJobId(result.preview_id); // This new image becomes parent for next iteration
+        setLeftLibraryTab("images"); // Keep on Images tab when showing generated image
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.preview_id });
         setGeneratingPreview(false);
         setMobileTab("canvas");
@@ -785,6 +826,7 @@ function WorkspacePage() {
         setLastPreviewImageUrl(result.image_url);
         setLastPreviewId(result.edit_id);
         setCurrentParentJobId(result.edit_id); // This new edit becomes parent for next iteration
+        setLeftLibraryTab("images"); // Keep on Images tab when showing edited image
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.edit_id });
         setGeneratingPreview(false);
         setMobileTab("canvas");
@@ -875,6 +917,7 @@ function WorkspacePage() {
         setLastPreviewImageUrl(result.image_url);
         setLastPreviewId(result.combined_id);
         setCurrentParentJobId(result.combined_id); // This new combined image becomes parent for next iteration
+        setLeftLibraryTab("images"); // Keep on Images tab when showing combined image
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.combined_id });
         setGeneratingPreview(false);
         setMobileTab("canvas");
@@ -953,6 +996,24 @@ function WorkspacePage() {
     const imageUrl = job.previewImageUrl || job.imageUrl;
     if (!imageUrl) return;
 
+    // If this job is RUN (3D generating), show generating state in center (3D area), not image preview
+    if (job.status === "RUN" && !job.resultGlbUrl) {
+      setLeftLibraryTab("3d"); // Switch to 3D tab when viewing a job that is generating 3D
+      setCurrentGenerating({
+        jobId: job.id,
+        status: "generating",
+        progress: 0,
+        estimatedTotalSeconds: 300,
+        startTime: Date.now(),
+      });
+      setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
+      setLastPreviewImageUrl(imageUrl);
+      setLastPreviewId(job.id);
+      setCurrentParentJobId(job.id);
+      loadJobInfo(job);
+      return;
+    }
+
     // If we're in text_2img mode, fill the next empty slot instead of switching modes
     if (inputMode === "text_2img") {
       setModeStates((prev) => {
@@ -970,6 +1031,7 @@ function WorkspacePage() {
       setLastPreviewImageUrl(imageUrl);
       setLastPreviewId(job.id);
       setCurrentParentJobId(job.id);
+      setLeftLibraryTab("images");
       setCenterView({ type: "preview", imageUrl, previewId: job.id });
       loadJobInfo(job);
       return;
@@ -979,6 +1041,7 @@ function WorkspacePage() {
     setLastPreviewImageUrl(imageUrl);
     setLastPreviewId(job.id);
     setCurrentParentJobId(job.id); // This library image becomes parent for next edit/3D
+    setLeftLibraryTab("images");
     setCenterView({ type: "preview", imageUrl, previewId: job.id });
     setInputMode("text_1img");
     setModeStates((prev) => ({
@@ -997,6 +1060,7 @@ function WorkspacePage() {
 
   const handle3DClick = (job: BackendJob) => {
     if (job.resultGlbUrl) {
+      setLeftLibraryTab("3d"); // Keep 3D tab active when viewing a 3D model
       setCenterView({ type: "3d", glbUrl: getProxyGlbUrl(job.id), jobId: job.id });
       // Load generation info for this 3D job
       loadJobInfo(job);
@@ -1037,6 +1101,7 @@ function WorkspacePage() {
       setLastPreviewImageUrl(imageUrl);
       setLastPreviewId(item.id);
       setCurrentParentJobId(item.id);
+      setLeftLibraryTab("images");
       setCenterView({ type: "preview", imageUrl, previewId: item.id });
       setInputMode("text_1img");
       setModeStates((prev) => ({
@@ -1070,6 +1135,7 @@ function WorkspacePage() {
     if (!open3dId || libraryLoading) return;
     const job = library3DAssets.find((j) => j.id === open3dId);
     if (job?.resultGlbUrl) {
+      setLeftLibraryTab("3d");
       setCenterView({ type: "3d", glbUrl: getProxyGlbUrl(job.id), jobId: job.id });
       loadJobInfo(job);
       setMobileTab("canvas");
@@ -1278,7 +1344,7 @@ function WorkspacePage() {
             </button>
           </div>
           <div className="hidden md:flex px-3 py-2.5 border-b border-neutral-100 items-center gap-2">
-            <button type="button" onClick={() => setLeftPanelOpen(false)} className="p-2 rounded-xl hover:bg-neutral-100 text-black hover:bg-neutral-200 transition-colors shrink-0" title="Close library" aria-label="Close library panel">
+            <button type="button" onClick={() => setLeftPanelOpen(false)} className="p-2 rounded-xl text-black hover:bg-neutral-200 transition-colors shrink-0" title="Close library" aria-label="Close library panel">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
             <div className="relative flex-1 min-w-0">
@@ -1304,7 +1370,7 @@ function WorkspacePage() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={leftLibraryTab === "images"}
+                {...(leftLibraryTab === "images" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
                 aria-controls="library-images-panel"
                 id="library-tab-images"
                 tabIndex={leftLibraryTab === "images" ? 0 : -1}
@@ -1318,7 +1384,7 @@ function WorkspacePage() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={leftLibraryTab === "3d"}
+                {...(leftLibraryTab === "3d" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
                 aria-controls="library-3d-panel"
                 id="library-tab-3d"
                 tabIndex={leftLibraryTab === "3d" ? 0 : -1}
@@ -1446,7 +1512,7 @@ function WorkspacePage() {
             </div>
           )}
 
-          {centerView.type === "preview" && (
+          {centerView.type === "preview" && !(currentGenerating && centerView.previewId === currentGenerating.jobId) && (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 min-h-0 flex items-center justify-center p-4 bg-neutral-100/50">
                 <div className="relative w-full max-w-full h-full max-h-full rounded-xl overflow-hidden border border-neutral-200 shadow-lg bg-white flex items-center justify-center">
@@ -1472,10 +1538,10 @@ function WorkspacePage() {
             </div>
           )}
 
-          {centerView.type === "generating" && (
+          {(centerView.type === "generating" || (centerView.type === "preview" && currentGenerating && centerView.previewId === currentGenerating.jobId)) && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <div className="w-16 h-16 mb-4 border-4 border-neutral-200 border-t-black rounded-full animate-spin" />
-              <p className="text-sm font-medium text-black mb-1">{centerView.message}</p>
+              <p className="text-sm font-medium text-black mb-1">{centerView.type === "generating" ? centerView.message : "Generating 3D model..."}</p>
               {currentGenerating?.queueInfo && (currentGenerating.queueInfo.jobs_ahead > 0 || (currentGenerating.queueInfo.estimated_total_seconds ?? 0) > 0) && (
                 <p className="text-xs text-neutral-500 mb-2">
                   {currentGenerating.queueInfo.jobs_ahead > 0 && (
@@ -1487,9 +1553,9 @@ function WorkspacePage() {
                 </p>
               )}
               <div className="w-64 h-2 bg-neutral-200 rounded-full overflow-hidden">
-                <div className="h-full bg-black rounded-full transition-all duration-500" style={{ width: `${Math.min(centerView.progress, 100)}%` }} />
+                <div className="h-full bg-black rounded-full transition-all duration-500" style={{ width: `${Math.min(centerView.type === "generating" ? centerView.progress : 0, 100)}%` }} />
               </div>
-              <p className="text-xs text-neutral-500 mt-2">{Math.round(centerView.progress)}%</p>
+              <p className="text-xs text-neutral-500 mt-2">{Math.round(centerView.type === "generating" ? centerView.progress : 0)}%</p>
               <button
                 type="button"
                 onClick={async () => {
@@ -1515,7 +1581,7 @@ function WorkspacePage() {
 
           {centerView.type === "3d" && (
             <div className="flex-1 flex flex-col min-h-0 max-md:min-h-[50vh]">
-              <div className={`flex-1 min-h-0 ${fullView ? "flex justify-center items-center" : ""}`}>
+              <div className={`flex-1 min-h-0 relative ${fullView ? "flex justify-center items-center" : ""}`}>
                 <div className={fullView ? "w-full h-full min-w-0 min-h-0" : "h-full w-full"}>
                 <ThreeViewer
                   glbUrl={centerView.glbUrl}
@@ -1528,7 +1594,84 @@ function WorkspacePage() {
                   brightness={brightness}
                   materialType={materialType}
                   materialRoughness={materialRoughness}
+                  wireframeMode={wireframeMode}
+                  onWireframeChange={setWireframeMode}
                 />
+                </div>
+                {/* Material + Roughness bar on top of 3D scene; z-[100] so it stays above WebGL canvas layer and works as soon as model loads */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/95 backdrop-blur-sm border border-neutral-200/80 shadow-lg pointer-events-auto">
+                  {[
+                    { id: "standard" as const, label: "PBR", title: "PBR (Physically Based)" },
+                    { id: "matcap" as const, label: "Matcap", title: "Matcap" },
+                    { id: "toon" as const, label: "Toon", title: "Toon shading" },
+                    { id: "lambert" as const, label: "Lambert", title: "Lambert (diffuse)" },
+                    { id: "normal" as const, label: "Normal", title: "Normal map" },
+                  ].map(({ id, label, title }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      title={title}
+                      aria-label={title}
+                      onClick={() => setMaterialType(id)}
+                      className={`p-2 rounded-lg transition-all duration-200 ${materialType === id ? "bg-neutral-800 text-white" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"}`}
+                    >
+                      {id === "standard" && (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
+                      )}
+                      {id === "matcap" && (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
+                      )}
+                      {id === "toon" && (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /><path d="M12 3v6" /><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" /></svg>
+                      )}
+                      {id === "lambert" && (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+                      )}
+                      {id === "normal" && (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h6v6H3z" /><path d="M15 3h6v6h-6z" /><path d="M3 15h6v6H3z" /><path d="M15 15h6v6h-6z" /></svg>
+                      )}
+                    </button>
+                  ))}
+                  <div className="ml-1 pl-2 border-l border-neutral-200 flex items-center">
+                    <button
+                      type="button"
+                      title={wireframeMode ? "Wireframe On" : "Wireframe Off"}
+                      aria-label={wireframeMode ? "Wireframe On" : "Wireframe Off"}
+                      onClick={() => setWireframeMode((v) => !v)}
+                      className={`p-2 rounded-lg transition-all duration-200 ${wireframeMode ? "bg-neutral-800 text-white" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"}`}
+                    >
+                      <svg className={`w-5 h-5 ${wireframeMode ? "opacity-100" : "opacity-70"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={wireframeMode ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                      </svg>
+                    </button>
+                  </div>
+                  {materialType === "standard" && (
+                    <div className="relative ml-1 pl-2 border-l border-neutral-200">
+                      <button
+                        type="button"
+                        title="Roughness"
+                        aria-label="Roughness"
+                        onClick={() => setRoughnessDropdownOpen((o) => !o)}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-neutral-700 hover:bg-neutral-100 capitalize"
+                      >
+                        <span>{materialRoughness}</span>
+                        <svg className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${roughnessDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      {roughnessDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setRoughnessDropdownOpen(false)} aria-hidden />
+                          <div className="absolute top-full left-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
+                            {(["smooth", "medium", "rough"] as const).map((opt) => (
+                              <button key={opt} type="button" onClick={() => { setMaterialRoughness(opt); setRoughnessDropdownOpen(false); }} className={`w-full px-2.5 py-1.5 text-xs text-left capitalize transition-colors ${materialRoughness === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Actions: mobile = Download + info icon; desktop = Download + Full View + optional Create another 3D / Edit */}
@@ -1901,7 +2044,7 @@ function WorkspacePage() {
             mobileTab === "create" ? "max-md:!w-full max-md:!min-w-0 max-md:flex-1 max-md:min-h-0 max-md:overflow-auto" : "max-md:hidden"
           )}
         >
-          <div className="h-full overflow-y-auto min-w-0 flex flex-col" style={{ tabSize: 4 }}>
+          <div className="h-full overflow-y-auto min-w-0 flex flex-col [tab-size:4]">
           {/* Right navbar: workspace name, credits, My Library, Profile, Collapse — hidden on mobile */}
           <div className="hidden md:flex flex-shrink-0 px-3 pt-3 pb-2 border-b border-neutral-100 items-center gap-2 min-w-0">
             <input
@@ -1926,7 +2069,7 @@ function WorkspacePage() {
             </button>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto w-[90%] max-w-full mx-auto hide-scrollbar">
-          <div className="px-3 pt-4 pb-8 space-y-5" style={{ lineHeight: 1.15 }}>
+          <div className="px-3 pt-4 pb-8 space-y-5 leading-[1.15]">
             {/* Input mode — shadcn-style Tabs (Text | Edit | Combine) */}
             <div role="tablist" aria-label="Input mode" className="inline-flex h-10 w-full items-center rounded-lg bg-neutral-100 p-1 text-neutral-500">
               <button type="button" role="tab" onClick={() => setInputMode("text")} title="Text prompt only" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><span className="text-sm font-semibold leading-none">T</span><span>Text</span></button>
@@ -2021,7 +2164,7 @@ function WorkspacePage() {
             )}
 
             {/* AI Model — reference style: label + (i) left, white rounded dropdown right */}
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
               <div className="flex items-center gap-1.5">
                 <label className="text-sm font-semibold text-neutral-800">AI Model</label>
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="3D generation model" aria-label="Info">
@@ -2072,7 +2215,7 @@ function WorkspacePage() {
             </div>
 
             {/* Number of Generations — reference style row */}
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
               <div className="flex items-center gap-1.5">
                 <label className="text-sm font-semibold text-neutral-800">Number of Generations</label>
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="How many variants to generate" aria-label="Info">
@@ -2080,11 +2223,11 @@ function WorkspacePage() {
                 </span>
               </div>
               <div className="flex items-center rounded-lg bg-white border border-neutral-200 overflow-hidden">
-                <button type="button" onClick={() => setNumGenerations((n) => Math.max(1, n - 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors">
+                <button type="button" onClick={() => setNumGenerations((n) => Math.max(1, n - 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors" title="Decrease number of generations" aria-label="Decrease number of generations">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
                 <span className="min-w-[2ch] text-center text-sm text-neutral-800 py-1.5">{numGenerations}</span>
-                <button type="button" onClick={() => setNumGenerations((n) => Math.min(10, n + 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors">
+                <button type="button" onClick={() => setNumGenerations((n) => Math.min(10, n + 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors" title="Increase number of generations" aria-label="Increase number of generations">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                 </button>
               </div>
@@ -2118,7 +2261,7 @@ function WorkspacePage() {
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
               ) : (
                 <>
-                  <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-90" style={{ filter: "invert(1) brightness(1.15)" }} />
+                  <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-90 invert brightness-110" />
                   <span className="tracking-tight font-semibold">Generate</span>
                 </>
               )}
@@ -2131,7 +2274,7 @@ function WorkspacePage() {
                 <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="Viewer environment" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
               </div>
               <div className="space-y-2.5">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                   <label className="text-sm font-medium text-neutral-800">Lighting</label>
                   <div className="relative min-w-[100px]">
                     <button
@@ -2156,100 +2299,47 @@ function WorkspacePage() {
                     )}
                   </div>
                 </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                   <label className="text-sm font-medium text-neutral-800">Light intensity</label>
                   <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
                     <Slider value={lightIntensity} onValueChange={setLightIntensity} min={0.3} max={2} step={0.1} className="min-w-0 flex-1" aria-label="Light intensity" />
                     <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{lightIntensity.toFixed(1)}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                   <label className="text-sm font-medium text-neutral-800">Brightness</label>
                   <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
                     <Slider value={brightness} onValueChange={setBrightness} min={0.5} max={2} step={0.05} className="min-w-0 flex-1" aria-label="Brightness" />
                     <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{brightness.toFixed(2)}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                   <label className="text-sm font-medium text-neutral-800">Background</label>
-                  <button type="button" role="switch" aria-checked={envBackground} onClick={() => setEnvBackground((b) => !b)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envBackground ? "bg-neutral-800" : "bg-neutral-200"}`} title={envBackground ? "Transparent background" : "Solid background"}>
+                  <button type="button" onClick={() => setEnvBackground((b) => !b)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envBackground ? "bg-neutral-800" : "bg-neutral-200"}`} title={envBackground ? "Transparent background" : "Solid background"}>
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envBackground ? "translate-x-4" : "translate-x-0"}`} />
                   </button>
                 </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                   <label className="text-sm font-medium text-neutral-800">Grid</label>
-                  <button type="button" role="switch" aria-checked={envGrid} onClick={() => setEnvGrid((g) => !g)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envGrid ? "bg-neutral-800" : "bg-neutral-200"}`} title={envGrid ? "Hide grid" : "Show grid"}>
+                  <button type="button" onClick={() => setEnvGrid((g) => !g)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envGrid ? "bg-neutral-800" : "bg-neutral-200"}`} title={envGrid ? "Hide grid" : "Show grid"}>
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envGrid ? "translate-x-4" : "translate-x-0"}`} />
                   </button>
                 </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                   <label className="text-sm font-medium text-neutral-800">Shadow</label>
-                  <button type="button" role="switch" aria-checked={envShadow} onClick={() => setEnvShadow((s) => !s)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envShadow ? "bg-neutral-800" : "bg-neutral-200"}`} title={envShadow ? "Hide shadows" : "Show shadows"}>
+                  <button type="button" onClick={() => setEnvShadow((s) => !s)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envShadow ? "bg-neutral-800" : "bg-neutral-200"}`} title={envShadow ? "Hide shadows" : "Show shadows"}>
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envShadow ? "translate-x-4" : "translate-x-0"}`} />
                   </button>
                 </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3" style={{ lineHeight: 1.15 }}>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                   <label className="text-sm font-medium text-neutral-800">Auto rotate</label>
-                  <button type="button" role="switch" aria-checked={envAutoRotate} onClick={() => setEnvAutoRotate((r) => !r)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envAutoRotate ? "bg-neutral-800" : "bg-neutral-200"}`} title={envAutoRotate ? "Pause rotation" : "Auto rotate"}>
+                  <button type="button" onClick={() => setEnvAutoRotate((r) => !r)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envAutoRotate ? "bg-neutral-800" : "bg-neutral-200"}`} title={envAutoRotate ? "Pause rotation" : "Auto rotate"}>
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envAutoRotate ? "translate-x-4" : "translate-x-0"}`} />
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Materials — PBR, Matcap, Toon, Depth, Lambert, Normal + Roughness for PBR */}
-            <div className="space-y-3 pt-1 border-t border-neutral-100">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">Material</span>
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="3D material type" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { id: "standard" as const, label: "PBR" },
-                  { id: "matcap" as const, label: "Matcap" },
-                  { id: "toon" as const, label: "Toon" },
-                  { id: "depth" as const, label: "Depth" },
-                  { id: "lambert" as const, label: "Lambert" },
-                  { id: "normal" as const, label: "Normal" },
-                ].map(({ id, label }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setMaterialType(id)}
-                    className={`inline-flex items-center justify-center rounded-md px-2 py-2 text-xs font-medium transition-all duration-200 ${materialType === id ? "bg-neutral-900 text-white shadow-sm ring-1 ring-neutral-700" : "text-neutral-600 bg-neutral-100 hover:bg-neutral-200 hover:text-neutral-900"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {materialType === "standard" && (
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pt-1" style={{ lineHeight: 1.15 }}>
-                  <label className="text-sm font-medium text-neutral-800">Roughness</label>
-                  <div className="relative min-w-[90px]">
-                    <button
-                      type="button"
-                      onClick={() => setRoughnessDropdownOpen((o) => !o)}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 text-left text-sm font-medium text-neutral-800 hover:bg-neutral-50 transition-colors duration-200 capitalize"
-                    >
-                      <span>{materialRoughness}</span>
-                      <svg className={`w-4 h-4 shrink-0 text-neutral-400 transition-transform duration-200 ${roughnessDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </button>
-                    {roughnessDropdownOpen && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setRoughnessDropdownOpen(false)} aria-hidden />
-                        <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
-                          {(["smooth", "medium", "rough"] as const).map((opt) => (
-                            <button key={opt} type="button" onClick={() => { setMaterialRoughness(opt); setRoughnessDropdownOpen(false); }} className={`w-full px-3 py-2 text-sm text-left capitalize transition-colors ${materialRoughness === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
           </div>
           </div>

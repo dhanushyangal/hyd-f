@@ -1,19 +1,24 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import VideoBackground from "./VideoBackground";
 import { PromptBox } from "../PromptBox";
-import Showcase from "./Showcase";
-import IndustrySection from "./IndustrySection";
-import HowItWorks from "./HowItWorks";
-import AppShowcase from "./AppShowcase";
-import FeaturesSection from "./FeaturesSection";
-import WhyHydrilla from "./WhyHydrilla";
-import PricingSection from "./PricingSection";
-import FAQSection from "./FAQSection";
 import { SignUpButton } from "@clerk/nextjs";
+
+// Above-the-fold: load immediately for fast FCP/LCP
+import Showcase from "./Showcase";
+
+// Below-the-fold: code-split to reduce initial bundle and improve INP/TTI
+const IndustrySection = dynamic(() => import("./IndustrySection").then((m) => m.default), { ssr: true });
+const HowItWorks = dynamic(() => import("./HowItWorks").then((m) => m.default), { ssr: true });
+const AppShowcase = dynamic(() => import("./AppShowcase").then((m) => m.default), { ssr: true });
+const FeaturesSection = dynamic(() => import("./FeaturesSection").then((m) => m.default), { ssr: true });
+const WhyHydrilla = dynamic(() => import("./WhyHydrilla").then((m) => m.default), { ssr: true });
+const PricingSection = dynamic(() => import("./PricingSection").then((m) => m.default), { ssr: true });
+const FAQSection = dynamic(() => import("./FAQSection").then((m) => m.default), { ssr: true });
 
 const HERO_VIDEO = "/3d-images/73e345f9d334f51cad2509e6e97f85a6_720w.mp4";
 const HERO_POSTER = "/3d-images/hero-sky.jpg";
@@ -195,21 +200,41 @@ export default function Hero() {
 
       <MissionSection />
 
-      <div id="solutions"><IndustrySection /></div>
+      <div id="solutions">
+        <Suspense fallback={<div className="min-h-[320px]" aria-hidden />}>
+          <IndustrySection />
+        </Suspense>
+      </div>
 
-      <HowItWorks />
+      <Suspense fallback={<div className="min-h-[280px]" aria-hidden />}>
+        <HowItWorks />
+      </Suspense>
 
       <Showcase />
 
-      <AppShowcase />
+      <Suspense fallback={<div className="min-h-[200px]" aria-hidden />}>
+        <AppShowcase />
+      </Suspense>
 
-      <div id="features"><FeaturesSection /></div>
+      <div id="features">
+        <Suspense fallback={<div className="min-h-[320px]" aria-hidden />}>
+          <FeaturesSection />
+        </Suspense>
+      </div>
 
-      <WhyHydrilla />
+      <Suspense fallback={<div className="min-h-[200px]" aria-hidden />}>
+        <WhyHydrilla />
+      </Suspense>
 
-      <div id="pricing"><PricingSection /></div>
+      <div id="pricing">
+        <Suspense fallback={<div className="min-h-[400px]" aria-hidden />}>
+          <PricingSection />
+        </Suspense>
+      </div>
 
-      <FAQSection />
+      <Suspense fallback={<div className="min-h-[300px]" aria-hidden />}>
+        <FAQSection />
+      </Suspense>
 
       {/* CTA section — light theme, below FAQ */}
       <section

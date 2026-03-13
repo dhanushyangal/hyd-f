@@ -1,6 +1,11 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
+import type { NextRequest } from "next/server";
 
-export default clerkMiddleware();
+// Next.js proxy uses the same signature as middleware: (request, event)
+export function proxy(request: NextRequest, event: unknown) {
+  const handler = clerkMiddleware();
+  return (handler as (req: NextRequest, evt: unknown) => ReturnType<typeof handler>)(request, event);
+}
 
 export const config = {
   matcher: [
@@ -10,4 +15,3 @@ export const config = {
     "/(api|trpc)(.*)",
   ],
 };
-

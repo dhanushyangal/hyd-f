@@ -18,20 +18,10 @@ const nextConfig = {
   },
   // Enable compression
   compress: true,
-  // Add caching headers
+  // Caching headers: only static assets get long cache; documents stay fresh for Core Web Vitals
   async headers() {
     return [
       {
-        source: "/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        // Static assets - long cache
         source: "/_next/static/:path*",
         headers: [
           {
@@ -41,12 +31,12 @@ const nextConfig = {
         ],
       },
       {
-        // Images - long cache
-        source: "/:all*(jpg|jpeg|png|gif|svg|webp|avif|ico)",
+        // Allow CDN/browser to cache images in common paths
+        source: "/3d-images/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: "public, max-age=86400, stale-while-revalidate=3600",
           },
         ],
       },
