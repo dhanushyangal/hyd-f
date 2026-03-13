@@ -29,11 +29,12 @@ function YearlySwitch({
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
 }) {
+  const ariaChecked = checked ? "true" : "false";
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={checked}
+      aria-checked={ariaChecked}
       id={id}
       onClick={() => onCheckedChange(!checked)}
       style={{
@@ -361,18 +362,9 @@ function PlanCard({ plan, userPlan, planLoading }: { plan: Plan; userPlan: UserP
     ctaEnabled = false;
   }
 
-  const ctaBg = isCurrentAny
-    ? "#16a34a"
-    : plan.popular
-    ? "#111"
-    : "transparent";
-
-  const ctaColor = isCurrentAny ? "#fff" : plan.popular ? "#fff" : "#111";
-  const ctaBorder = isCurrentAny
-    ? "none"
-    : plan.popular
-    ? "none"
-    : "1.5px solid rgba(17,17,17,0.15)";
+  const ctaBg = isCurrentAny ? "#16a34a" : "#111";
+  const ctaColor = "#fff";
+  const ctaBorder = "none";
 
   return (
     <motion.div

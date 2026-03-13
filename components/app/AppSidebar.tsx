@@ -81,16 +81,9 @@ function CreditsCard() {
           {loading ? "–" : `${pct}%`}
         </span>
       </div>
-      <div
-        className="h-1.5 w-full rounded-full overflow-hidden bg-neutral-100"
-        role="progressbar"
-        aria-label="Credits usage"
-        aria-valuenow={loading ? 0 : used}
-        aria-valuemin={0}
-        aria-valuemax={total > 0 ? total : 100}
-      >
+      <div className="h-1.5 w-full rounded-full overflow-hidden bg-neutral-100" aria-label="Credits usage">
         <div
-          className="h-full rounded-full bg-blue-500 transition-all duration-300"
+          className="h-full rounded-full bg-neutral-900 transition-all duration-300"
           style={{ width: loading ? "0%" : `${pct}%` }}
         />
       </div>
@@ -253,7 +246,7 @@ export function AppSidebar() {
               <Link
                 href="/app/pricing"
                 onClick={closeMobileSidebar}
-                className="sidebar-upgrade-btn flex items-center justify-center w-9 h-9 mx-auto rounded-lg bg-blue-600 text-white font-medium text-xs hover:bg-blue-700"
+                className="sidebar-upgrade-btn flex items-center justify-center w-9 h-9 mx-auto rounded-lg bg-neutral-900 text-white font-medium text-xs hover:bg-neutral-800"
                 title="Upgrade"
               >
                 <Sparkles className="w-4 h-4" />
@@ -262,7 +255,7 @@ export function AppSidebar() {
               <Link
                 href="/app/pricing"
                 onClick={closeMobileSidebar}
-                className="sidebar-upgrade-btn flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-blue-600 text-white font-medium text-xs px-3 font-dm-sans hover:bg-blue-700"
+                className="sidebar-upgrade-btn flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-neutral-900 text-white font-medium text-xs px-3 font-dm-sans hover:bg-neutral-800"
               >
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
                 <span>Upgrade</span>
