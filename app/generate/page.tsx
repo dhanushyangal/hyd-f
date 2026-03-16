@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth, SignInButton, SignedIn, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, cancelJob, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
@@ -43,7 +44,13 @@ interface GeneratingModel {
 }
 
 export default function GeneratePage() {
+  const router = useRouter();
   const { isSignedIn, getToken, isLoaded } = useAuth();
+
+  // Redirect /generate → /workspace (keep generate page code intact)
+  useEffect(() => {
+    router.replace("/workspace");
+  }, [router]);
   
   // Cache auth state to prevent flashing
   const [cachedAuthState, setCachedAuthState] = useState<boolean | null>(null);

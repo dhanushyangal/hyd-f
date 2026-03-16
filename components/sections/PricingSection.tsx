@@ -29,12 +29,10 @@ function YearlySwitch({
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
 }) {
-  const ariaChecked = checked ? "true" : "false";
   return (
     <button
       type="button"
-      role="switch"
-      aria-checked={ariaChecked}
+      aria-label="Toggle yearly billing"
       id={id}
       onClick={() => onCheckedChange(!checked)}
       style={{

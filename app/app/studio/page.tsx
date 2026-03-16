@@ -25,6 +25,7 @@ export default function StudioPage() {
   const router = useRouter();
   const { getToken, isSignedIn } = useAuth();
   const { user } = useUser();
+  const SHOW_QUICK_START_CHAT = false;
   const userName = user?.firstName || user?.fullName || user?.username || "";
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,31 @@ export default function StudioPage() {
     try {
       const tokenGetter = async () => await getToken();
       const ws = await fetchWorkspaces(tokenGetter);
+
+      // If user has zero workspaces, create one "Demo Workspace" so they have something to click.
+      if (typeof window !== "undefined" && ws.length === 0) {
+        const demoName = "Demo Workspace";
+        // Only lock during the create call to prevent duplicate POSTs (e.g. double effect).
+        // Do NOT use "true" as a permanent lock — if user deletes the demo, we create again.
+        const key = "hydrilla_demo_workspace_creating_v1";
+        const val = window.localStorage.getItem(key) || "";
+        const creatingTs = val.startsWith("creating:") ? Number(val.slice("creating:".length)) : NaN;
+        const isCreatingNow = Number.isFinite(creatingTs) && Date.now() - creatingTs < 30_000;
+
+        if (!isCreatingNow) {
+          window.localStorage.setItem(key, `creating:${Date.now()}`);
+          try {
+            const demo = await createWorkspaceApi(demoName, tokenGetter);
+            window.localStorage.removeItem(key);
+            setWorkspaces([demo]);
+            setLoading(false);
+            return;
+          } catch {
+            window.localStorage.removeItem(key);
+          }
+        }
+      }
+
       setWorkspaces(ws);
     } catch {
       /* ignore */
@@ -283,23 +309,25 @@ export default function StudioPage() {
       </section>
 
       {/* Quick start – bottom, clearly separated */}
-      <section className="mt-auto pt-6 sm:pt-8 border-t border-neutral-200">
-        <h2 className="text-xs sm:text-sm font-medium text-neutral-700 uppercase tracking-wider mb-3 sm:mb-4">
-          Quick start
-        </h2>
-        <Link
-          href="/generate"
-          className="group inline-flex items-center gap-3 sm:gap-4 w-full max-w-[280px] p-4 sm:p-5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:shadow-md hover:border-neutral-300 transition-all duration-200"
-        >
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
-            <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div className="min-w-0 text-left">
-            <p className="font-semibold text-neutral-900 text-sm sm:text-base">Chat</p>
-            <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">Generate in a conversation</p>
-          </div>
-        </Link>
-      </section>
+      {SHOW_QUICK_START_CHAT && (
+        <section className="mt-auto pt-6 sm:pt-8 border-t border-neutral-200">
+          <h2 className="text-xs sm:text-sm font-medium text-neutral-700 uppercase tracking-wider mb-3 sm:mb-4">
+            Quick start
+          </h2>
+          <Link
+            href="/generate"
+            className="group inline-flex items-center gap-3 sm:gap-4 w-full max-w-[280px] p-4 sm:p-5 rounded-xl border border-neutral-200 bg-white shadow-sm hover:shadow-md hover:border-neutral-300 transition-all duration-200"
+          >
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
+              <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <div className="min-w-0 text-left">
+              <p className="font-semibold text-neutral-900 text-sm sm:text-base">Chat</p>
+              <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">Generate in a conversation</p>
+            </div>
+          </Link>
+        </section>
+      )}
 
       {/* New workspace modal */}
       {showNewModal && (

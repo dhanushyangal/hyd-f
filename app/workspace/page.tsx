@@ -76,6 +76,14 @@ type CenterView =
   | { type: "3d"; glbUrl: string; jobId: string }
   | { type: "error"; message: string };
 
+/** Show "GPU is unavailable" when both APIs have failed (fetch/network errors). */
+function toUserFacingGpuError(msg: string | undefined): string {
+  if (!msg) return "GPU is unavailable";
+  if (/fetch failed|timeout|ECONNREFUSED|External service unavailable|GPU is unavailable/i.test(msg))
+    return "GPU is unavailable";
+  return msg;
+}
+
 interface GeneratingJob {
   jobId: string;
   status: "generating" | "completed" | "failed";
@@ -126,23 +134,8 @@ function WorkspacePage() {
         setWorkspaceName(name);
         setLibraryImages(jobs.filter((j) => (j.previewImageUrl || j.imageUrl) && !j.resultGlbUrl).slice(0, 50));
         setLibrary3DAssets(jobs.filter((j) => j.resultGlbUrl).slice(0, 50));
-        // If DB shows a job as RUN (e.g. 3D still generating), show generating UI and start polling
-        const runJob = jobs.find((j) => j.status === "RUN" && !j.resultGlbUrl);
-        if (runJob) {
-          setLeftLibraryTab("3d"); // Show 3D tab when resuming a running 3D job
-          setCurrentGenerating({
-            jobId: runJob.id,
-            status: "generating",
-            progress: 0,
-            estimatedTotalSeconds: 300,
-            startTime: Date.now(),
-          });
-          setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
-          if (runJob.previewImageUrl) {
-            setLastPreviewImageUrl(runJob.previewImageUrl);
-            setLastPreviewId(runJob.id);
-          }
-        }
+        // Do not auto-show "Generating 3D model..." on load: only show it when the user
+        // starts a generation or explicitly clicks a RUN job in the library.
       })
       .catch(() => {})
       .finally(() => setLibraryLoading(false));
@@ -433,23 +426,10 @@ function WorkspacePage() {
     };
   }, []);
 
-  // Restore "generating" UI when workspace jobs include a job that is RUN in DB (e.g. after refresh or open)
-  const restoreRunning3DJobIfAny = useCallback((jobs: BackendJob[]) => {
-    const runJob = jobs.find((j) => j.status === "RUN" && !j.resultGlbUrl);
-    if (!runJob) return;
-    setLeftLibraryTab("3d");
-    setCurrentGenerating({
-      jobId: runJob.id,
-      status: "generating",
-      progress: 0,
-      estimatedTotalSeconds: 300,
-      startTime: Date.now(),
-    });
-    setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
-    if (runJob.previewImageUrl) {
-      setLastPreviewImageUrl(runJob.previewImageUrl);
-      setLastPreviewId(runJob.id);
-    }
+  // Intentionally do not restore "generating" UI from RUN jobs on refresh — only show
+  // generating when the user starts a generation or clicks a RUN job in the library.
+  const restoreRunning3DJobIfAny = useCallback((_jobs: BackendJob[]) => {
+    // No-op: avoids showing "Generating 3D model..." when user did not trigger it.
   }, []);
 
   // ──────────── Refresh library helper ────────────
@@ -549,7 +529,7 @@ function WorkspacePage() {
             progressIntervalRef.current = null;
           }
           setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
-          setCenterView({ type: "error", message: status.error || "Generation failed" });
+          setCenterView({ type: "error", message: toUserFacingGpuError(status.error || "Generation failed") });
         } else if (status.status === "cancelled") {
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
@@ -664,9 +644,9 @@ function WorkspacePage() {
         const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "";
         if (msg?.includes("GPU is currently offline")) {
           notifyGpuOffline(msg, tokenGetter);
-          setCenterView({ type: "error", message: msg });
+          setCenterView({ type: "error", message: toUserFacingGpuError(msg) });
         } else {
-          setCenterView({ type: "error", message: "Failed to get queue info" });
+          setCenterView({ type: "error", message: toUserFacingGpuError("Failed to get queue info") });
         }
         setLoading(false);
         return;
@@ -684,7 +664,7 @@ function WorkspacePage() {
         });
       } catch (err: unknown) {
         const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "Failed to start 3D";
-        setCenterView({ type: "error", message: msg });
+        setCenterView({ type: "error", message: toUserFacingGpuError(msg) });
       }
       setLoading(false);
     },
@@ -714,7 +694,7 @@ function WorkspacePage() {
       try { queueInfo = await fetchQueueInfo(); } catch (err: any) {
         if (err.message?.includes("GPU is currently offline")) {
           notifyGpuOffline(err.message, tokenGetter);
-          setCenterView({ type: "error", message: err.message });
+          setCenterView({ type: "error", message: toUserFacingGpuError(err.message) });
           setGeneratingPreview(false);
           return;
         }
@@ -766,7 +746,7 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.preview_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-        setCenterView({ type: "error", message: err.message || "Failed to generate image" });
+        setCenterView({ type: "error", message: toUserFacingGpuError(err.message || "Failed to generate image") });
         setGeneratingPreview(false);
       }
       return;
@@ -855,7 +835,7 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.edit_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-        setCenterView({ type: "error", message: err.message || "Failed to edit image" });
+        setCenterView({ type: "error", message: toUserFacingGpuError(err.message || "Failed to edit image") });
         setGeneratingPreview(false);
       }
       return;
@@ -961,7 +941,7 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.combined_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-        setCenterView({ type: "error", message: err.message || "Failed to combine images" });
+        setCenterView({ type: "error", message: toUserFacingGpuError(err.message || "Failed to combine images") });
         setGeneratingPreview(false);
       }
     }
@@ -1304,16 +1284,17 @@ function WorkspacePage() {
 
       {/* 3-panel layout — on mobile: single column, show canvas OR (library + form) based on bottom tab */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative flex-col md:flex-row">
-        {/* Left panel toggle — desktop only */}
+        {/* Left panel toggle — solid black, no blur (avoids lag) */}
         {!leftPanelOpen && (
           <button
             type="button"
             onClick={() => setLeftPanelOpen(true)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 hidden md:flex items-center justify-center bg-white border border-r-0 border-neutral-200 rounded-r-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
-            title="Open library"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex flex-col items-center justify-center gap-1 py-3 px-2 min-w-[48px] bg-black border border-black rounded-r-lg text-white hover:bg-neutral-800 active:bg-neutral-900"
+            title="Open library panel"
             aria-label="Open library panel"
           >
-            <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            <span className="text-[10px] font-medium uppercase tracking-wider opacity-90">Library</span>
           </button>
         )}
 
@@ -1569,7 +1550,7 @@ function WorkspacePage() {
                     setCurrentGenerating(null);
                     setCenterView({ type: "error", message: "Job cancelled" });
                   } catch (e: any) {
-                    setCenterView({ type: "error", message: e?.message || "Failed to cancel" });
+                    setCenterView({ type: "error", message: toUserFacingGpuError(e?.message || "Failed to cancel") });
                   }
                 }}
                 className="mt-4 px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
@@ -2022,16 +2003,17 @@ function WorkspacePage() {
           )}
         </main>
 
-        {/* Right panel toggle tab when collapsed */}
+        {/* Right panel toggle — solid black, no blur (avoids lag) */}
         {!rightPanelOpen && (
           <button
             type="button"
             onClick={() => setRightPanelOpen(true)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-6 h-14 hidden md:flex items-center justify-center bg-white border border-l-0 border-neutral-200 rounded-l-lg shadow-sm hover:bg-neutral-50 transition-colors duration-200"
-            title="Open input panel"
-            aria-label="Open input panel"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex flex-col items-center justify-center gap-1 py-3 px-2 min-w-[48px] bg-black border border-black rounded-l-lg text-white hover:bg-neutral-800 active:bg-neutral-900"
+            title="Open create panel"
+            aria-label="Open create panel"
           >
-            <svg className="w-4 h-4 text-neutral-500 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            <svg className="w-5 h-5 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            <span className="text-[10px] font-medium uppercase tracking-wider opacity-90">Create</span>
           </button>
         )}
 
