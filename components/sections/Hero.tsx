@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import VideoBackground from "./VideoBackground";
 import { PromptBox } from "../PromptBox";
-import { SignUpButton } from "@clerk/nextjs";
+import { SignUpButton, useAuth } from "@clerk/nextjs";
 
 // Above-the-fold: load immediately for fast FCP/LCP
 import Showcase from "./Showcase";
@@ -38,6 +38,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Hero() {
   const router = useRouter();
+  const { isSignedIn, isLoaded } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<HeroMode>("create");
   const [demoEmail, setDemoEmail] = useState("");
@@ -51,17 +52,32 @@ export default function Hero() {
   }, []);
 
   const handleSubmit = () => {
-    if (prompt.trim()) {
+    if (!prompt.trim()) return;
+    if (!isLoaded) return;
+    if (!isSignedIn) {
       try {
         sessionStorage.setItem(HERO_PROMPT_KEY, prompt.trim());
       } catch (_) {}
-      router.push("/generate");
+      router.push("/sign-in?redirect_url=" + encodeURIComponent("/workspace"));
+      return;
     }
+    try {
+      sessionStorage.setItem(HERO_PROMPT_KEY, prompt.trim());
+    } catch (_) {}
+    router.push("/generate");
   };
 
+  const DEMO_MEETING_URL = "https://cal.com/hydrilla";
+
   const handleDemoSubmit = () => {
-    if (emailRegex.test(demoEmail.trim())) {
-      router.push(`/earlyaccess?email=${encodeURIComponent(demoEmail.trim())}`);
+    if (!emailRegex.test(demoEmail.trim())) return;
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      router.push("/sign-in?redirect_url=" + encodeURIComponent("/app/demo-meeting"));
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.location.href = DEMO_MEETING_URL;
     }
   };
 
