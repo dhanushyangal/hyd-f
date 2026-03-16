@@ -18,6 +18,13 @@ const nextConfig = {
   },
   // Enable compression
   compress: true,
+  // Redirect /generate → /workspace so we never compile the heavy generate page on direct hit
+  async redirects() {
+    return [
+      { source: "/generate", destination: "/workspace", permanent: false },
+      { source: "/generate/", destination: "/workspace", permanent: false },
+    ];
+  },
   // Caching headers: only static assets get long cache; documents stay fresh for Core Web Vitals
   async headers() {
     return [
