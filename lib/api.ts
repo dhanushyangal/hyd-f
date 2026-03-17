@@ -1790,6 +1790,7 @@ export async function fetchWorkspaceJobs(workspaceId: string, getToken?: () => P
     });
 
     if (!response.ok) {
+      if (response.status === 404) return [];
       throw new Error(`Failed to fetch workspace jobs: ${response.statusText}`);
     }
 

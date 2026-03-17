@@ -19,9 +19,12 @@ export function getCurrentWorkspaceId(): string | null {
     return window.sessionStorage.getItem(WORKSPACE_CURRENT_ID_KEY);
   }
   return null;
+}
 
-
-  
+export function clearCurrentWorkspaceId(): void {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.removeItem(WORKSPACE_CURRENT_ID_KEY);
+  }
 }
 
 

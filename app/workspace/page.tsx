@@ -31,7 +31,7 @@ import {
   QueueInfo,
   LineageItem,
 } from "../../lib/api";
-import { setCurrentWorkspaceId, getCurrentWorkspaceId, cn } from "../../lib/utils";
+import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const CREDITS_IMAGE = 2;
@@ -127,11 +127,22 @@ function WorkspacePage() {
     const tokenGetter = async () => (await getToken()) ?? "";
     setLibraryLoading(true);
     Promise.all([
-      fetchWorkspace(id, tokenGetter).then((ws) => ws?.name ?? ""),
+      fetchWorkspace(id, tokenGetter),
       fetchWorkspaceJobs(id, tokenGetter),
     ])
-      .then(([name, jobs]) => {
-        setWorkspaceName(name);
+      .then(([ws, jobs]) => {
+        // If the stored workspace no longer exists, force user to create/select a new one.
+        if (!ws) {
+          clearCurrentWorkspaceId();
+          setWorkspaceId(null);
+          setWorkspaceName("");
+          setLibraryImages([]);
+          setLibrary3DAssets([]);
+          setShowNewWorkspaceModal(true);
+          return;
+        }
+
+        setWorkspaceName(ws.name ?? "");
         setLibraryImages(jobs.filter((j) => (j.previewImageUrl || j.imageUrl) && !j.resultGlbUrl).slice(0, 50));
         setLibrary3DAssets(jobs.filter((j) => j.resultGlbUrl).slice(0, 50));
         // Do not auto-show "Generating 3D model..." on load: only show it when the user
@@ -171,6 +182,14 @@ function WorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const mustCreateWorkspace = isLoaded && isSignedIn && !workspaceId;
+
+  // If user lands on /workspace without a selected workspace, force workspace creation first.
+  useEffect(() => {
+    if (!mustCreateWorkspace) return;
+    setShowNewWorkspaceModal(true);
+  }, [mustCreateWorkspace]);
 
   // Library data
   const [libraryImages, setLibraryImages] = useState<BackendJob[]>([]);
@@ -410,6 +429,8 @@ function WorkspacePage() {
       setShowNewWorkspaceModal(false);
       setNewWorkspaceName("");
       setCurrentWorkspaceId(ws.id);
+      setWorkspaceId(ws.id);
+      setWorkspaceName(ws.name ?? name);
       router.push("/workspace");
     } catch (err) {
       console.error("Failed to create workspace:", err);
@@ -448,6 +469,13 @@ function WorkspacePage() {
       restoreRunning3DJobIfAny(jobs);
     } catch { /* ignore */ }
   }, [getToken, workspaceId, restoreRunning3DJobIfAny]);
+
+  // When workspace is created/changed, refresh credits + library immediately.
+  useEffect(() => {
+    if (!isSignedIn || !workspaceId) return;
+    refreshCredits();
+    refreshLibrary();
+  }, [isSignedIn, workspaceId, refreshCredits, refreshLibrary]);
 
   // Workspace + jobs are loaded in the same effect that resolves workspaceId (above)
   // so we don't wait an extra render. refreshLibrary() is still used for manual refresh.
@@ -675,6 +703,11 @@ function WorkspacePage() {
   const handleGenerateImage = async (thenGenerate3D?: boolean) => {
     if (loading || generatingPreview) return;
     setError(null);
+    if (!workspaceId) {
+      setShowNewWorkspaceModal(true);
+      setError("Please create a workspace first");
+      return;
+    }
     if (prompt.trim()) savePromptToHistory(prompt);
     if (!thenGenerate3D) {
       setLastPreviewImageUrl(null);
@@ -950,6 +983,11 @@ function WorkspacePage() {
   // ──────────── Generate 3D: from current preview, or generate image first then 3D ────────────
   const handleGenerate3D = async () => {
     setError(null);
+    if (!workspaceId) {
+      setShowNewWorkspaceModal(true);
+      setError("Please create a workspace first");
+      return;
+    }
     if (lastPreviewImageUrl) {
       await start3DFromImage(lastPreviewImageUrl, lastPreviewId);
       return;
@@ -1129,7 +1167,14 @@ function WorkspacePage() {
 
       {/* New Workspace name modal */}
       {showNewWorkspaceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => !newWorkspaceCreating && setShowNewWorkspaceModal(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => {
+            if (newWorkspaceCreating) return;
+            if (mustCreateWorkspace) return;
+            setShowNewWorkspaceModal(false);
+          }}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-black mb-2">New Workspace</h2>
             <p className="text-sm text-neutral-500 mb-4">Give your workspace a name to get started.</p>
@@ -1144,20 +1189,24 @@ function WorkspacePage() {
                   e.preventDefault();
                   if (newWorkspaceName.trim()) handleCreateNewWorkspace();
                 }
-                if (e.key === "Escape") setShowNewWorkspaceModal(false);
+                if (e.key === "Escape") {
+                  if (!mustCreateWorkspace) setShowNewWorkspaceModal(false);
+                }
               }}
               autoFocus
               disabled={newWorkspaceCreating}
             />
             <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => !newWorkspaceCreating && setShowNewWorkspaceModal(false)}
-                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-black transition-colors"
-                disabled={newWorkspaceCreating}
-              >
-                Cancel
-              </button>
+              {!mustCreateWorkspace && (
+                <button
+                  type="button"
+                  onClick={() => !newWorkspaceCreating && setShowNewWorkspaceModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-black transition-colors"
+                  disabled={newWorkspaceCreating}
+                >
+                  Cancel
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleCreateNewWorkspace}
