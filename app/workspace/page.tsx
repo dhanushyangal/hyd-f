@@ -112,6 +112,13 @@ function WorkspacePage() {
   const searchParams = useSearchParams();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
+  // If user is not authenticated, redirect to sign-in immediately.
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (isSignedIn) return;
+    router.push("/sign-in");
+  }, [isLoaded, isSignedIn, router]);
+
   // Resolve workspace ID from URL or sessionStorage; keep URL as /workspace only.
   // In the same effect, start loading workspace + jobs so we don't wait an extra render.
   useEffect(() => {
@@ -138,6 +145,7 @@ function WorkspacePage() {
           setWorkspaceName("");
           setLibraryImages([]);
           setLibrary3DAssets([]);
+          setForcedWorkspaceModal(true);
           setShowNewWorkspaceModal(true);
           return;
         }
@@ -155,6 +163,7 @@ function WorkspacePage() {
   const [workspaceName, setWorkspaceName] = useState("");
   const workspaceNameTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showNewWorkspaceModal, setShowNewWorkspaceModal] = useState(false);
+  const [forcedWorkspaceModal, setForcedWorkspaceModal] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [newWorkspaceCreating, setNewWorkspaceCreating] = useState(false);
   const [inputMode, setInputMode] = useState<InputMode>("text");
@@ -184,12 +193,33 @@ function WorkspacePage() {
   const [error, setError] = useState<string | null>(null);
 
   const mustCreateWorkspace = isLoaded && isSignedIn && !workspaceId;
+  const hasWorkspaceContext = Boolean(workspaceId && workspaceName.trim());
 
   // If user lands on /workspace without a selected workspace, force workspace creation first.
   useEffect(() => {
     if (!mustCreateWorkspace) return;
+    setForcedWorkspaceModal(true);
     setShowNewWorkspaceModal(true);
   }, [mustCreateWorkspace]);
+
+  // If workspace exists but has no name, require a name before allowing any creation.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (!workspaceId) return;
+    if (workspaceName.trim()) return;
+    setForcedWorkspaceModal(true);
+    setShowNewWorkspaceModal(true);
+  }, [isLoaded, isSignedIn, workspaceId, workspaceName]);
+
+  // If a workspace becomes available, close any forced modal opened during initial load.
+  useEffect(() => {
+    if (!workspaceId) return;
+    if (!forcedWorkspaceModal) return;
+    if (newWorkspaceCreating) return;
+    setShowNewWorkspaceModal(false);
+    setForcedWorkspaceModal(false);
+    setNewWorkspaceName("");
+  }, [workspaceId, forcedWorkspaceModal, newWorkspaceCreating]);
 
   // Library data
   const [libraryImages, setLibraryImages] = useState<BackendJob[]>([]);
@@ -425,8 +455,19 @@ function WorkspacePage() {
     setNewWorkspaceCreating(true);
     try {
       const tokenGetter = async () => await getToken();
+      // If we already have a workspaceId but it's unnamed, just set its name (do not create a new workspace).
+      if (workspaceId && !workspaceName.trim()) {
+        await updateWorkspaceNameApi(workspaceId, name, tokenGetter);
+        setWorkspaceName(name);
+        setShowNewWorkspaceModal(false);
+        setForcedWorkspaceModal(false);
+        setNewWorkspaceName("");
+        return;
+      }
+
       const ws = await createWorkspaceApi(name, tokenGetter);
       setShowNewWorkspaceModal(false);
+      setForcedWorkspaceModal(false);
       setNewWorkspaceName("");
       setCurrentWorkspaceId(ws.id);
       setWorkspaceId(ws.id);
@@ -437,7 +478,7 @@ function WorkspacePage() {
     } finally {
       setNewWorkspaceCreating(false);
     }
-  }, [newWorkspaceName, newWorkspaceCreating, getToken, router]);
+  }, [newWorkspaceName, newWorkspaceCreating, getToken, router, workspaceId, workspaceName]);
 
   // Cleanup intervals on unmount
   useEffect(() => {
@@ -661,6 +702,12 @@ function WorkspacePage() {
   // Helper: start 3D generation from image URL (used after image gen or when we already have preview)
   const start3DFromImage = useCallback(
     async (imageUrl: string, previewId: string | null) => {
+      if (!hasWorkspaceContext) {
+        setForcedWorkspaceModal(true);
+        setShowNewWorkspaceModal(true);
+        setError("Please create a workspace first");
+        return;
+      }
       const tokenGetter = async () => await getToken();
       setLeftLibraryTab("3d"); // Switch to 3D tab so result will show in 3D section below search
       setLoading(true);
@@ -696,14 +743,15 @@ function WorkspacePage() {
       }
       setLoading(false);
     },
-    [getToken, workspaceId]
+    [getToken, workspaceId, hasWorkspaceContext]
   );
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
   const handleGenerateImage = async (thenGenerate3D?: boolean) => {
     if (loading || generatingPreview) return;
     setError(null);
-    if (!workspaceId) {
+    if (!hasWorkspaceContext) {
+      setForcedWorkspaceModal(true);
       setShowNewWorkspaceModal(true);
       setError("Please create a workspace first");
       return;
@@ -983,7 +1031,8 @@ function WorkspacePage() {
   // ──────────── Generate 3D: from current preview, or generate image first then 3D ────────────
   const handleGenerate3D = async () => {
     setError(null);
-    if (!workspaceId) {
+    if (!hasWorkspaceContext) {
+      setForcedWorkspaceModal(true);
       setShowNewWorkspaceModal(true);
       setError("Please create a workspace first");
       return;
@@ -1171,7 +1220,7 @@ function WorkspacePage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
           onClick={() => {
             if (newWorkspaceCreating) return;
-            if (mustCreateWorkspace) return;
+            if (forcedWorkspaceModal) return;
             setShowNewWorkspaceModal(false);
           }}
         >
@@ -1190,14 +1239,14 @@ function WorkspacePage() {
                   if (newWorkspaceName.trim()) handleCreateNewWorkspace();
                 }
                 if (e.key === "Escape") {
-                  if (!mustCreateWorkspace) setShowNewWorkspaceModal(false);
+                  if (!forcedWorkspaceModal) setShowNewWorkspaceModal(false);
                 }
               }}
               autoFocus
               disabled={newWorkspaceCreating}
             />
             <div className="flex gap-3 justify-end">
-              {!mustCreateWorkspace && (
+              {!forcedWorkspaceModal && (
                 <button
                   type="button"
                   onClick={() => !newWorkspaceCreating && setShowNewWorkspaceModal(false)}
