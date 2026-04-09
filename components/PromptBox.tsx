@@ -266,7 +266,7 @@ export function PromptBox({
       <div className="relative w-full">
         <div className={`backdrop-blur-xl rounded-2xl pt-5 pb-3 px-6 flex flex-col gap-1 w-full relative overflow-visible sm:pt-6 sm:pb-4 sm:px-8 min-h-[72px] ${
           isHero
-            ? "bg-white/[0.07] border border-white/20 shadow-none"
+            ? "border border-white/35 bg-white/15 backdrop-blur-2xl shadow-[0_12px_48px_-16px_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
             : "bg-white/25 border border-white/30 shadow-lg"
         }`}>
           {/* eslint-disable-next-line @next/next/no-inline-styles */}
@@ -278,7 +278,7 @@ export function PromptBox({
             disabled={disabled}
             placeholder={placeholder}
             className={`prompt-box-textarea w-full bg-transparent border-0 outline-none text-[14px] sm:text-[18px] font-medium resize-none min-h-[28px] sm:min-h-[32px] leading-tight tracking-tight p-0 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-0 focus:border-0 focus:outline-none focus:shadow-none font-dm-sans ${
-              isHero ? "text-white placeholder:text-white/50" : "text-neutral-900 placeholder:text-neutral-500"
+              isHero ? "text-neutral-900 placeholder:text-black" : "text-neutral-900 placeholder:text-neutral-500"
             }`}
             style={{
               whiteSpace: "pre-wrap",
@@ -519,11 +519,11 @@ export function PromptBox({
                 transition={{ duration: 0.2 }}
                 onClick={onSubmit}
                 disabled={disabled || !canSubmit}
-                className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed font-dm-sans transition-colors ${
+                className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold disabled:cursor-not-allowed font-dm-sans transition-colors ${
                   isHero
                     ? canSubmit
-                      ? "bg-white text-neutral-900 border border-white/40 hover:bg-white/95"
-                      : "bg-white/10 text-white/50 border border-white/20"
+                      ? "border border-white/40 bg-white/35 text-black backdrop-blur-md shadow-md hover:bg-white/50"
+                      : "border border-white/25 bg-white/15 text-black/45 backdrop-blur-md disabled:opacity-100"
                     : canSubmit 
                       ? 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 text-slate-800 shadow-md border border-slate-300/60' 
                       : 'bg-slate-100/50 text-slate-400 border border-slate-200/40'

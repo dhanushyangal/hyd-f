@@ -84,6 +84,11 @@ function toUserFacingGpuError(msg: string | undefined): string {
   return msg;
 }
 
+function isGpuOfflineFailure(rawMsg: string | undefined, userFacingMsg?: string): boolean {
+  const m = `${rawMsg ?? ""} ${userFacingMsg ?? ""}`;
+  return /GPU is (currently )?offline|GPU is unavailable/i.test(m);
+}
+
 interface GeneratingJob {
   jobId: string;
   status: "generating" | "completed" | "failed";
@@ -245,6 +250,23 @@ function WorkspacePage() {
   const [mobileGeneratedToast, setMobileGeneratedToast] = useState(false);
   const [lineagePreviewItem, setLineagePreviewItem] = useState<LineageItem | null>(null);
   const mobileGeneratedToastRef = useRef<NodeJS.Timeout | null>(null);
+  /** Mobile-only: timestamp when user-started generation began (for minimum GPU-offline overlay duration). */
+  const mobileGenStartedAtRef = useRef<number | null>(null);
+
+  const markMobileGenerationStart = useCallback(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      mobileGenStartedAtRef.current = Date.now();
+    }
+  }, []);
+
+  const waitMobileGpuOfflineMinimum = useCallback(async (rawMsg: string | undefined, userFacingMsg: string) => {
+    if (typeof window === "undefined" || window.innerWidth >= 768) return;
+    if (!isGpuOfflineFailure(rawMsg, userFacingMsg)) return;
+    const start = mobileGenStartedAtRef.current;
+    if (start == null) return;
+    const elapsed = Date.now() - start;
+    if (elapsed < 4000) await new Promise((r) => setTimeout(r, 4000 - elapsed));
+  }, []);
 
   // Credits (from /api/payments/credits) – header + cost line (image 2, 3D 10)
   const [creditsTotal, setCreditsTotal] = useState<number>(0);
@@ -597,8 +619,13 @@ function WorkspacePage() {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
           }
+          const userFacing = toUserFacingGpuError(status.error || "Generation failed");
           setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
-          setCenterView({ type: "error", message: toUserFacingGpuError(status.error || "Generation failed") });
+          void (async () => {
+            await waitMobileGpuOfflineMinimum(status.error, userFacing);
+            mobileGenStartedAtRef.current = null;
+            setCenterView({ type: "error", message: userFacing });
+          })();
         } else if (status.status === "cancelled") {
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
@@ -710,6 +737,7 @@ function WorkspacePage() {
       }
       const tokenGetter = async () => await getToken();
       setLeftLibraryTab("3d"); // Switch to 3D tab so result will show in 3D section below search
+      markMobileGenerationStart();
       setLoading(true);
       setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
       let queueInfo: QueueInfo | null = null;
@@ -717,18 +745,22 @@ function WorkspacePage() {
         queueInfo = await fetchQueueInfo();
       } catch (err: unknown) {
         const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "";
+        const userFacing = msg?.includes("GPU is currently offline")
+          ? toUserFacingGpuError(msg)
+          : toUserFacingGpuError("Failed to get queue info");
         if (msg?.includes("GPU is currently offline")) {
           notifyGpuOffline(msg, tokenGetter);
-          setCenterView({ type: "error", message: toUserFacingGpuError(msg) });
-        } else {
-          setCenterView({ type: "error", message: toUserFacingGpuError("Failed to get queue info") });
         }
+        await waitMobileGpuOfflineMinimum(msg, userFacing);
+        mobileGenStartedAtRef.current = null;
+        setCenterView({ type: "error", message: userFacing });
         setLoading(false);
         return;
       }
       const estimatedTotal = queueInfo?.estimated_total_seconds || 300;
       try {
         const result = await submitImageTo3D(imageUrl, null, tokenGetter, previewId, null, workspaceId, previewId);
+        mobileGenStartedAtRef.current = null;
         setCurrentGenerating({
           jobId: result.job_id,
           status: "generating",
@@ -739,11 +771,14 @@ function WorkspacePage() {
         });
       } catch (err: unknown) {
         const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "Failed to start 3D";
-        setCenterView({ type: "error", message: toUserFacingGpuError(msg) });
+        const userFacing = toUserFacingGpuError(msg);
+        await waitMobileGpuOfflineMinimum(msg, userFacing);
+        mobileGenStartedAtRef.current = null;
+        setCenterView({ type: "error", message: userFacing });
       }
       setLoading(false);
     },
-    [getToken, workspaceId, hasWorkspaceContext]
+    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, waitMobileGpuOfflineMinimum]
   );
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
@@ -769,13 +804,17 @@ function WorkspacePage() {
       if (!prompt.trim()) { setError("Please enter a prompt"); return; }
 
       setGeneratingPreview(true);
+      markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Generating image from text..." });
 
       let queueInfo: QueueInfo | null = null;
       try { queueInfo = await fetchQueueInfo(); } catch (err: any) {
         if (err.message?.includes("GPU is currently offline")) {
           notifyGpuOffline(err.message, tokenGetter);
-          setCenterView({ type: "error", message: toUserFacingGpuError(err.message) });
+          const userFacing = toUserFacingGpuError(err.message);
+          await waitMobileGpuOfflineMinimum(err.message, userFacing);
+          mobileGenStartedAtRef.current = null;
+          setCenterView({ type: "error", message: userFacing });
           setGeneratingPreview(false);
           return;
         }
@@ -800,6 +839,7 @@ function WorkspacePage() {
         setLeftLibraryTab("images"); // Keep on Images tab when showing generated image
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.preview_id });
         setGeneratingPreview(false);
+        mobileGenStartedAtRef.current = null;
         setMobileTab("canvas");
         setMobileGeneratedToast(true);
 
@@ -827,7 +867,10 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.preview_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-        setCenterView({ type: "error", message: toUserFacingGpuError(err.message || "Failed to generate image") });
+        const userFacing = toUserFacingGpuError(err.message || "Failed to generate image");
+        await waitMobileGpuOfflineMinimum(err.message, userFacing);
+        mobileGenStartedAtRef.current = null;
+        setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
       }
       return;
@@ -860,6 +903,7 @@ function WorkspacePage() {
       }
 
       setGeneratingPreview(true);
+      markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Editing image..." });
 
       const estimatedTime = 30;
@@ -890,6 +934,7 @@ function WorkspacePage() {
         setLeftLibraryTab("images"); // Keep on Images tab when showing edited image
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.edit_id });
         setGeneratingPreview(false);
+        mobileGenStartedAtRef.current = null;
         setMobileTab("canvas");
         setMobileGeneratedToast(true);
 
@@ -916,7 +961,10 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.edit_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-        setCenterView({ type: "error", message: toUserFacingGpuError(err.message || "Failed to edit image") });
+        const userFacing = toUserFacingGpuError(err.message || "Failed to edit image");
+        await waitMobileGpuOfflineMinimum(err.message, userFacing);
+        mobileGenStartedAtRef.current = null;
+        setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
       }
       return;
@@ -931,6 +979,7 @@ function WorkspacePage() {
       if (!prompt.trim()) { setError("Please enter a prompt"); return; }
 
       setGeneratingPreview(true);
+      markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Combining images..." });
 
       const estimatedTime = 40;
@@ -981,6 +1030,7 @@ function WorkspacePage() {
         setLeftLibraryTab("images"); // Keep on Images tab when showing combined image
         setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.combined_id });
         setGeneratingPreview(false);
+        mobileGenStartedAtRef.current = null;
         setMobileTab("canvas");
         setMobileGeneratedToast(true);
 
@@ -1022,7 +1072,10 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.combined_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-        setCenterView({ type: "error", message: toUserFacingGpuError(err.message || "Failed to combine images") });
+        const userFacing = toUserFacingGpuError(err.message || "Failed to combine images");
+        await waitMobileGpuOfflineMinimum(err.message, userFacing);
+        mobileGenStartedAtRef.current = null;
+        setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
       }
     }
@@ -1194,6 +1247,17 @@ function WorkspacePage() {
   );
 
   const isGenerating = loading || generatingPreview || (currentGenerating?.status === "generating");
+  const mobileCanvasGenerating =
+    centerView.type === "generating" ||
+    Boolean(
+      centerView.type === "preview" &&
+        currentGenerating?.status === "generating" &&
+        centerView.previewId === currentGenerating.jobId
+    );
+  const mobileGeneratingMessage =
+    centerView.type === "generating" ? centerView.message : "Generating 3D model...";
+  const mobileGeneratingProgress =
+    centerView.type === "generating" ? centerView.progress : (currentGenerating?.progress ?? 0);
   const showGenerate3DButton = centerView.type === "preview" && lastPreviewImageUrl && !isGenerating;
 
   // Mobile: open 3D from /generations via ?open3d=jobId — show in canvas and switch to Canvas tab
@@ -1362,13 +1426,31 @@ function WorkspacePage() {
         </Link>
       </header>
 
-      {/* Mobile-only: small top alerts — generating token and generated toast */}
-      {centerView.type === "generating" && (
-        <div className="md:hidden fixed left-0 right-0 top-[65px] z-30 flex justify-center px-3 py-2 pointer-events-none">
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black text-white text-xs font-medium shadow-lg">
-            <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
-            {centerView.message} {Math.round(centerView.progress)}%
-          </span>
+      {/* Mobile-only: large generating card on Create tab (canvas is hidden — user needs clear feedback); Canvas tab uses main column */}
+      {mobileTab === "create" && mobileCanvasGenerating && (
+        <div
+          className="md:hidden fixed inset-x-0 z-[35] flex items-center justify-center px-4 pointer-events-auto bg-black/50 backdrop-blur-[2px]"
+          style={{
+            top: "calc(3.5rem + env(safe-area-inset-top, 0px))",
+            bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
+          }}
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <div className="w-full max-w-sm min-h-[min(52vh,320px)] rounded-3xl bg-black text-white shadow-2xl flex flex-col items-center justify-center gap-5 px-8 py-10 mx-auto border border-white/10">
+            <div className="w-14 h-14 border-[3px] border-white/25 border-t-white rounded-full animate-spin shrink-0" />
+            <div className="text-center space-y-2">
+              <p className="text-base font-semibold leading-snug tracking-tight">{mobileGeneratingMessage}</p>
+              <p className="text-sm text-white/70 tabular-nums">{Math.round(mobileGeneratingProgress)}%</p>
+            </div>
+            <div className="w-full max-w-[240px] h-2.5 bg-white/15 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(mobileGeneratingProgress, 100)}%` }}
+              />
+            </div>
+          </div>
         </div>
       )}
       {mobileGeneratedToast && (
@@ -2238,9 +2320,35 @@ function WorkspacePage() {
               </div>
             </div>
 
-            {/* Error */}
+            {/* Error — validation & workspace (always); centerView errors on phone Create tab (canvas hidden) */}
             {error && (
               <div className="px-3 py-2.5 text-sm bg-red-50 text-red-600 rounded-xl border border-red-200">{error}</div>
+            )}
+            {mobileTab === "create" && centerView.type === "error" && (
+              <div className="md:hidden space-y-3 px-0.5">
+                <div className="px-3 py-3 text-sm bg-red-50 text-red-700 rounded-xl border border-red-200 flex gap-3 items-start">
+                  <span className="shrink-0 mt-0.5 text-red-500" aria-hidden>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </span>
+                  <p className="min-w-0 flex-1 leading-relaxed">{centerView.message}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    if (lastPreviewImageUrl && lastPreviewId) {
+                      setCenterView({ type: "preview", imageUrl: lastPreviewImageUrl, previewId: lastPreviewId });
+                    } else {
+                      setCenterView({ type: "empty" });
+                    }
+                  }}
+                  className="w-full py-2.5 text-sm font-semibold text-white bg-black rounded-xl hover:bg-neutral-800 transition-colors"
+                >
+                  Try again
+                </button>
+              </div>
             )}
 
             {/* AI Model — reference style: label + (i) left, white rounded dropdown right */}
@@ -2338,7 +2446,7 @@ function WorkspacePage() {
               className={`w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2.5 transition-all duration-200 ${isGenerating ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-black text-white hover:bg-neutral-800 shadow-sm hover:shadow-md active:scale-[0.99]"}`}
             >
               {isGenerating ? (
-                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
+                <><div className="w-4 h-4 border-2 border-neutral-500/40 border-t-neutral-800 rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
               ) : (
                 <>
                   <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-90 invert brightness-110" />
