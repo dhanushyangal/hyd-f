@@ -13,6 +13,7 @@ import {
   editImage,
   combinedEdit,
   uploadImageViaApi,
+  uploadImage,
   fetchHistory,
   fetchWorkspace,
   fetchWorkspaceJobs,
@@ -50,7 +51,7 @@ const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m
   ),
 });
 
-type InputMode = "text" | "text_1img" | "text_2img";
+type InputMode = "text" | "image" | "text_1img" | "text_2img";
 
 // Per-mode state so each mode remembers its own prompt and images
 interface ModeState {
@@ -65,6 +66,7 @@ interface ModeState {
 
 const defaultModeStates: Record<InputMode, ModeState> = {
   text: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
+  image: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
   text_1img: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
   text_2img: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
 };
@@ -79,9 +81,21 @@ type CenterView =
 /** Show "GPU is unavailable" when both APIs have failed (fetch/network errors). */
 function toUserFacingGpuError(msg: string | undefined): string {
   if (!msg) return "GPU is unavailable";
-  if (/fetch failed|timeout|ECONNREFUSED|External service unavailable|GPU is unavailable/i.test(msg))
+  if (/fetch failed|failed to fetch|networkerror|timeout|ECONNREFUSED|External service unavailable|GPU is unavailable/i.test(msg))
     return "GPU is unavailable";
   return msg;
+}
+
+/** Prefer gateway (S3 URL); fall back to backend upload when the gateway is unreachable (fixes raw "Failed to fetch" in local dev). */
+async function uploadSourceImageWithFallback(
+  file: File,
+  getToken: () => Promise<string | null>
+): Promise<string> {
+  try {
+    return await uploadImageViaApi(file, getToken);
+  } catch {
+    return await uploadImage(file, getToken);
+  }
 }
 
 function isGpuOfflineFailure(rawMsg: string | undefined, userFacingMsg?: string): boolean {
@@ -876,6 +890,31 @@ function WorkspacePage() {
       return;
     }
 
+    // ── Image only: upload or library image → 3D (no text-to-image, no edit API) ──
+    if (inputMode === "image") {
+      if (!file1 && !image1) {
+        setError("Please upload an image");
+        return;
+      }
+      setError(null);
+      let imageUrl: string;
+      if (file1) {
+        try {
+          imageUrl = await uploadSourceImageWithFallback(file1, tokenGetter);
+        } catch (err: any) {
+          setError(err?.message || "Failed to upload image");
+          return;
+        }
+      } else {
+        imageUrl = image1!;
+      }
+      setLastPreviewImageUrl(imageUrl);
+      setLastPreviewId(jobId1);
+      setCenterView({ type: "preview", imageUrl, previewId: jobId1 || undefined });
+      await start3DFromImage(imageUrl, jobId1);
+      return;
+    }
+
     // ── Text + 1 image: /edit-image (image-to-image), or image-to-3D if no prompt ──
     if (inputMode === "text_1img") {
       if (!file1 && !image1) { setError("Please upload an image"); return; }
@@ -887,9 +926,9 @@ function WorkspacePage() {
         let imageUrl: string;
         if (file1) {
           try {
-            imageUrl = await uploadImageViaApi(file1, tokenGetter);
+            imageUrl = await uploadSourceImageWithFallback(file1, tokenGetter);
           } catch (err: any) {
-            setError(err.message || "Failed to upload image");
+            setError(err?.message || "Failed to upload image");
             return;
           }
         } else {
@@ -916,9 +955,9 @@ function WorkspacePage() {
       }, 200);
 
       try {
-        // Resolve source image URL via gateway API → S3 (so source_images is never blob URL)
+        // Resolve source image URL via gateway API → S3 (fallback: backend so uploads work when gateway is down)
         const srcUrl = file1
-          ? await uploadImageViaApi(file1, tokenGetter)
+          ? await uploadSourceImageWithFallback(file1, tokenGetter)
           : (image1 ?? null);
         const editSrcImages = srcUrl ? [srcUrl] : [];
 
@@ -996,12 +1035,12 @@ function WorkspacePage() {
         let url1: string;
         let url2: string;
         if (file1) {
-          url1 = await uploadImageViaApi(file1, tokenGetter);
+          url1 = await uploadSourceImageWithFallback(file1, tokenGetter);
         } else {
           url1 = image1!; // from library (already S3 or proxy URL)
         }
         if (file2) {
-          url2 = await uploadImageViaApi(file2, tokenGetter);
+          url2 = await uploadSourceImageWithFallback(file2, tokenGetter);
         } else {
           url2 = image2!; // from library
         }
@@ -1134,6 +1173,26 @@ function WorkspacePage() {
       return;
     }
 
+    if (inputMode === "image") {
+      setLastPreviewImageUrl(imageUrl);
+      setLastPreviewId(job.id);
+      setCurrentParentJobId(job.id);
+      setLeftLibraryTab("images");
+      setCenterView({ type: "preview", imageUrl, previewId: job.id });
+      setModeStates((prev) => ({
+        ...prev,
+        image: {
+          ...prev.image,
+          image1: imageUrl,
+          file1: null,
+          jobId1: job.id,
+          prompt: "",
+        },
+      }));
+      loadJobInfo(job);
+      return;
+    }
+
     // If we're in text_2img mode, fill the next empty slot instead of switching modes
     if (inputMode === "text_2img") {
       setModeStates((prev) => {
@@ -1223,20 +1282,33 @@ function WorkspacePage() {
       setCurrentParentJobId(item.id);
       setLeftLibraryTab("images");
       setCenterView({ type: "preview", imageUrl, previewId: item.id });
-      setInputMode("text_1img");
-      setModeStates((prev) => ({
-        ...prev,
-        text_1img: {
-          ...prev.text_1img,
-          image1: imageUrl,
-          file1: null,
-          jobId1: item.id,
-          prompt: prev.text_1img.prompt ?? "", // Keep current prompt; only select the image
-        },
-      }));
+      if (inputMode === "image") {
+        setModeStates((prev) => ({
+          ...prev,
+          image: {
+            ...prev.image,
+            image1: imageUrl,
+            file1: null,
+            jobId1: item.id,
+            prompt: "",
+          },
+        }));
+      } else {
+        setInputMode("text_1img");
+        setModeStates((prev) => ({
+          ...prev,
+          text_1img: {
+            ...prev.text_1img,
+            image1: imageUrl,
+            file1: null,
+            jobId1: item.id,
+            prompt: prev.text_1img.prompt ?? "",
+          },
+        }));
+      }
     }
     loadJobInfo(job);
-  }, [lineageItemToJob, loadJobInfo]);
+  }, [lineageItemToJob, loadJobInfo, inputMode]);
 
   // ──────────── Filtered library ────────────
   const filteredImages = libraryImages.filter((a) =>
@@ -2232,20 +2304,22 @@ function WorkspacePage() {
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto w-[90%] max-w-full mx-auto hide-scrollbar">
           <div className="px-3 pt-4 pb-8 space-y-5 leading-[1.15]">
-            {/* Input mode — shadcn-style Tabs (Text | Edit | Combine) */}
-            <div role="tablist" aria-label="Input mode" className="inline-flex h-10 w-full items-center rounded-lg bg-neutral-100 p-1 text-neutral-500">
-              <button type="button" role="tab" onClick={() => setInputMode("text")} title="Text prompt only" className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${inputMode === "text" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><span className="text-sm font-semibold leading-none">T</span><span>Text</span></button>
-              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_1img")} title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_1img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></button>
-              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_2img")} title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_2img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><div className="flex -space-x-0.5 shrink-0"><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /><div className="w-2.5 h-2.5 rounded-sm bg-current opacity-70" /></div><span>Combine</span></button>
+            {/* Input mode — Text | Image | Edit | Combine */}
+            <div role="tablist" aria-label="Input mode" className="grid grid-cols-2 sm:grid-cols-4 gap-0.5 rounded-lg bg-neutral-100 p-1 text-neutral-500">
+              <button type="button" role="tab" onClick={() => setInputMode("text")} title="Text prompt only" className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${inputMode === "text" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><span className="text-xs font-semibold leading-none sm:text-sm">T</span><span>Text</span></button>
+              <button type="button" role="tab" onClick={() => setInputMode("image")} title="Upload an image to generate a 3D model" className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${inputMode === "image" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Image</span></button>
+              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_1img")} title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"} className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_1img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></button>
+              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_2img")} title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"} className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_2img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><div className="flex -space-x-0.5 shrink-0"><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /></div><span>Combine</span></button>
             </div>
 
             {/* Image slots — same spacing as reference */}
-            {(inputMode === "text_1img" || inputMode === "text_2img") && (
+            {(inputMode === "image" || inputMode === "text_1img" || inputMode === "text_2img") && (
               <div className="space-y-2">
-                <label className="block text-sm font-bold text-neutral-800">{inputMode === "text_2img" ? "Image 1 & 2" : "Image"}</label>
+                <label className="block text-sm font-bold text-neutral-800">{inputMode === "text_2img" ? "Image 1 & 2" : inputMode === "image" ? "Source image" : "Image"}</label>
                 <div className="flex gap-2">
                   <div className={inputMode === "text_2img" ? "flex-1 min-w-0" : "flex-1"}>
                     {inputMode === "text_2img" && <span className="text-xs text-neutral-500 block mb-1">Image 1</span>}
+                    {inputMode === "image" && <p className="text-xs text-neutral-500 mb-2">Upload or drop an image, or choose one from the library. Generate runs image → 3D.</p>}
                     <ImageDropzone slot={1} image={image1} onDrop={(e) => handleDrop(e, 1)} onPaste={(e) => handlePaste(e, 1)} onFileSelect={(e) => handleFileSelect(e, 1)} onClear={() => handleClearImage(1)} isDragging={isDragging} onDragOver={() => setIsDragging(true)} onDragLeave={() => setIsDragging(false)} />
                   </div>
                   {inputMode === "text_2img" && (
@@ -2258,7 +2332,8 @@ function WorkspacePage() {
               </div>
             )}
 
-            {/* Prompt — label row with optional icons, large textarea, character count */}
+            {/* Prompt — hidden in Image mode (upload → 3D only) */}
+            {inputMode !== "image" && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <label className="text-sm font-bold text-neutral-800">Prompt</label>
@@ -2319,6 +2394,7 @@ function WorkspacePage() {
                 <span className="absolute bottom-2.5 right-3 text-[11px] text-neutral-400 tabular-nums">{prompt.length}/800</span>
               </div>
             </div>
+            )}
 
             {/* Error — validation & workspace (always); centerView errors on phone Create tab (canvas hidden) */}
             {error && (
@@ -2423,7 +2499,9 @@ function WorkspacePage() {
 
             {/* Credits — cost per action: image 2, 3D 10; show total */}
             {(() => {
-              const isImageOrEdit = inputMode === "text" || (prompt.trim().length > 0 && (image1 || image2));
+              const isImageOrEdit =
+                inputMode === "text" ||
+                (inputMode !== "image" && prompt.trim().length > 0 && (image1 || image2));
               const cost = isImageOrEdit ? CREDITS_IMAGE : CREDITS_3D;
               const total = creditsLoading ? 0 : creditsTotal;
               return (
@@ -2450,7 +2528,7 @@ function WorkspacePage() {
               ) : (
                 <>
                   <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-90 invert brightness-110" />
-                  <span className="tracking-tight font-semibold">Generate</span>
+                  <span className="tracking-tight font-semibold">{inputMode === "image" ? "Generate 3D" : "Generate"}</span>
                 </>
               )}
             </button>
