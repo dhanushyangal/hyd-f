@@ -12,7 +12,10 @@ interface ShowcaseItem {
   image?: string;
   video?: string;
   images?: string[]; // For looping images
-  iconType?: 'tencent' | 'meta' | 'ms';
+  iconType?: 'tencent' | 'ms';
+  /** Custom mark next to the title (same layout as Tencent on Hunyuan3D-2.1) */
+  logoSrc?: string;
+  logoAlt?: string;
 }
 
 const showcaseItems: ShowcaseItem[] = [
@@ -24,25 +27,20 @@ const showcaseItems: ShowcaseItem[] = [
     iconType: 'tencent',
   },
   {
-    id: "hunyuan-2",
-    name: "Hunyuan3D-2",
-    description: "Professional 3D asset creation with photorealistic rendering",
-    image: "/tenc-3d.jpg",
-    iconType: 'tencent',
+    id: "meshy",
+    name: "Meshy",
+    description: "AI 3D models from text and images—mesh generation built for creators",
+    image: "/meshy.jpg",
+    logoSrc: "/meshy-logo.png",
+    logoAlt: "Meshy",
   },
   {
-    id: "sam3d",
-    name: "SAM3D",
-    description: "Segment Anything Model for 3D object detection and segmentation",
-    image: "/sam-3d.jpg",
-    iconType: 'meta',
-  },
-  {
-    id: "hunyuan-2mini-turbo",
-    name: "Hunyuan3D-2mini-Turbo",
-    description: "Fast 3D model generation optimized for real-time workflows",
-    image: "/turbo.png",
-    iconType: 'tencent',
+    id: "rodin",
+    name: "Rodin",
+    description: "Production-grade 3D generation with strong geometry and clean topology",
+    image: "/rodin.png",
+    logoSrc: "/rodin-logo.png",
+    logoAlt: "Rodin",
   },
   {
     id: "trellis-2",
@@ -459,9 +457,17 @@ export default function Showcase() {
                   {/* Logo/Brand Name - Top Left */}
                   <div className="absolute top-5 left-5 sm:top-6 sm:left-6 z-10">
                     <div className="flex items-center gap-2.5">
-                      {item.iconType && (
+                      {(item.logoSrc || item.iconType) && (
                         <div className="relative w-5 h-5 flex-shrink-0 flex items-center justify-center">
-                          {item.iconType === 'tencent' && (
+                          {item.logoSrc ? (
+                            <Image
+                              src={item.logoSrc}
+                              alt={item.logoAlt || item.name}
+                              width={20}
+                              height={20}
+                              className="w-5 h-5 object-contain"
+                            />
+                          ) : item.iconType === "tencent" ? (
                             <Image
                               src="/tencent.png"
                               alt="Tencent"
@@ -469,17 +475,7 @@ export default function Showcase() {
                               height={20}
                               className="w-5 h-5 object-contain"
                             />
-                          )}
-                          {item.iconType === 'meta' && (
-                            <Image
-                              src="/meta.png"
-                              alt="Meta"
-                              width={20}
-                              height={20}
-                              className="w-5 h-5 object-contain"
-                            />
-                          )}
-                          {item.iconType === 'ms' && (
+                          ) : item.iconType === "ms" ? (
                             <Image
                               src="/ms.png"
                               alt="Microsoft"
@@ -487,7 +483,7 @@ export default function Showcase() {
                               height={20}
                               className="w-5 h-5 object-contain brightness-0 invert"
                             />
-                          )}
+                          ) : null}
                         </div>
                       )}
                       <span 
