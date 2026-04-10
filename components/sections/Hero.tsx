@@ -47,13 +47,15 @@ type NavigatorWithConnection = Navigator & {
 };
 
 /**
- * Full-bleed hero backdrop: MP4 when the connection looks fast enough; otherwise static JPG.
- * Uses explicit play() after mount for mobile autoplay. Respects reduced motion (image only).
+ * Hero backdrop: always load JPG first (LCP). MP4 mounts only after the poster image has loaded
+ * and the network is not slow / save-data. Video fades in on first frame; slow connections never fetch video.
  */
 function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [posterLoaded, setPosterLoaded] = useState(false);
   const [connectionSlow, setConnectionSlow] = useState<boolean | null>(null);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
 
   useEffect(() => {
     if (typeof navigator === "undefined") return;
@@ -68,20 +70,25 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
         return;
       }
       const t = c.effectiveType ?? "";
-      // Only skip video on very slow profiles; 3g label is often wrong on desktop / good Wi‑Fi.
-      setConnectionSlow(t === "slow-2g" || t === "2g");
+      // No video on slow / metered-style labels (includes 3g — hero video is heavy).
+      setConnectionSlow(
+        t === "slow-2g" || t === "2g" || t === "3g"
+      );
     };
     update();
     c.addEventListener?.("change", update);
     return () => c.removeEventListener?.("change", update);
   }, []);
 
-  const tryVideo =
+  const networkAllowsVideo =
     !reduceMotion && connectionSlow !== true && !videoFailed;
+
+  /** JPG must finish first; only then mount & fetch MP4 (saves bandwidth on slow nets: we never mount video). */
+  const shouldMountVideo = posterLoaded && networkAllowsVideo;
 
   // Muted autoplay still needs an explicit play() on many mobile browsers after mount.
   useLayoutEffect(() => {
-    if (!tryVideo) return;
+    if (!shouldMountVideo) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = true;
@@ -91,7 +98,7 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
 
     const kickPlay = () => {
       void v.play().catch(() => {
-        /* second try after metadata */
+        /* retry after more data */
       });
     };
     kickPlay();
@@ -101,15 +108,27 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
       v.removeEventListener("loadeddata", kickPlay);
       v.removeEventListener("canplay", kickPlay);
     };
-  }, [tryVideo]);
+  }, [shouldMountVideo]);
 
   return (
     <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
-      {/* Video (fast / unknown network); poster matches JPG for first paint */}
-      {tryVideo ? (
+      {/* Layer 1: poster always — first paint and fallback if video never runs */}
+      <img
+        src={HERO_BACKDROP_POSTER}
+        alt=""
+        className="absolute inset-0 z-0 h-full w-full object-cover scale-[1.02]"
+        fetchPriority="high"
+        decoding="async"
+        loading="eager"
+        onLoad={() => setPosterLoaded(true)}
+      />
+      {/* Layer 2: video only after JPG loaded + fast connection; hidden until actually playing */}
+      {shouldMountVideo ? (
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover scale-[1.02]"
+          className={`absolute inset-0 z-10 h-full w-full object-cover scale-[1.02] transition-opacity duration-700 ease-out ${
+            videoPlaying ? "opacity-100" : "opacity-0"
+          }`}
           src={HERO_BACKDROP_VIDEO}
           poster={HERO_BACKDROP_POSTER}
           autoPlay
@@ -117,17 +136,13 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
           loop
           playsInline
           preload="auto"
-          onError={() => setVideoFailed(true)}
+          onPlaying={() => setVideoPlaying(true)}
+          onError={() => {
+            setVideoFailed(true);
+            setVideoPlaying(false);
+          }}
         />
-      ) : (
-        <img
-          src={HERO_BACKDROP_POSTER}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover scale-[1.02]"
-          fetchPriority="high"
-          decoding="async"
-        />
-      )}
+      ) : null}
     </div>
   );
 }
