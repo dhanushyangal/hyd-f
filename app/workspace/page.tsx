@@ -317,6 +317,17 @@ function WorkspacePage() {
     { id: "trilles", label: "Trilles" },
     { id: "hunyuan3d", label: "Hunyuan 3D", comingSoon: true },
   ];
+  const modelTypeLabel: Record<ModelId, string> = {
+    trilles: "Trilles",
+    hunyuan3d: "Hunyuan 3D",
+  };
+  const formatGenerationType = useCallback((value?: string | null): string => {
+    if (!value) return "Image";
+    const normalized = value.replace(/_/g, " ").trim();
+    if (/hunyuan\s*3d/i.test(normalized)) return "Trilles";
+    if (/trellis|trilles/i.test(normalized)) return "Trilles";
+    return normalized;
+  }, []);
 
   // 3D viewer options (Environment, Material, lighting intensity/brightness)
   const [envLighting, setEnvLighting] = useState<"studio" | "outdoor" | "neutral">("studio");
@@ -622,7 +633,7 @@ function WorkspacePage() {
             previewImageUrl: lastPreviewImageUrl || null,
             prompt: selectedJobInfo?.prompt || null,
             status: "DONE" as const,
-            generateType: "Hunyuan3D",
+            generateType: modelTypeLabel[selectedModel],
             parentJobId: lastPreviewId,
             createdAt: new Date().toISOString(),
             userId: null, imageUrl: null, faceCount: null, enablePBR: false, polygonType: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString(),
@@ -773,7 +784,7 @@ function WorkspacePage() {
       }
       const estimatedTotal = queueInfo?.estimated_total_seconds || 300;
       try {
-        const result = await submitImageTo3D(imageUrl, null, tokenGetter, previewId, null, workspaceId, previewId);
+        const result = await submitImageTo3D(imageUrl, null, tokenGetter, previewId, null, workspaceId, previewId, selectedModel);
         mobileGenStartedAtRef.current = null;
         setCurrentGenerating({
           jobId: result.job_id,
@@ -792,7 +803,7 @@ function WorkspacePage() {
       }
       setLoading(false);
     },
-    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, waitMobileGpuOfflineMinimum]
+    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, modelTypeLabel, selectedModel, waitMobileGpuOfflineMinimum]
   );
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
@@ -1488,14 +1499,24 @@ function WorkspacePage() {
             {workspaceName.trim() ? workspaceName : "Hydrilla"}
           </Link>
         </div>
-        <Link
-          href="/generations"
-          className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/12 text-blue-600 hover:bg-blue-500/20 transition-colors shrink-0"
-          aria-label="Workspace generations"
-          title="Generations"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/rigging"
+            className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/12 text-emerald-600 hover:bg-emerald-500/20 transition-colors shrink-0"
+            aria-label="3D Rigging"
+            title="3D Rigging"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.5-6.5L17 8m-10 8l-2.5 2.5M20.5 18.5L18 16M5.5 5.5L8 8" /><circle cx="12" cy="12" r="2" /></svg>
+          </Link>
+          <Link
+            href="/generations"
+            className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/12 text-blue-600 hover:bg-blue-500/20 transition-colors shrink-0"
+            aria-label="Workspace generations"
+            title="Generations"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          </Link>
+        </div>
       </header>
 
       {/* Mobile-only: large generating card on Create tab (canvas is hidden — user needs clear feedback); Canvas tab uses main column */}
@@ -1986,7 +2007,7 @@ function WorkspacePage() {
                     <div className="p-3 space-y-3 max-h-[50vh] overflow-y-auto">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                         <div className="text-neutral-400 font-medium">Type</div>
-                        <div className="text-neutral-700 capitalize">{selectedJobInfo.generateType?.replace(/_/g, " ") || "Image"}</div>
+                        <div className="text-neutral-700">{formatGenerationType(selectedJobInfo.generateType)}</div>
                         <div className="text-neutral-400 font-medium">Status</div>
                         <div className="flex items-center gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${selectedJobInfo.status === "DONE" ? "bg-green-500" : selectedJobInfo.status === "FAIL" ? "bg-red-500" : "bg-yellow-500"}`} />
@@ -2041,7 +2062,7 @@ function WorkspacePage() {
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className={`text-[10px] font-semibold ${isCurrent ? "text-black" : "text-neutral-500"}`}>{stepLabel}</span>
-                                      <span className="text-[10px] text-neutral-400 capitalize">{item.generateType?.replace(/_/g, " ") || "image"}</span>
+                                      <span className="text-[10px] text-neutral-400">{formatGenerationType(item.generateType)}</span>
                                       {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">{mergeLabel}</span>}
                                       {item.resultGlbUrl && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-500">3D</span>}
                                     </div>
@@ -2138,7 +2159,7 @@ function WorkspacePage() {
                 {/* Current job details */}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                   <div className="text-neutral-400 font-medium">Type</div>
-                  <div className="text-neutral-700 capitalize">{selectedJobInfo.generateType?.replace(/_/g, " ") || "Image"}</div>
+                  <div className="text-neutral-700">{formatGenerationType(selectedJobInfo.generateType)}</div>
 
                   <div className="text-neutral-400 font-medium">Status</div>
                   <div className="flex items-center gap-1.5">
@@ -2206,7 +2227,7 @@ function WorkspacePage() {
                                 <span className={`text-[10px] font-semibold ${isCurrent ? "text-black" : "text-neutral-500"}`}>
                                   {stepLabel}
                                 </span>
-                                <span className="text-[10px] text-neutral-400 capitalize">{item.generateType?.replace(/_/g, " ") || "image"}</span>
+                                <span className="text-[10px] text-neutral-400">{formatGenerationType(item.generateType)}</span>
                                 {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">{mergeLabel}</span>}
                                 {item.resultGlbUrl && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-500">3D</span>}
                               </div>
@@ -2292,6 +2313,9 @@ function WorkspacePage() {
               <svg className="w-4 h-4 text-neutral-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <span className="text-sm font-semibold text-neutral-800 tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
             </div>
+            <Link href="/rigging" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors shrink-0" title="3D Rigging" aria-label="3D Rigging">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.5-6.5L17 8m-10 8l-2.5 2.5M20.5 18.5L18 16M5.5 5.5L8 8" /><circle cx="12" cy="12" r="2" /></svg>
+            </Link>
             <Link href="/library" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
             </Link>

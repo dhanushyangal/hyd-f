@@ -853,7 +853,8 @@ export async function submitImageTo3D(
   previewJobId?: string | null,
   chatId?: string | null,
   workspaceId?: string | null,
-  parentJobId?: string | null
+  parentJobId?: string | null,
+  aiModel?: string | null
 ): Promise<{ job_id: string }> {
   let sourceImageUrl: string | null = imageUrl || null;
 
@@ -887,7 +888,7 @@ export async function submitImageTo3D(
     const res = await fetch(`${backendBase}/api/3d/generate`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ imageUrl: urlToSend }),
+      body: JSON.stringify({ imageUrl: urlToSend, aiModel: aiModel || undefined }),
     });
 
     if (res.status === 402) {
@@ -920,6 +921,7 @@ export async function submitImageTo3D(
         if (chatId) body.chatId = chatId;
         if (workspaceId) body.workspaceId = workspaceId;
         if (parentJobId || previewJobId) body.parentJobId = parentJobId || previewJobId;
+        if (aiModel) body.aiModel = aiModel;
         await fetch(`${backendBase}/api/3d/register-job`, {
           method: "POST",
           headers,
