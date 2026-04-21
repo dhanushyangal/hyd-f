@@ -102,7 +102,7 @@ export default function StudioPage() {
       setShowNewModal(false);
       setNewName("");
       setCurrentWorkspaceId(ws.id);
-      router.push("/workspace");
+      router.push(`/workspace/${ws.id}`);
     } catch (err: unknown) {
       console.error("Failed to create workspace:", err);
     } finally {
@@ -112,7 +112,7 @@ export default function StudioPage() {
 
   const handleOpenWorkspace = (workspaceId: string) => {
     setCurrentWorkspaceId(workspaceId);
-    router.push("/workspace");
+    router.push(`/workspace/${workspaceId}`);
   };
 
   const handleDeleteWorkspace = async (workspaceId: string) => {

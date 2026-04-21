@@ -337,7 +337,16 @@ function resolveImageUrl(url: string): string {
  * Otherwise calls gateway directly (no deduction).
  * Gateway may return immediately (sync) with image_url, or async (pending) — we poll until completed.
  */
-export async function generatePreviewImage(prompt: string, getToken?: () => Promise<string | null>): Promise<{ 
+export async function generatePreviewImage(
+  prompt: string,
+  getToken?: () => Promise<string | null>,
+  context?: {
+    chatId?: string | null;
+    workspaceId?: string | null;
+    parentJobId?: string | null;
+    parentJobIds?: string[] | null;
+  }
+): Promise<{ 
   image_url: string; 
   preview_id: string;
   queue?: QueueInfo;
@@ -376,7 +385,13 @@ export async function generatePreviewImage(prompt: string, getToken?: () => Prom
         const res = await fetch(`${backendBase}/api/3d/text-to-image`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ prompt: prompt.trim() }),
+          body: JSON.stringify({
+            prompt: prompt.trim(),
+            chatId: context?.chatId || undefined,
+            workspaceId: context?.workspaceId || undefined,
+            parentJobId: context?.parentJobId || undefined,
+            parentJobIds: context?.parentJobIds && context.parentJobIds.length > 0 ? context.parentJobIds : undefined,
+          }),
         });
         if (res.status === 402) {
           const data = await res.json().catch(() => ({}));
@@ -453,7 +468,14 @@ export async function editImage(
   prompt: string,
   imageFile?: File | null,
   imageUrl?: string | null,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
+  context?: {
+    chatId?: string | null;
+    workspaceId?: string | null;
+    parentJobId?: string | null;
+    parentJobIds?: string[] | null;
+    sourceImages?: string[] | null;
+  }
 ): Promise<{ edit_id: string; image_url: string; prompt: string; strength: number }> {
   const formData = new FormData();
   formData.append("prompt", prompt.trim());
@@ -463,6 +485,15 @@ export async function editImage(
     formData.append("image_url", imageUrl);
   } else {
     throw new Error("Either image file or image URL is required");
+  }
+  if (context?.chatId) formData.append("chatId", context.chatId);
+  if (context?.workspaceId) formData.append("workspaceId", context.workspaceId);
+  if (context?.parentJobId) formData.append("parentJobId", context.parentJobId);
+  if (context?.parentJobIds && context.parentJobIds.length > 0) {
+    formData.append("parentJobIds", JSON.stringify(context.parentJobIds));
+  }
+  if (context?.sourceImages && context.sourceImages.length > 0) {
+    formData.append("sourceImages", JSON.stringify(context.sourceImages));
   }
 
   const doRequest = async (url: string, headers: HeadersInit) => {
@@ -570,7 +601,14 @@ export async function combinedEdit(
   imageFile2: File | null,
   getToken?: () => Promise<string | null>,
   imageUrl1?: string | null,
-  imageUrl2?: string | null
+  imageUrl2?: string | null,
+  context?: {
+    chatId?: string | null;
+    workspaceId?: string | null;
+    parentJobId?: string | null;
+    parentJobIds?: string[] | null;
+    sourceImages?: string[] | null;
+  }
 ): Promise<{ combined_id: string; image_url: string; prompt: string; prompt_used: string }> {
   const file1 = imageFile1 || (imageUrl1 ? await urlToFile(imageUrl1, "image_1") : null);
   const file2 = imageFile2 || (imageUrl2 ? await urlToFile(imageUrl2, "image_2") : null);
@@ -583,6 +621,15 @@ export async function combinedEdit(
   formData.append("prompt", prompt.trim());
   formData.append("image_1", file1);
   formData.append("image_2", file2);
+  if (context?.chatId) formData.append("chatId", context.chatId);
+  if (context?.workspaceId) formData.append("workspaceId", context.workspaceId);
+  if (context?.parentJobId) formData.append("parentJobId", context.parentJobId);
+  if (context?.parentJobIds && context.parentJobIds.length > 0) {
+    formData.append("parentJobIds", JSON.stringify(context.parentJobIds));
+  }
+  if (context?.sourceImages && context.sourceImages.length > 0) {
+    formData.append("sourceImages", JSON.stringify(context.sourceImages));
+  }
 
   const doRequest = async (url: string, headers: HeadersInit) => {
     const res = await fetch(url, { method: "POST", headers, body: formData });
@@ -665,7 +712,11 @@ export async function submitTextTo3D(prompt: string, getToken?: () => Promise<st
     const res = await fetch(`${backendBase}/api/3d/generate`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({
+        prompt,
+        chatId: chatId || undefined,
+        workspaceId: workspaceId || undefined,
+      }),
     });
 
     if (res.status === 402) {
@@ -690,7 +741,7 @@ export async function submitTextTo3D(prompt: string, getToken?: () => Promise<st
     // Attach chat/workspace by registering the job (backend already created it with user_id and credits)
     if (jobId && (chatId || workspaceId)) {
       try {
-        const registerBody: Record<string, unknown> = { job_id: jobId, prompt };
+        const registerBody: Record<string, unknown> = { job_id: jobId, prompt, generateType: "TextTo3D" };
         if (chatId) registerBody.chatId = chatId;
         if (workspaceId) registerBody.workspaceId = workspaceId;
         await fetch(`${backendBase}/api/3d/register-job`, {
@@ -888,7 +939,14 @@ export async function submitImageTo3D(
     const res = await fetch(`${backendBase}/api/3d/generate`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ imageUrl: urlToSend, aiModel: aiModel || undefined }),
+      body: JSON.stringify({
+        imageUrl: urlToSend,
+        aiModel: aiModel || undefined,
+        chatId: chatId || undefined,
+        workspaceId: workspaceId || undefined,
+        parentJobId: (parentJobId || previewJobId) || undefined,
+        parentJobIds: (parentJobId || previewJobId) ? [parentJobId || previewJobId] : undefined,
+      }),
     });
 
     if (res.status === 402) {
@@ -915,6 +973,7 @@ export async function submitImageTo3D(
         const body: Record<string, unknown> = {
           job_id: jobId,
           imageUrl: urlToSend,
+          generateType: "ImageTo3D",
         };
         if (sourceImageUrl) body.sourceImages = [sourceImageUrl];
         if (previewJobId) body.previewJobId = previewJobId;
@@ -989,6 +1048,7 @@ async function submitImageTo3DViaGateway(
       const body: Record<string, unknown> = {
         job_id: result.job_id,
         imageUrl: sourceImageUrl || imageUrl || "uploaded_file",
+        generateType: "ImageTo3D",
       };
       if (sourceImageUrl) body.sourceImages = [sourceImageUrl];
       if (previewJobId) body.previewJobId = previewJobId;
@@ -1045,7 +1105,7 @@ export async function _unusedSubmitImageTo3DGateway(
       await fetch(`${backendBase}/api/3d/register-job`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ job_id: result.job_id, imageUrl: imageUrl || "uploaded_file", chatId, workspaceId, parentJobId: parentJobId || previewJobId }),
+        body: JSON.stringify({ job_id: result.job_id, imageUrl: imageUrl || "uploaded_file", generateType: "ImageTo3D", chatId, workspaceId, parentJobId: parentJobId || previewJobId }),
       }).catch(() => {});
     }
     return result;

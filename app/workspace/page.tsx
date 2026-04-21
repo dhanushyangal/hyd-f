@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { Slider } from "../../components/ui/slider";
 import {
@@ -17,6 +17,7 @@ import {
   fetchHistory,
   fetchWorkspace,
   fetchWorkspaceJobs,
+  fetchWorkspaces,
   updateWorkspaceNameApi,
   createWorkspaceApi,
   fetchStatus,
@@ -128,8 +129,10 @@ export default function WorkspacePageWrapper() {
 function WorkspacePage() {
   const { isSignedIn, getToken, isLoaded } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [resolvingWorkspace, setResolvingWorkspace] = useState(true);
 
   // If user is not authenticated, redirect to sign-in immediately.
   useEffect(() => {
@@ -138,46 +141,68 @@ function WorkspacePage() {
     router.push("/sign-in");
   }, [isLoaded, isSignedIn, router]);
 
-  // Resolve workspace ID from URL or sessionStorage; keep URL as /workspace only.
-  // In the same effect, start loading workspace + jobs so we don't wait an extra render.
+  // Resolve workspace ID from path (/workspace/:id), fallback query/session, and keep URL canonical as /workspace/:id.
+  // If user has no workspace, redirect to /app/studio.
   useEffect(() => {
-    const idFromUrl = searchParams.get("id");
-    const id = idFromUrl ?? getCurrentWorkspaceId();
-    if (idFromUrl) {
-      setCurrentWorkspaceId(idFromUrl);
-      window.history.replaceState(null, "", "/workspace");
-    }
-    setWorkspaceId(id);
+    if (!isLoaded || !isSignedIn) return;
 
-    if (!id || !isLoaded || !isSignedIn) return;
+    const pathParts = pathname.split("/").filter(Boolean);
+    const idFromPath = pathParts[0] === "workspace" && pathParts[1] ? pathParts[1] : null;
+    const idFromUrl = searchParams.get("id");
+    const storedId = getCurrentWorkspaceId();
+    const resolvedId = idFromPath ?? idFromUrl ?? storedId;
     const tokenGetter = async () => (await getToken()) ?? "";
-    setLibraryLoading(true);
-    Promise.all([
-      fetchWorkspace(id, tokenGetter),
-      fetchWorkspaceJobs(id, tokenGetter),
-    ])
-      .then(([ws, jobs]) => {
-        // If the stored workspace no longer exists, force user to create/select a new one.
+
+    const hydrateWorkspace = async (id: string) => {
+      setCurrentWorkspaceId(id);
+      setWorkspaceId(id);
+      if (pathname !== `/workspace/${id}`) router.replace(`/workspace/${id}`);
+
+      setLibraryLoading(true);
+      try {
+        const [ws, jobs] = await Promise.all([
+          fetchWorkspace(id, tokenGetter),
+          fetchWorkspaceJobs(id, tokenGetter),
+        ]);
         if (!ws) {
           clearCurrentWorkspaceId();
           setWorkspaceId(null);
           setWorkspaceName("");
           setLibraryImages([]);
           setLibrary3DAssets([]);
-          setForcedWorkspaceModal(true);
-          setShowNewWorkspaceModal(true);
+          router.replace("/app/studio");
+          setResolvingWorkspace(false);
           return;
         }
 
         setWorkspaceName(ws.name ?? "");
-        setLibraryImages(jobs.filter((j) => (j.previewImageUrl || j.imageUrl) && !j.resultGlbUrl).slice(0, 50));
-        setLibrary3DAssets(jobs.filter((j) => j.resultGlbUrl).slice(0, 50));
-        // Do not auto-show "Generating 3D model..." on load: only show it when the user
-        // starts a generation or explicitly clicks a RUN job in the library.
-      })
-      .catch(() => {})
-      .finally(() => setLibraryLoading(false));
-  }, [searchParams, isLoaded, isSignedIn, getToken]);
+        setLibraryImages(jobs.filter(shouldShowInImageLibrary).slice(0, 50));
+        setLibrary3DAssets(jobs.filter(shouldShowIn3DLibrary).slice(0, 50));
+        setResolvingWorkspace(false);
+      } finally {
+        setLibraryLoading(false);
+      }
+    };
+
+    if (resolvedId) {
+      void hydrateWorkspace(resolvedId);
+      return;
+    }
+
+    void (async () => {
+      const workspaces = await fetchWorkspaces(tokenGetter);
+      const firstWorkspaceId = workspaces[0]?.id ?? null;
+      if (!firstWorkspaceId) {
+        clearCurrentWorkspaceId();
+        setWorkspaceId(null);
+        setWorkspaceName("");
+        setResolvingWorkspace(false);
+        router.replace("/app/studio");
+        return;
+      }
+      await hydrateWorkspace(firstWorkspaceId);
+    })();
+  }, [pathname, searchParams, isLoaded, isSignedIn, getToken, router]);
 
   const [workspaceName, setWorkspaceName] = useState("");
   const workspaceNameTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -211,7 +236,7 @@ function WorkspacePage() {
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const mustCreateWorkspace = isLoaded && isSignedIn && !workspaceId;
+  const mustCreateWorkspace = isLoaded && isSignedIn && !resolvingWorkspace && !workspaceId;
   const hasWorkspaceContext = Boolean(workspaceId && workspaceName.trim());
 
   // If user lands on /workspace without a selected workspace, force workspace creation first.
@@ -244,6 +269,49 @@ function WorkspacePage() {
   const [libraryImages, setLibraryImages] = useState<BackendJob[]>([]);
   const [library3DAssets, setLibrary3DAssets] = useState<BackendJob[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+
+  // Optimistic pending entries for immediate loader feedback in the left library.
+  // Each pending has an id like `pending-<ts>-<rand>` and status "WAIT".
+  // They are removed once the server returns a real RUN/WAIT/DONE job for the same generation.
+  const [pendingJobs, setPendingJobs] = useState<BackendJob[]>([]);
+  const makePendingId = useCallback(
+    () => `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    []
+  );
+  const addPendingJob = useCallback(
+    (partial: Partial<BackendJob> & { generateType: string }): string => {
+      const id = makePendingId();
+      const nowIso = new Date().toISOString();
+      const pending: BackendJob = {
+        id,
+        userId: null,
+        status: "WAIT",
+        prompt: partial.prompt ?? null,
+        imageUrl: partial.imageUrl ?? null,
+        generateType: partial.generateType,
+        faceCount: null,
+        enablePBR: false,
+        polygonType: null,
+        resultGlbUrl: null,
+        previewImageUrl: partial.previewImageUrl ?? null,
+        errorCode: null,
+        errorMessage: null,
+        name: partial.name ?? null,
+        workspaceId: partial.workspaceId ?? workspaceId ?? null,
+        parentJobId: partial.parentJobId ?? null,
+        parentJobIds: partial.parentJobIds ?? [],
+        sourceImages: partial.sourceImages ?? null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      setPendingJobs((prev) => [pending, ...prev].slice(0, 20));
+      return id;
+    },
+    [makePendingId, workspaceId]
+  );
+  const removePendingJob = useCallback((id: string) => {
+    setPendingJobs((prev) => prev.filter((p) => p.id !== id));
+  }, []);
 
   // Generation tracking (for 3D jobs)
   const [currentGenerating, setCurrentGenerating] = useState<GeneratingJob | null>(null);
@@ -328,6 +396,31 @@ function WorkspacePage() {
     if (/trellis|trilles/i.test(normalized)) return "Trilles";
     return normalized;
   }, []);
+  const is3DGenerationType = useCallback((value?: string | null): boolean => {
+    if (!value) return false;
+    const normalized = value.replace(/_/g, " ").toLowerCase();
+    return (
+      normalized.includes("3d") ||
+      normalized.includes("trellis") ||
+      normalized.includes("trilles") ||
+      normalized.includes("hunyuan")
+    );
+  }, []);
+  const shouldShowInImageLibrary = useCallback((job: BackendJob): boolean => {
+    // Show completed 2D images and in-progress 2D jobs.
+    // Exclude failed jobs and all 3D jobs from Images tab.
+    if (job.status === "FAIL") return false;
+    if (is3DGenerationType(job.generateType)) return false;
+    if (job.status === "DONE") return Boolean(job.previewImageUrl || job.imageUrl);
+    return job.status === "RUN" || job.status === "WAIT";
+  }, [is3DGenerationType]);
+  const shouldShowIn3DLibrary = useCallback((job: BackendJob): boolean => {
+    // Show completed 3D outputs and in-progress 3D jobs.
+    if (job.status === "FAIL") return false;
+    if (job.resultGlbUrl) return true;
+    if (!is3DGenerationType(job.generateType)) return false;
+    return job.status === "RUN" || job.status === "WAIT";
+  }, [is3DGenerationType]);
 
   // 3D viewer options (Environment, Material, lighting intensity/brightness)
   const [envLighting, setEnvLighting] = useState<"studio" | "outdoor" | "neutral">("studio");
@@ -519,7 +612,7 @@ function WorkspacePage() {
       setCurrentWorkspaceId(ws.id);
       setWorkspaceId(ws.id);
       setWorkspaceName(ws.name ?? name);
-      router.push("/workspace");
+      router.push(`/workspace/${ws.id}`);
     } catch (err) {
       console.error("Failed to create workspace:", err);
     } finally {
@@ -552,11 +645,37 @@ function WorkspacePage() {
       }
       const tokenGetter = async () => await getToken();
       const jobs = await fetchWorkspaceJobs(workspaceId, tokenGetter);
-      setLibraryImages(jobs.filter((j) => (j.previewImageUrl || j.imageUrl) && !j.resultGlbUrl).slice(0, 50));
-      setLibrary3DAssets(jobs.filter((j) => j.resultGlbUrl).slice(0, 50));
+      setLibraryImages(jobs.filter(shouldShowInImageLibrary).slice(0, 50));
+      setLibrary3DAssets(jobs.filter(shouldShowIn3DLibrary).slice(0, 50));
       restoreRunning3DJobIfAny(jobs);
+
+      // Prune optimistic pending entries whose corresponding real job now exists on the server.
+      // Heuristic: drop pending if a server job was created AFTER the pending's createdAt
+      // and matches by category (3D vs 2D) + optional prompt/imageUrl/parentJobId.
+      setPendingJobs((prev) => {
+        if (prev.length === 0) return prev;
+        const now = Date.now();
+        return prev.filter((p) => {
+          const pendingStarted = Date.parse(p.createdAt);
+          const maxAgeMs = 60_000; // give up after 60s — a real job should exist by then
+          if (Number.isFinite(pendingStarted) && now - pendingStarted > maxAgeMs) return false;
+          const pendingIs3D = is3DGenerationType(p.generateType);
+          const match = jobs.find((j) => {
+            const jStarted = Date.parse(j.createdAt);
+            if (!Number.isFinite(jStarted) || jStarted < pendingStarted - 2000) return false;
+            const jIs3D = is3DGenerationType(j.generateType);
+            if (pendingIs3D !== jIs3D) return false;
+            if (p.parentJobId && j.parentJobId && p.parentJobId === j.parentJobId) return true;
+            if (p.prompt && j.prompt && p.prompt === j.prompt) return true;
+            if (p.imageUrl && j.imageUrl && p.imageUrl === j.imageUrl) return true;
+            // Fallback: first same-category job created within 10s of pending start
+            return Math.abs(jStarted - pendingStarted) < 10_000;
+          });
+          return !match;
+        });
+      });
     } catch { /* ignore */ }
-  }, [getToken, workspaceId, restoreRunning3DJobIfAny]);
+  }, [getToken, workspaceId, restoreRunning3DJobIfAny, shouldShowInImageLibrary, shouldShowIn3DLibrary, is3DGenerationType]);
 
   // When workspace is created/changed, refresh credits + library immediately.
   useEffect(() => {
@@ -564,6 +683,34 @@ function WorkspacePage() {
     refreshCredits();
     refreshLibrary();
   }, [isSignedIn, workspaceId, refreshCredits, refreshLibrary]);
+
+  // ──────────── Background library polling ────────────
+  // Poll workspace jobs every 5s whenever there are active (RUN/WAIT) jobs or
+  // optimistic pending entries, so the left library reflects progress across
+  // tabs, browsers and devices without waiting for a user action.
+  useEffect(() => {
+    if (!isSignedIn || !workspaceId) return;
+    const hasActive =
+      pendingJobs.length > 0 ||
+      libraryImages.some((j) => j.status === "RUN" || j.status === "WAIT") ||
+      library3DAssets.some((j) => j.status === "RUN" || j.status === "WAIT");
+    if (!hasActive) return;
+    const interval = setInterval(() => {
+      refreshLibrary();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isSignedIn, workspaceId, pendingJobs.length, libraryImages, library3DAssets, refreshLibrary]);
+
+  // Refresh when the tab becomes visible again (so the loader state matches
+  // the server when the user returns from another tab/device).
+  useEffect(() => {
+    if (!isSignedIn || !workspaceId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshLibrary();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [isSignedIn, workspaceId, refreshLibrary]);
 
   // Workspace + jobs are loaded in the same effect that resolves workspaceId (above)
   // so we don't wait an extra render. refreshLibrary() is still used for manual refresh.
@@ -596,13 +743,34 @@ function WorkspacePage() {
             const msg = jobsAhead > 0
               ? `Waiting in queue (${jobsAhead} user${jobsAhead !== 1 ? "s" : ""} ahead${waitMin > 0 ? `, ~${waitMin} min` : ""})...`
               : "Starting soon...";
-            setCenterView({ type: "generating", progress: waitProgress, message: msg });
+            setCenterView((prev) => {
+              // Do not hijack center view if user clicked another item in workspace.
+              // Keep updating loading UI only when this generating job is currently in focus.
+              const followsCurrentJob =
+                prev.type === "generating" ||
+                (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
+                (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
+              if (!followsCurrentJob) return prev;
+              return { type: "generating", progress: waitProgress, message: msg };
+            });
           } else {
             const waitTime = status.queue.estimated_wait_seconds || 0;
             const processingElapsed = Math.max(0, elapsedSeconds - waitTime);
             const processingDuration = estimatedTotal - waitTime;
             const progress = 50 + (processingElapsed / processingDuration) * 45;
-            setCenterView({ type: "generating", progress: Math.max(50, Math.min(95, progress)), message: "Generating 3D model..." });
+            setCenterView((prev) => {
+              // Do not hijack center view if user clicked another item in workspace.
+              const followsCurrentJob =
+                prev.type === "generating" ||
+                (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
+                (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
+              if (!followsCurrentJob) return prev;
+              return {
+                type: "generating",
+                progress: Math.max(50, Math.min(95, progress)),
+                message: "Generating 3D model...",
+              };
+            });
           }
         }
 
@@ -765,6 +933,17 @@ function WorkspacePage() {
       markMobileGenerationStart();
       setLoading(true);
       setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
+
+      // Optimistic pending entry so the 3D library shows a loader immediately
+      // (before the API returns) and the user sees progress without delay.
+      const pendingId = addPendingJob({
+        generateType: "ImageTo3D",
+        previewImageUrl: imageUrl,
+        imageUrl,
+        parentJobId: previewId ?? null,
+        parentJobIds: previewId ? [previewId] : [],
+      });
+
       let queueInfo: QueueInfo | null = null;
       try {
         queueInfo = await fetchQueueInfo();
@@ -779,6 +958,7 @@ function WorkspacePage() {
         await waitMobileGpuOfflineMinimum(msg, userFacing);
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
+        removePendingJob(pendingId);
         setLoading(false);
         return;
       }
@@ -794,16 +974,19 @@ function WorkspacePage() {
           startTime: Date.now(),
           queueInfo: queueInfo || undefined,
         });
+        // Kick a library refresh so the newly-created server job shows up and replaces the pending.
+        refreshLibrary();
       } catch (err: unknown) {
         const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "Failed to start 3D";
         const userFacing = toUserFacingGpuError(msg);
         await waitMobileGpuOfflineMinimum(msg, userFacing);
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
+        removePendingJob(pendingId);
       }
       setLoading(false);
     },
-    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, modelTypeLabel, selectedModel, waitMobileGpuOfflineMinimum]
+    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, modelTypeLabel, selectedModel, waitMobileGpuOfflineMinimum, addPendingJob, removePendingJob, refreshLibrary]
   );
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
@@ -832,6 +1015,13 @@ function WorkspacePage() {
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Generating image from text..." });
 
+      // Optimistic pending entry so the image library shows a loader immediately.
+      const pendingTextImageId = addPendingJob({
+        generateType: "TextToImage",
+        prompt: prompt.trim(),
+      });
+      setLeftLibraryTab("images");
+
       let queueInfo: QueueInfo | null = null;
       try { queueInfo = await fetchQueueInfo(); } catch (err: any) {
         if (err.message?.includes("GPU is currently offline")) {
@@ -855,7 +1045,9 @@ function WorkspacePage() {
       }, 200);
 
       try {
-        const result = await generatePreviewImage(prompt.trim(), tokenGetter);
+        const result = await generatePreviewImage(prompt.trim(), tokenGetter, {
+          workspaceId,
+        });
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
 
         setLastPreviewImageUrl(result.image_url);
@@ -883,6 +1075,7 @@ function WorkspacePage() {
 
         // Text-only: no parent (root job)
         try { await registerJobWithPreview(result.preview_id, result.image_url, prompt.trim(), tokenGetter, null, null, workspaceId, null); } catch { /* non-critical */ }
+        removePendingJob(pendingTextImageId);
         refreshLibrary();
 
         // Update generation info panel
@@ -897,6 +1090,7 @@ function WorkspacePage() {
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
+        removePendingJob(pendingTextImageId);
       }
       return;
     }
@@ -956,6 +1150,16 @@ function WorkspacePage() {
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Editing image..." });
 
+      const pendingEditId = addPendingJob({
+        generateType: "EditImage",
+        prompt: prompt.trim(),
+        previewImageUrl: image1 ?? null,
+        imageUrl: image1 ?? null,
+        parentJobId: jobId1 ?? currentParentJobId ?? null,
+        parentJobIds: jobId1 ? [jobId1] : [],
+      });
+      setLeftLibraryTab("images");
+
       const estimatedTime = 30;
       const startTime = Date.now();
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
@@ -972,7 +1176,12 @@ function WorkspacePage() {
           : (image1 ?? null);
         const editSrcImages = srcUrl ? [srcUrl] : [];
 
-        const result = await editImage(prompt.trim(), file1, image1, tokenGetter);
+        const result = await editImage(prompt.trim(), file1, image1, tokenGetter, {
+          workspaceId,
+          parentJobId: jobId1 || currentParentJobId || null,
+          parentJobIds: jobId1 ? [jobId1] : [],
+          sourceImages: editSrcImages,
+        });
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
 
         const editParent = jobId1 || currentParentJobId; // The image being edited is the parent
@@ -1002,6 +1211,7 @@ function WorkspacePage() {
         }));
 
         try { await registerJobWithPreview(result.edit_id, result.image_url, prompt.trim(), tokenGetter, null, "EditImage", workspaceId, editParent, editParentIds, editSrcImages); } catch { /* non-critical */ }
+        removePendingJob(pendingEditId);
         refreshLibrary();
 
         // Update generation info panel
@@ -1016,6 +1226,7 @@ function WorkspacePage() {
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
+        removePendingJob(pendingEditId);
       }
       return;
     }
@@ -1031,6 +1242,19 @@ function WorkspacePage() {
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Combining images..." });
+
+      const combinedPendingParentIds: string[] = [];
+      if (jobId1) combinedPendingParentIds.push(jobId1);
+      if (jobId2) combinedPendingParentIds.push(jobId2);
+      const pendingCombinedId = addPendingJob({
+        generateType: "Combined",
+        prompt: prompt.trim(),
+        previewImageUrl: image1 ?? image2 ?? null,
+        imageUrl: image1 ?? image2 ?? null,
+        parentJobId: jobId1 ?? jobId2 ?? currentParentJobId ?? null,
+        parentJobIds: combinedPendingParentIds,
+      });
+      setLeftLibraryTab("images");
 
       const estimatedTime = 40;
       const startTime = Date.now();
@@ -1056,6 +1280,10 @@ function WorkspacePage() {
           url2 = image2!; // from library
         }
         const srcImages: string[] = [url1, url2];
+        const parentIds: string[] = [];
+        if (jobId1) parentIds.push(jobId1);
+        if (jobId2) parentIds.push(jobId2);
+        const primaryParent = jobId1 || jobId2 || currentParentJobId;
 
         // Send files if available, otherwise URLs (from workspace library)
         const result = await combinedEdit(
@@ -1064,15 +1292,15 @@ function WorkspacePage() {
           file2,
           tokenGetter,
           file1 ? null : image1,  // URL for slot 1 if no file
-          file2 ? null : image2   // URL for slot 2 if no file
+          file2 ? null : image2,   // URL for slot 2 if no file
+          {
+            workspaceId,
+            parentJobId: primaryParent,
+            parentJobIds: parentIds,
+            sourceImages: srcImages,
+          }
         );
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-
-        // Build multi-parent list from slot job IDs
-        const parentIds: string[] = [];
-        if (jobId1) parentIds.push(jobId1);
-        if (jobId2) parentIds.push(jobId2);
-        const primaryParent = jobId1 || jobId2 || currentParentJobId;
 
         setLastPreviewImageUrl(result.image_url);
         setLastPreviewId(result.combined_id);
@@ -1106,6 +1334,7 @@ function WorkspacePage() {
             srcImages            // actual source image URLs
           );
         } catch { /* non-critical */ }
+        removePendingJob(pendingCombinedId);
         refreshLibrary();
 
         // Update generation info panel
@@ -1127,6 +1356,7 @@ function WorkspacePage() {
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
+        removePendingJob(pendingCombinedId);
       }
     }
   };
@@ -1166,17 +1396,21 @@ function WorkspacePage() {
     const imageUrl = job.previewImageUrl || job.imageUrl;
     if (!imageUrl) return;
 
-    // If this job is RUN (3D generating), show generating state in center (3D area), not image preview
-    if (job.status === "RUN" && !job.resultGlbUrl) {
+    // If this job is queued/running for 3D generation, restore generating state in center.
+    if ((job.status === "RUN" || job.status === "WAIT") && !job.resultGlbUrl && is3DGenerationType(job.generateType)) {
       setLeftLibraryTab("3d"); // Switch to 3D tab when viewing a job that is generating 3D
       setCurrentGenerating({
         jobId: job.id,
         status: "generating",
         progress: 0,
         estimatedTotalSeconds: 300,
-        startTime: Date.now(),
+        startTime: Number.isFinite(Date.parse(job.createdAt)) ? Date.parse(job.createdAt) : Date.now(),
       });
-      setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
+      setCenterView({
+        type: "generating",
+        progress: job.status === "WAIT" ? 5 : 15,
+        message: job.status === "WAIT" ? "Queued for 3D generation..." : "Generating 3D model...",
+      });
       setLastPreviewImageUrl(imageUrl);
       setLastPreviewId(job.id);
       setCurrentParentJobId(job.id);
@@ -1249,6 +1483,29 @@ function WorkspacePage() {
   };
 
   const handle3DClick = (job: BackendJob) => {
+    if ((job.status === "RUN" || job.status === "WAIT") && !job.resultGlbUrl) {
+      setLeftLibraryTab("3d");
+      setCurrentGenerating({
+        jobId: job.id,
+        status: "generating",
+        progress: 0,
+        estimatedTotalSeconds: 300,
+        startTime: Number.isFinite(Date.parse(job.createdAt)) ? Date.parse(job.createdAt) : Date.now(),
+      });
+      setCenterView({
+        type: "generating",
+        progress: job.status === "WAIT" ? 5 : 15,
+        message: job.status === "WAIT" ? "Queued for 3D generation..." : "Generating 3D model...",
+      });
+      if (job.previewImageUrl || job.imageUrl) {
+        setLastPreviewImageUrl(job.previewImageUrl || job.imageUrl);
+        setLastPreviewId(job.id);
+        setCurrentParentJobId(job.id);
+      }
+      loadJobInfo(job);
+      return;
+    }
+
     if (job.resultGlbUrl) {
       setLeftLibraryTab("3d"); // Keep 3D tab active when viewing a 3D model
       setCenterView({ type: "3d", glbUrl: getProxyGlbUrl(job.id), jobId: job.id });
@@ -1322,10 +1579,17 @@ function WorkspacePage() {
   }, [lineageItemToJob, loadJobInfo, inputMode]);
 
   // ──────────── Filtered library ────────────
-  const filteredImages = libraryImages.filter((a) =>
+  // Merge optimistic pending entries with server jobs. Pendings appear first so the
+  // loader shows immediately on user action, and stay visible until the server returns
+  // the real RUN/WAIT job (at which point refreshLibrary prunes the pending).
+  const pendingImageJobs = pendingJobs.filter((p) => !is3DGenerationType(p.generateType));
+  const pending3DJobs = pendingJobs.filter((p) => is3DGenerationType(p.generateType));
+  const mergedLibraryImages = [...pendingImageJobs, ...libraryImages];
+  const mergedLibrary3DAssets = [...pending3DJobs, ...library3DAssets];
+  const filteredImages = mergedLibraryImages.filter((a) =>
     (a.prompt || a.name || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filtered3DAssets = library3DAssets.filter((a) =>
+  const filtered3DAssets = mergedLibrary3DAssets.filter((a) =>
     (a.prompt || a.name || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -1353,9 +1617,20 @@ function WorkspacePage() {
       setCenterView({ type: "3d", glbUrl: getProxyGlbUrl(job.id), jobId: job.id });
       loadJobInfo(job);
       setMobileTab("canvas");
-      window.history.replaceState(null, "", "/workspace");
+      window.history.replaceState(null, "", workspaceId ? `/workspace/${workspaceId}` : "/workspace");
     }
-  }, [searchParams, libraryLoading, library3DAssets, loadJobInfo]);
+  }, [searchParams, libraryLoading, library3DAssets, loadJobInfo, workspaceId]);
+
+  if (resolvingWorkspace) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-neutral-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
+          <p className="text-sm text-neutral-500">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-neutral-50 text-black">
@@ -1678,12 +1953,20 @@ function WorkspacePage() {
                           e.dataTransfer.effectAllowed = "copy";
                         }}
                         onClick={() => handleImageClick(item)}
-                        className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center"
+                        className="relative aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center"
                       >
                         {(item.previewImageUrl || item.imageUrl) ? (
                           <img src={item.previewImageUrl || item.imageUrl || ""} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
                         ) : (
                           <span className="text-neutral-600 text-[10px] text-center px-1 truncate max-w-full font-medium">{item.prompt || "Image"}</span>
+                        )}
+                        {(item.status === "RUN" || item.status === "WAIT") && (
+                          <div className="absolute inset-0 bg-black/35 flex flex-col items-center justify-center gap-1.5">
+                            <div className="w-4 h-4 border-2 border-white/70 border-t-white rounded-full animate-spin" />
+                            <span className="text-[10px] font-medium text-white">
+                              {item.status === "WAIT" ? "Queued" : "Generating"}
+                            </span>
+                          </div>
                         )}
                       </div>
                     ))
@@ -1709,13 +1992,21 @@ function WorkspacePage() {
                     </div>
                   ) : (
                     filtered3DAssets.map((item) => (
-                      <div key={item.id} onClick={() => handle3DClick(item)} className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center">
+                      <div key={item.id} onClick={() => handle3DClick(item)} className="relative aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center">
                         {item.previewImageUrl ? (
                           <img src={item.previewImageUrl} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover" />
                         ) : (
                           <div className="flex flex-col items-center text-black/50">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                             <span className="text-[10px] mt-1 font-medium">3D</span>
+                          </div>
+                        )}
+                        {(item.status === "RUN" || item.status === "WAIT") && (
+                          <div className="absolute inset-0 bg-black/35 flex flex-col items-center justify-center gap-1.5">
+                            <div className="w-4 h-4 border-2 border-white/70 border-t-white rounded-full animate-spin" />
+                            <span className="text-[10px] font-medium text-white">
+                              {item.status === "WAIT" ? "Queued" : "Generating"}
+                            </span>
                           </div>
                         )}
                       </div>
