@@ -940,6 +940,25 @@ function WorkspacePage() {
         parentJobId: previewId ?? null,
         parentJobIds: previewId ? [previewId] : [],
       });
+      loadJobInfo({
+        id: pendingId,
+        userId: null,
+        status: "WAIT",
+        prompt: prompt.trim() || null,
+        imageUrl,
+        generateType: "ImageTo3D",
+        enablePBR: false,
+        resultGlbUrl: null,
+        previewImageUrl: imageUrl,
+        errorCode: null,
+        errorMessage: null,
+        workspaceId: workspaceId ?? null,
+        parentJobId: previewId ?? null,
+        parentJobIds: previewId ? [previewId] : [],
+        sourceImages: [imageUrl],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
 
       let queueInfo: QueueInfo | null = null;
       try {
@@ -970,6 +989,25 @@ function WorkspacePage() {
           estimatedTotalSeconds: estimatedTotal,
           startTime: Date.now(),
           queueInfo: queueInfo || undefined,
+        });
+        loadJobInfo({
+          id: result.job_id,
+          userId: null,
+          status: "RUN",
+          prompt: prompt.trim() || null,
+          imageUrl,
+          generateType: "ImageTo3D",
+          enablePBR: false,
+          resultGlbUrl: null,
+          previewImageUrl: imageUrl,
+          errorCode: null,
+          errorMessage: null,
+          workspaceId: workspaceId ?? null,
+          parentJobId: previewId ?? null,
+          parentJobIds: previewId ? [previewId] : [],
+          sourceImages: [imageUrl],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         });
         // Kick a library refresh so the newly-created server job shows up and replaces the pending.
         refreshLibrary();
@@ -1016,6 +1054,25 @@ function WorkspacePage() {
       const pendingTextImageId = addPendingJob({
         generateType: "TextToImage",
         prompt: prompt.trim(),
+      });
+      loadJobInfo({
+        id: pendingTextImageId,
+        userId: null,
+        status: "WAIT",
+        prompt: prompt.trim(),
+        imageUrl: null,
+        generateType: "TextToImage",
+        enablePBR: false,
+        resultGlbUrl: null,
+        previewImageUrl: null,
+        errorCode: null,
+        errorMessage: null,
+        workspaceId: workspaceId ?? null,
+        parentJobId: null,
+        parentJobIds: [],
+        sourceImages: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
       setLeftLibraryTab("images");
 
@@ -1155,6 +1212,25 @@ function WorkspacePage() {
         parentJobId: jobId1 ?? currentParentJobId ?? null,
         parentJobIds: jobId1 ? [jobId1] : [],
       });
+      loadJobInfo({
+        id: pendingEditId,
+        userId: null,
+        status: "WAIT",
+        prompt: prompt.trim(),
+        imageUrl: image1 ?? null,
+        generateType: "EditImage",
+        enablePBR: false,
+        resultGlbUrl: null,
+        previewImageUrl: image1 ?? null,
+        errorCode: null,
+        errorMessage: null,
+        workspaceId: workspaceId ?? null,
+        parentJobId: jobId1 ?? currentParentJobId ?? null,
+        parentJobIds: jobId1 ? [jobId1] : [],
+        sourceImages: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
       setLeftLibraryTab("images");
 
       const estimatedTime = 30;
@@ -1250,6 +1326,25 @@ function WorkspacePage() {
         imageUrl: image1 ?? image2 ?? null,
         parentJobId: jobId1 ?? jobId2 ?? currentParentJobId ?? null,
         parentJobIds: combinedPendingParentIds,
+      });
+      loadJobInfo({
+        id: pendingCombinedId,
+        userId: null,
+        status: "WAIT",
+        prompt: prompt.trim(),
+        imageUrl: image1 ?? image2 ?? null,
+        generateType: "Combined",
+        enablePBR: false,
+        resultGlbUrl: null,
+        previewImageUrl: image1 ?? image2 ?? null,
+        errorCode: null,
+        errorMessage: null,
+        workspaceId: workspaceId ?? null,
+        parentJobId: jobId1 ?? jobId2 ?? currentParentJobId ?? null,
+        parentJobIds: combinedPendingParentIds,
+        sourceImages: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
       setLeftLibraryTab("images");
 
@@ -1854,7 +1949,7 @@ function WorkspacePage() {
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Left navbar: Logo only (larger) + New Workspace — hidden on mobile (use global header) */}
           <div className="hidden md:flex px-4 py-3 border-b border-neutral-100 items-center justify-between gap-2">
-            <Link href="/" className="text-2xl font-bold text-black tracking-tight shrink-0 hover:opacity-80 transition-opacity">
+            <Link href="/app/studio" className="text-2xl font-bold text-black tracking-tight shrink-0 hover:opacity-80 transition-opacity">
               Hydrilla
             </Link>
             <button
@@ -2843,78 +2938,80 @@ function WorkspacePage() {
               )}
             </button>
 
-            {/* Environment — Lighting, sliders, toggles */}
-            <div className="space-y-3 pt-1 border-t border-neutral-100">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">Environment</span>
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="Viewer environment" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
-              </div>
-              <div className="space-y-2.5">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <label className="text-sm font-medium text-neutral-800">Lighting</label>
-                  <div className="relative min-w-[100px]">
-                    <button
-                      type="button"
-                      onClick={() => setLightingDropdownOpen((o) => !o)}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 text-left text-sm font-medium text-neutral-800 hover:bg-neutral-50 transition-colors duration-200 capitalize"
-                    >
-                      <span>{envLighting}</span>
-                      <svg className={`w-4 h-4 shrink-0 text-neutral-400 transition-transform duration-200 ${lightingDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            {/* Environment controls only when 3D model is currently open in center */}
+            {centerView.type === "3d" && (
+              <div className="space-y-3 pt-1 border-t border-neutral-100">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">Environment</span>
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="Viewer environment" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
+                </div>
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                    <label className="text-sm font-medium text-neutral-800">Lighting</label>
+                    <div className="relative min-w-[100px]">
+                      <button
+                        type="button"
+                        onClick={() => setLightingDropdownOpen((o) => !o)}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 text-left text-sm font-medium text-neutral-800 hover:bg-neutral-50 transition-colors duration-200 capitalize"
+                      >
+                        <span>{envLighting}</span>
+                        <svg className={`w-4 h-4 shrink-0 text-neutral-400 transition-transform duration-200 ${lightingDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      {lightingDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setLightingDropdownOpen(false)} aria-hidden />
+                          <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
+                            {(["neutral", "studio", "outdoor"] as const).map((opt) => (
+                              <button key={opt} type="button" onClick={() => { setEnvLighting(opt); setLightingDropdownOpen(false); }} className={`w-full px-3 py-2 text-sm text-left capitalize transition-colors ${envLighting === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                    <label className="text-sm font-medium text-neutral-800">Light intensity</label>
+                    <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
+                      <Slider value={lightIntensity} onValueChange={setLightIntensity} min={0.3} max={2} step={0.1} className="min-w-0 flex-1" aria-label="Light intensity" />
+                      <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{lightIntensity.toFixed(1)}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                    <label className="text-sm font-medium text-neutral-800">Brightness</label>
+                    <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
+                      <Slider value={brightness} onValueChange={setBrightness} min={0.5} max={2} step={0.05} className="min-w-0 flex-1" aria-label="Brightness" />
+                      <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{brightness.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                    <label className="text-sm font-medium text-neutral-800">Background</label>
+                    <button type="button" onClick={() => setEnvBackground((b) => !b)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envBackground ? "bg-neutral-800" : "bg-neutral-200"}`} title={envBackground ? "Transparent background" : "Solid background"}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envBackground ? "translate-x-4" : "translate-x-0"}`} />
                     </button>
-                    {lightingDropdownOpen && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setLightingDropdownOpen(false)} aria-hidden />
-                        <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
-                          {(["neutral", "studio", "outdoor"] as const).map((opt) => (
-                            <button key={opt} type="button" onClick={() => { setEnvLighting(opt); setLightingDropdownOpen(false); }} className={`w-full px-3 py-2 text-sm text-left capitalize transition-colors ${envLighting === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
                   </div>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <label className="text-sm font-medium text-neutral-800">Light intensity</label>
-                  <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
-                    <Slider value={lightIntensity} onValueChange={setLightIntensity} min={0.3} max={2} step={0.1} className="min-w-0 flex-1" aria-label="Light intensity" />
-                    <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{lightIntensity.toFixed(1)}</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                    <label className="text-sm font-medium text-neutral-800">Grid</label>
+                    <button type="button" onClick={() => setEnvGrid((g) => !g)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envGrid ? "bg-neutral-800" : "bg-neutral-200"}`} title={envGrid ? "Hide grid" : "Show grid"}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envGrid ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
                   </div>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <label className="text-sm font-medium text-neutral-800">Brightness</label>
-                  <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
-                    <Slider value={brightness} onValueChange={setBrightness} min={0.5} max={2} step={0.05} className="min-w-0 flex-1" aria-label="Brightness" />
-                    <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{brightness.toFixed(2)}</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                    <label className="text-sm font-medium text-neutral-800">Shadow</label>
+                    <button type="button" onClick={() => setEnvShadow((s) => !s)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envShadow ? "bg-neutral-800" : "bg-neutral-200"}`} title={envShadow ? "Hide shadows" : "Show shadows"}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envShadow ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
                   </div>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <label className="text-sm font-medium text-neutral-800">Background</label>
-                  <button type="button" onClick={() => setEnvBackground((b) => !b)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envBackground ? "bg-neutral-800" : "bg-neutral-200"}`} title={envBackground ? "Transparent background" : "Solid background"}>
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envBackground ? "translate-x-4" : "translate-x-0"}`} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <label className="text-sm font-medium text-neutral-800">Grid</label>
-                  <button type="button" onClick={() => setEnvGrid((g) => !g)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envGrid ? "bg-neutral-800" : "bg-neutral-200"}`} title={envGrid ? "Hide grid" : "Show grid"}>
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envGrid ? "translate-x-4" : "translate-x-0"}`} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <label className="text-sm font-medium text-neutral-800">Shadow</label>
-                  <button type="button" onClick={() => setEnvShadow((s) => !s)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envShadow ? "bg-neutral-800" : "bg-neutral-200"}`} title={envShadow ? "Hide shadows" : "Show shadows"}>
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envShadow ? "translate-x-4" : "translate-x-0"}`} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <label className="text-sm font-medium text-neutral-800">Auto rotate</label>
-                  <button type="button" onClick={() => setEnvAutoRotate((r) => !r)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envAutoRotate ? "bg-neutral-800" : "bg-neutral-200"}`} title={envAutoRotate ? "Pause rotation" : "Auto rotate"}>
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envAutoRotate ? "translate-x-4" : "translate-x-0"}`} />
-                  </button>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                    <label className="text-sm font-medium text-neutral-800">Auto rotate</label>
+                    <button type="button" onClick={() => setEnvAutoRotate((r) => !r)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envAutoRotate ? "bg-neutral-800" : "bg-neutral-200"}`} title={envAutoRotate ? "Pause rotation" : "Auto rotate"}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envAutoRotate ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
           </div>
           </div>
