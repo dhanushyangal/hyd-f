@@ -169,14 +169,11 @@ export interface BackendJob {
   prompt: string | null;
   imageUrl: string | null;
   generateType: string;
-  faceCount: number | null;
   enablePBR: boolean;
-  polygonType: string | null;
   resultGlbUrl: string | null;
   previewImageUrl: string | null;
   errorCode: string | null;
   errorMessage: string | null;
-  name?: string | null;
   workspaceId?: string | null;
   parentJobId?: string | null;
   parentJobIds?: string[];       // All parent IDs (multi-parent merges)
@@ -1607,30 +1604,6 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
     
     // Re-throw other errors (API errors, parsing errors, etc.)
     throw err;
-  }
-}
-
-/**
- * Update job name (requires auth)
- */
-export async function updateJobName(jobId: string, name: string, getToken: () => Promise<string | null>): Promise<void> {
-  const token = await getToken();
-  if (!token) {
-    throw new Error("Authentication required");
-  }
-
-  const res = await fetch(`${backendBase}/api/3d/jobs/${jobId}/name`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ name }),
-  });
-
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || "Failed to update job name");
   }
 }
 

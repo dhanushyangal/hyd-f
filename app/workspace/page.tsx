@@ -289,14 +289,11 @@ function WorkspacePage() {
         prompt: partial.prompt ?? null,
         imageUrl: partial.imageUrl ?? null,
         generateType: partial.generateType,
-        faceCount: null,
         enablePBR: false,
-        polygonType: null,
         resultGlbUrl: null,
         previewImageUrl: partial.previewImageUrl ?? null,
         errorCode: null,
         errorMessage: null,
-        name: partial.name ?? null,
         workspaceId: partial.workspaceId ?? workspaceId ?? null,
         parentJobId: partial.parentJobId ?? null,
         parentJobIds: partial.parentJobIds ?? [],
@@ -804,7 +801,7 @@ function WorkspacePage() {
             generateType: modelTypeLabel[selectedModel],
             parentJobId: lastPreviewId,
             createdAt: new Date().toISOString(),
-            userId: null, imageUrl: null, faceCount: null, enablePBR: false, polygonType: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString(),
+            userId: null, imageUrl: null, enablePBR: false, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString(),
           };
           loadJobInfo(completed3DJob);
         } else if (status.status === "failed") {
@@ -1079,7 +1076,7 @@ function WorkspacePage() {
         refreshLibrary();
 
         // Update generation info panel
-        const newJob = { id: result.preview_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "TextToImage", createdAt: new Date().toISOString(), userId: null, imageUrl: null, faceCount: null, enablePBR: false, polygonType: null, resultGlbUrl: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
+        const newJob = { id: result.preview_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "TextToImage", createdAt: new Date().toISOString(), userId: null, imageUrl: null, enablePBR: false, resultGlbUrl: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
         loadJobInfo(newJob);
 
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.preview_id);
@@ -1215,7 +1212,7 @@ function WorkspacePage() {
         refreshLibrary();
 
         // Update generation info panel
-        const editedJob = { id: result.edit_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "EditImage", parentJobId: editParent, parentJobIds: editParentIds, sourceImages: editSrcImages, createdAt: new Date().toISOString(), userId: null, imageUrl: null, faceCount: null, enablePBR: false, polygonType: null, resultGlbUrl: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
+        const editedJob = { id: result.edit_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "EditImage", parentJobId: editParent, parentJobIds: editParentIds, sourceImages: editSrcImages, createdAt: new Date().toISOString(), userId: null, imageUrl: null, enablePBR: false, resultGlbUrl: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
         loadJobInfo(editedJob);
 
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.edit_id);
@@ -1343,7 +1340,7 @@ function WorkspacePage() {
           status: "DONE" as const, generateType: "Combined",
           parentJobId: primaryParent, parentJobIds: parentIds, sourceImages: srcImages,
           createdAt: new Date().toISOString(), userId: null, imageUrl: null,
-          faceCount: null, enablePBR: false, polygonType: null, resultGlbUrl: null,
+          enablePBR: false, resultGlbUrl: null,
           errorCode: null, errorMessage: null, updatedAt: new Date().toISOString(),
         } satisfies BackendJob;
         loadJobInfo(combinedJob);
@@ -1522,9 +1519,7 @@ function WorkspacePage() {
     prompt: item.prompt ?? null,
     imageUrl: null,
     generateType: item.generateType || "Normal",
-    faceCount: null,
     enablePBR: false,
-    polygonType: null,
     resultGlbUrl: item.resultGlbUrl ?? null,
     previewImageUrl: item.previewImageUrl ?? null,
     errorCode: null,
@@ -1587,10 +1582,10 @@ function WorkspacePage() {
   const mergedLibraryImages = [...pendingImageJobs, ...libraryImages];
   const mergedLibrary3DAssets = [...pending3DJobs, ...library3DAssets];
   const filteredImages = mergedLibraryImages.filter((a) =>
-    (a.prompt || a.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
   const filtered3DAssets = mergedLibrary3DAssets.filter((a) =>
-    (a.prompt || a.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const isGenerating = loading || generatingPreview || (currentGenerating?.status === "generating");

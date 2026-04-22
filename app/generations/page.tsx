@@ -49,10 +49,10 @@ export default function GenerationsPage() {
   }, [isLoaded, isSignedIn, tokenGetter, router]);
 
   const filteredImages = libraryImages.filter((a) =>
-    (a.prompt || a.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
   const filtered3D = library3DAssets.filter((a) =>
-    (a.prompt || a.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleImageClick = (item: BackendJob) => {

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, SignInButton, SignedIn, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, cancelJob, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, updateJobName, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
+import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, cancelJob, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
 import { setCurrentWorkspaceId } from "../../lib/utils";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
@@ -1308,8 +1308,6 @@ export default function GeneratePage() {
   };
 
   // Editing state for library items
-  const [editingJobId, setEditingJobId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState<string>("");
 
   // Filter chats based on search
   const filteredChats = chats.filter((chat: Chat) => {
@@ -1319,44 +1317,6 @@ export default function GeneratePage() {
     const chatPrompt = chat.firstJobPrompt?.toLowerCase() || '';
     return chatName.includes(query) || chatPrompt.includes(query);
   });
-
-  // Handle name editing
-  const handleStartEdit = (job: BackendJob) => {
-    setEditingJobId(job.id);
-    setEditingName(job.name || job.prompt || "Untitled");
-  };
-
-  const handleSaveName = async (jobId: string) => {
-    if (!editingName.trim()) {
-      setEditingJobId(null);
-      return;
-    }
-
-    try {
-      const tokenGetter = async () => await getToken();
-      await updateJobName(jobId, editingName.trim(), tokenGetter);
-      
-      // Update local history
-      setHistory((prev) =>
-        prev.map((job) =>
-          job.id === jobId ? { ...job, name: editingName.trim() } : job
-        )
-      );
-      setEditingJobId(null);
-      setEditingName("");
-    } catch (err: any) {
-      console.error("Failed to update job name:", err);
-      addChatMessage({
-        type: "error",
-        content: err.message || "Failed to update name",
-      });
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingJobId(null);
-    setEditingName("");
-  };
 
   // Show loading state while Clerk is checking auth
   if (!isLoaded && !isMounted) {
