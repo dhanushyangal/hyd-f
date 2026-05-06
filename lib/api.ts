@@ -1287,6 +1287,33 @@ export function getProxyGlbUrl(jobId: string): string {
 }
 
 /**
+ * Wrap an S3 image URL in the backend image-proxy so we never serve direct
+ * URLs that can return <AccessDenied> (expired presigned URLs or unsigned
+ * URLs to a private bucket). The backend image-proxy uses IAM credentials
+ * to fetch the object fresh on every request and stream the bytes back.
+ *
+ * - Empty / null / undefined → null
+ * - Already a backend or proxy URL → returned as-is
+ * - Data URL or blob URL → returned as-is
+ * - S3 / amazonaws.com URL → wrapped with the image-proxy
+ * - Anything else → returned as-is (won't be proxied)
+ */
+export function getProxiedImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const s = url.trim();
+  if (!s) return null;
+
+  if (s.startsWith("data:") || s.startsWith("blob:")) return s;
+  if (s.startsWith(backendBase)) return s;
+  if (s.includes("/api/3d/image-proxy")) return s;
+
+  if (s.includes("amazonaws.com") || s.includes("s3.")) {
+    return `${backendBase}/api/3d/image-proxy?url=${encodeURIComponent(s)}`;
+  }
+  return s;
+}
+
+/**
  * Get preview image URL from job result
  * Also tries preview/{jobId}/preview_image.png path if the main URL doesn't work
  */

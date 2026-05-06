@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import {
   fetchHistory,
   getProxyGlbUrl,
+  getProxiedImageUrl,
   type BackendJob,
 } from "../../../lib/api";
 import { Download, Share2, X, ImageIcon } from "lucide-react";
@@ -31,7 +32,7 @@ function AssetCard({
   onSelect: () => void;
   onDownload: (e: React.MouseEvent) => void;
 }) {
-  const previewUrl = job.previewImageUrl || job.imageUrl;
+  const previewUrl = getProxiedImageUrl(job.previewImageUrl || job.imageUrl);
   const title = job.prompt ? job.prompt.slice(0, 40) + (job.prompt.length > 40 ? "…" : "") : "3D Model";
 
   return (
@@ -87,7 +88,9 @@ function AssetDetailModal({
 }) {
   const [viewStyle, setViewStyle] = useState<"realistic" | "clay" | "mono">("realistic");
   const glbUrl = getProxyGlbUrl(job.id);
-  const sourceImage = job.imageUrl || (job.sourceImages && job.sourceImages[0]) || null;
+  const sourceImage = getProxiedImageUrl(
+    job.imageUrl || (job.sourceImages && job.sourceImages[0]) || null,
+  );
   const title = job.prompt ? job.prompt.slice(0, 60) + (job.prompt.length > 60 ? "…" : "") : "3D Model";
 
   return (

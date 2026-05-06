@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import {
   fetchHistory,
   deleteJob,
+  getProxiedImageUrl,
   type BackendJob,
 } from "../../../lib/api";
 import {
@@ -29,7 +30,12 @@ const filterTabs: { id: FilterTab; label: string }[] = [
 const IMAGE_GENERATE_TYPES = new Set(["TextToImage", "EditImage", "Combined"]);
 
 function pickImageUrl(job: BackendJob): string | null {
-  return job.previewImageUrl || job.imageUrl || null;
+  // Always proxy through the backend so private/expired S3 URLs still load.
+  return getProxiedImageUrl(job.previewImageUrl || job.imageUrl);
+}
+
+function proxiedSource(url: string | null | undefined): string | null {
+  return getProxiedImageUrl(url ?? null);
 }
 
 function typeLabel(t: string): { label: string; icon: typeof Sparkles } {
@@ -225,15 +231,18 @@ function ImageDetailModal({
                   Source {sources.length > 1 ? "images" : "image"}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  {sources.slice(0, 4).map((src, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={`${src}-${i}`}
-                      src={src}
-                      alt={`Source ${i + 1}`}
-                      className="aspect-square w-full object-cover rounded-lg border border-neutral-200 bg-neutral-50"
-                    />
-                  ))}
+                  {sources.slice(0, 4).map((src, i) => {
+                    const proxied = proxiedSource(src) || src;
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={`${src}-${i}`}
+                        src={proxied}
+                        alt={`Source ${i + 1}`}
+                        className="aspect-square w-full object-cover rounded-lg border border-neutral-200 bg-neutral-50"
+                      />
+                    );
+                  })}
                 </div>
               </div>
             )}
