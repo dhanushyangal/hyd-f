@@ -584,9 +584,22 @@ async function urlToFile(url: string, filename: string): Promise<File> {
   const response = await fetch(proxyUrl);
   if (!response.ok) throw new Error(`Failed to fetch image: ${url}`);
   const blob = await response.blob();
-  const ext = url.split(".").pop()?.split("?")[0] || "png";
-  const mimeType = blob.type || `image/${ext}`;
-  return new File([blob], `${filename}.${ext}`, { type: mimeType });
+
+  // Determine extension from URL
+  const rawExt = (url.split(".").pop()?.split("?")[0] || "png").toLowerCase();
+  const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "png";
+
+  // Always use a real image/* mimetype. S3 may return "application/octet-stream"
+  // when objects were uploaded without ContentType — that would cause the backend
+  // multer fileFilter to reject the upload.
+  const blobType = (blob.type || "").toLowerCase();
+  const mimeType = blobType.startsWith("image/")
+    ? blobType
+    : `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+  // Re-wrap blob with the corrected type so the resulting File reports it.
+  const typed = new Blob([blob], { type: mimeType });
+  return new File([typed], `${filename}.${ext}`, { type: mimeType });
 }
 
 /**
