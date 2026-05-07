@@ -904,6 +904,41 @@ export async function uploadImageViaApi(file: File, getToken?: () => Promise<str
 }
 
 /**
+ * `blob:` / `data:` URLs only exist in the browser — the GPU worker on EC2 cannot
+ * download them. If we ever receive one (e.g. state lost the `File` after React
+ * re-render, or another caller passed a preview URL only), read the bytes here
+ * and upload before calling `/api/3d/generate`.
+ */
+async function ensurePublicImageUrlFor3d(
+  imageUrl: string | null,
+  imageFile: File | null
+): Promise<{ imageUrl: string | null; imageFile: File | null }> {
+  if (imageFile || !imageUrl) return { imageUrl, imageFile };
+  const t = imageUrl.trim();
+  if (!t.startsWith("blob:") && !t.startsWith("data:")) return { imageUrl, imageFile: null };
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const mime = blob.type || "image/png";
+    const ext =
+      mime === "image/jpeg" || mime === "image/jpg"
+        ? ".jpg"
+        : mime === "image/webp"
+          ? ".webp"
+          : mime === "image/gif"
+            ? ".gif"
+            : ".png";
+    const file = new File([blob], `upload${ext}`, { type: mime });
+    return { imageUrl: null, imageFile: file };
+  } catch {
+    throw new Error(
+      "Could not read the image from your device. Please select the file again or pick the image from your library."
+    );
+  }
+}
+
+/**
  * Submit image-to-3D job via backend (deducts credits, then submits to Python API).
  * If imageFile is provided, uploads first to get imageUrl. Returns job_id.
  * Throws on 402 (insufficient credits) with error message.
@@ -918,6 +953,10 @@ export async function submitImageTo3D(
   parentJobId?: string | null,
   aiModel?: string | null
 ): Promise<{ job_id: string }> {
+  const resolved = await ensurePublicImageUrlFor3d(imageUrl, imageFile);
+  imageUrl = resolved.imageUrl;
+  imageFile = resolved.imageFile;
+
   let sourceImageUrl: string | null = imageUrl || null;
 
   if (imageFile) {
