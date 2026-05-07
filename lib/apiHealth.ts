@@ -50,12 +50,26 @@ export function onHealthChange(listener: HealthListener): () => void {
 }
 
 // ── Probing / recovery ──────────────────────────────────────────────
-async function probe(url: string): Promise<boolean> {
+/** Use GET /health (not HEAD /): CORS and nginx often allow GET to /health while HEAD on / fails in the browser. */
+function healthCheckUrl(base: string): string {
+  const b = base.replace(/\/$/, "");
+  return `${b}/health`;
+}
+
+async function probe(baseUrl: string): Promise<boolean> {
   try {
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-    await fetch(url, { method: "HEAD", signal: controller.signal });
+    const res = await fetch(healthCheckUrl(baseUrl), {
+      method: "GET",
+      signal: controller.signal,
+      cache: "no-store",
+    });
     clearTimeout(tid);
+    // Any completed response means the browser can reach the host with CORS
+    // (same idea as the old HEAD probe, which ignored status). Do not require
+    // res.ok: `/health` may be 503/502 while other routes still work via the LB.
+    await res.arrayBuffer().catch(() => new ArrayBuffer(0));
     return true;
   } catch {
     return false;

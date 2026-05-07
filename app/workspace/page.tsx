@@ -937,9 +937,12 @@ function WorkspacePage() {
     [setImage1, setImage2, setFile1, setFile2, setJobId1, setJobId2]
   );
 
-  // Helper: start 3D generation from image URL (used after image gen or when we already have preview)
+  // Helper: start 3D generation from image URL (used after image gen or when we already have preview).
+  // When `localFile` is set (user picked a file from disk), pass it straight into `submitImageTo3D` so
+  // the client upload path matches /generate page — avoids relying on a separate pre-upload + URL that
+  // can be wrong (gateway vs backend, blob quirks, or localhost URLs in dev).
   const start3DFromImage = useCallback(
-    async (imageUrl: string, previewId: string | null) => {
+    async (imageUrl: string, previewId: string | null, localFile: File | null = null) => {
       if (!hasWorkspaceContext) {
         setForcedWorkspaceModal(true);
         setShowNewWorkspaceModal(true);
@@ -1001,7 +1004,16 @@ function WorkspacePage() {
       }
       const estimatedTotal = queueInfo?.estimated_total_seconds || 300;
       try {
-        const result = await submitImageTo3D(imageUrl, null, tokenGetter, previewId, null, workspaceId, previewId, selectedModel);
+        const result = await submitImageTo3D(
+          localFile ? null : imageUrl,
+          localFile,
+          tokenGetter,
+          previewId,
+          null,
+          workspaceId,
+          previewId,
+          selectedModel
+        );
         mobileGenStartedAtRef.current = null;
         setCurrentGenerating({
           jobId: result.job_id,
@@ -1493,36 +1505,40 @@ function WorkspacePage() {
       return;
     }
 
-    const tokenGetter = async () => await getToken();
-
-    // image mode (or text_1img with no prompt): upload the freshly selected
-    // file (if any), then go straight into `start3DFromImage`. This mirrors
-    // exactly what happens when the user clicks an image in the left library
-    // and presses the center "Generate 3D Model" button.
+    // image mode (or text_1img with no prompt): pass disk `File` straight into
+    // `submitImageTo3D` (via start3DFromImage) instead of a separate upload step,
+    // so behavior matches the working /generate flow and the GPU always receives
+    // a URL the worker can fetch (from gateway/backend upload inside submit).
     if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
       if (!file1 && !image1 && !lastPreviewImageUrl) {
         setError("Please upload or select an image");
         return;
       }
-      let imageUrl: string;
       let parentId: string | null = jobId1 ?? lastPreviewId;
+      let displayUrl: string;
+      let fileForSubmit: File | null = file1;
+      let revokeDisplayUrl: string | null = null;
       if (file1) {
-        try {
-          imageUrl = await uploadSourceImageWithFallback(file1, tokenGetter);
-          parentId = null; // freshly uploaded image is a root, not a child
-        } catch (err: any) {
-          setError(err?.message || "Failed to upload image");
-          return;
+        parentId = null;
+        if (image1) {
+          displayUrl = image1;
+        } else {
+          revokeDisplayUrl = URL.createObjectURL(file1);
+          displayUrl = revokeDisplayUrl;
         }
       } else if (image1) {
-        imageUrl = image1;
+        displayUrl = image1;
       } else {
-        imageUrl = lastPreviewImageUrl!;
+        displayUrl = lastPreviewImageUrl!;
       }
-      setLastPreviewImageUrl(imageUrl);
-      setLastPreviewId(parentId);
-      setCenterView({ type: "preview", imageUrl, previewId: parentId || undefined });
-      await start3DFromImage(imageUrl, parentId);
+      try {
+        setLastPreviewImageUrl(displayUrl);
+        setLastPreviewId(parentId);
+        setCenterView({ type: "preview", imageUrl: displayUrl, previewId: parentId || undefined });
+        await start3DFromImage(displayUrl, parentId, fileForSubmit);
+      } finally {
+        if (revokeDisplayUrl) URL.revokeObjectURL(revokeDisplayUrl);
+      }
       return;
     }
 
