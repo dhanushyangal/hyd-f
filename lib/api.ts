@@ -1287,6 +1287,64 @@ export function getProxyGlbUrl(jobId: string): string {
 }
 
 /**
+ * Snapshot of the GPU pipeline health (FLUX, Trellis, worker, queues).
+ * Returned by `GET /api/3d/health`.
+ */
+export interface PipelineHealth {
+  status: "ok" | "degraded" | "down" | string;
+  gateway?: string;
+  redis?: string;
+  flux: {
+    reachable: boolean;
+    model_loaded: boolean;
+    n_gpu?: number;
+    gpu_mem_allocated_gb?: number;
+    latency_ms?: number;
+    error?: string;
+  };
+  trellis: {
+    reachable: boolean;
+    model_loaded: boolean;
+    gpu_mem_allocated_gb?: number;
+    image_size?: number;
+    latency_ms?: number;
+    error?: string;
+  };
+  worker: {
+    alive: boolean;
+    last_heartbeat_seconds_ago?: number;
+    currently_processing_3d?: string | null;
+    currently_processing_preview?: string | null;
+  };
+  queues: { "3d": number; preview: number; edit: number; combined: number };
+  error?: string;
+}
+
+/**
+ * Fetch a quick snapshot of the GPU pipeline state. Useful for an
+ * "are the models loaded?" indicator. Always resolves (never throws)
+ * so the UI can render an offline state gracefully.
+ */
+export async function fetchPipelineHealth(): Promise<PipelineHealth> {
+  try {
+    const res = await fetch(`${backendBase}/api/3d/health`, {
+      cache: "no-store",
+    });
+    const data = await res.json();
+    return data as PipelineHealth;
+  } catch (err) {
+    return {
+      status: "down",
+      flux: { reachable: false, model_loaded: false },
+      trellis: { reachable: false, model_loaded: false },
+      worker: { alive: false },
+      queues: { "3d": 0, preview: 0, edit: 0, combined: 0 },
+      error: (err as Error)?.message || "Network error",
+    };
+  }
+}
+
+/**
  * Wrap an S3 image URL in the backend image-proxy so we never serve direct
  * URLs that can return <AccessDenied> (expired presigned URLs or unsigned
  * URLs to a private bucket). The backend image-proxy uses IAM credentials

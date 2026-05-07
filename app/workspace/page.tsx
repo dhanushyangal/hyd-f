@@ -719,7 +719,28 @@ function WorkspacePage() {
     let consecutiveFailures = 0;
     const MAX_FAILURES = 5;
 
+    // Hard cap on how long we keep polling a single job. Trellis can take
+    // 10–15 min on hard inputs, so we allow up to 25 min before giving up
+    // on the UI. The backend will eventually mark the job failed itself,
+    // but we don't want the user staring at a forever-spinning preview.
+    const MAX_POLL_MS = 25 * 60 * 1000;
+    const pollStartedAt = Date.now();
+
     const pollStatus = async () => {
+      // Stop polling if we've exceeded the max client-side wait.
+      if (Date.now() - pollStartedAt > MAX_POLL_MS) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
+        setCenterView({
+          type: "error",
+          message:
+            "3D generation is taking longer than expected. It may still complete in the background — check the library in a few minutes.",
+        });
+        return;
+      }
       try {
         const status = await fetchStatus(currentGenerating.jobId);
         consecutiveFailures = 0;
@@ -1454,19 +1475,65 @@ function WorkspacePage() {
   };
 
   // ──────────── Generate 3D: from current preview, or generate image first then 3D ────────────
+  // Single entry point for "Generate 3D" everywhere (center preview button AND
+  // the bottom "Generate 3D" button when inputMode === "image"). Previously the
+  // bottom button went through `handleGenerateImage()` which clears
+  // `lastPreviewImageUrl/Id` at its start (line ~1059) — that desyncs the
+  // polling effect's `prev.previewId === currentGenerating.jobId` check and
+  // leaves the user staring at a spinner that never updates. Routing both
+  // buttons through this function keeps the working "library click → Generate
+  // 3D Model" flow intact and uses an identical code path for fresh uploads.
   const handleGenerate3D = async () => {
     setError(null);
+    if (loading || generatingPreview) return;
     if (!hasWorkspaceContext) {
       setForcedWorkspaceModal(true);
       setShowNewWorkspaceModal(true);
       setError("Please create a workspace first");
       return;
     }
+
+    const tokenGetter = async () => await getToken();
+
+    // image mode (or text_1img with no prompt): upload the freshly selected
+    // file (if any), then go straight into `start3DFromImage`. This mirrors
+    // exactly what happens when the user clicks an image in the left library
+    // and presses the center "Generate 3D Model" button.
+    if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
+      if (!file1 && !image1 && !lastPreviewImageUrl) {
+        setError("Please upload or select an image");
+        return;
+      }
+      let imageUrl: string;
+      let parentId: string | null = jobId1 ?? lastPreviewId;
+      if (file1) {
+        try {
+          imageUrl = await uploadSourceImageWithFallback(file1, tokenGetter);
+          parentId = null; // freshly uploaded image is a root, not a child
+        } catch (err: any) {
+          setError(err?.message || "Failed to upload image");
+          return;
+        }
+      } else if (image1) {
+        imageUrl = image1;
+      } else {
+        imageUrl = lastPreviewImageUrl!;
+      }
+      setLastPreviewImageUrl(imageUrl);
+      setLastPreviewId(parentId);
+      setCenterView({ type: "preview", imageUrl, previewId: parentId || undefined });
+      await start3DFromImage(imageUrl, parentId);
+      return;
+    }
+
+    // We already have a generated preview in the center → reuse its URL.
     if (lastPreviewImageUrl) {
       await start3DFromImage(lastPreviewImageUrl, lastPreviewId);
       return;
     }
-    // No preview: generate image first (using current mode), then 3D
+
+    // No image and no preview: generate image first (using current text mode),
+    // then chain straight into 3D.
     await handleGenerateImage(true);
   };
 
@@ -2921,10 +2988,22 @@ function WorkspacePage() {
               );
             })()}
 
-            {/* Generate — primary action, premium black button with vectorized icon */}
+            {/* Generate — primary action, premium black button with vectorized icon.
+                When the user is in pure-image mode (or text_1img with no prompt) the
+                only thing this button does is "make a 3D from this image", so we
+                route it through `handleGenerate3D` — the same code path the working
+                left-library "Generate 3D Model" button uses. Going through
+                `handleGenerateImage()` previously cleared `lastPreviewImageUrl/Id`
+                and produced the "spinner never finishes" bug for fresh uploads. */}
             <button
               type="button"
-              onClick={() => handleGenerateImage()}
+              onClick={() => {
+                if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
+                  void handleGenerate3D();
+                } else {
+                  void handleGenerateImage();
+                }
+              }}
               disabled={isGenerating}
               className={`w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2.5 transition-all duration-200 ${isGenerating ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-black text-white hover:bg-neutral-800 shadow-sm hover:shadow-md active:scale-[0.99]"}`}
             >

@@ -319,8 +319,17 @@ export default function GeneratePage() {
     
     let consecutiveFailures = 0;
     const MAX_FAILURES = 3;
+    // Hard cap on how long we keep polling a single job (matches workspace
+    // page behavior). Without this, the UI sits forever when GPU is slow
+    // and the user only sees the "Preview" placeholder.
+    const MAX_POLL_MS = 25 * 60 * 1000;
+    const pollStartedAt = Date.now();
 
     const pollStatus = async () => {
+      if (Date.now() - pollStartedAt > MAX_POLL_MS) {
+        setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
+        return;
+      }
       try {
         const status = await fetchStatus(currentGenerating.jobId);
         consecutiveFailures = 0; // Reset on success
