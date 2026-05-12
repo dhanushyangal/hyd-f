@@ -25,6 +25,7 @@ import {
   fetchJobLineage,
   getGlbUrl,
   getProxyGlbUrl,
+  getProxiedImageUrl,
   notifyGpuOffline,
   cancelJob,
   isPrimaryUp,
@@ -38,6 +39,8 @@ import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const CREDITS_IMAGE = 2;
 const CREDITS_3D = 10;
+
+const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
 
 // Lazy-load ThreeViewer (Three.js is heavy; load only when 3D is shown)
 const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m) => ({ default: m.ThreeViewer })), {
@@ -1891,13 +1894,13 @@ function WorkspacePage() {
             <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col items-center">
               {lineagePreviewItem.previewImageUrl ? (
                 <img
-                  src={lineagePreviewItem.previewImageUrl}
+                  src={displayImageUrl(lineagePreviewItem.previewImageUrl)}
                   alt="Preview"
                   className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-lg border border-neutral-200 bg-neutral-50"
                 />
               ) : lineagePreviewItem.resultGlbUrl && lineagePreviewItem.sourceImages?.[0] ? (
                 <img
-                  src={lineagePreviewItem.sourceImages[0]}
+                  src={displayImageUrl(lineagePreviewItem.sourceImages[0])}
                   alt="Source"
                   className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-lg border border-neutral-200 bg-neutral-50"
                 />
@@ -2129,7 +2132,7 @@ function WorkspacePage() {
                         className="relative aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center"
                       >
                         {(item.previewImageUrl || item.imageUrl) ? (
-                          <img src={item.previewImageUrl || item.imageUrl || ""} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
+                          <img src={displayImageUrl(item.previewImageUrl || item.imageUrl)} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
                         ) : (
                           <span className="text-neutral-600 text-[10px] text-center px-1 truncate max-w-full font-medium">{item.prompt || "Image"}</span>
                         )}
@@ -2167,7 +2170,7 @@ function WorkspacePage() {
                     filtered3DAssets.map((item) => (
                       <div key={item.id} onClick={() => handle3DClick(item)} className="relative aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center">
                         {item.previewImageUrl ? (
-                          <img src={item.previewImageUrl} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover" />
+                          <img src={displayImageUrl(item.previewImageUrl)} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover" />
                         ) : (
                           <div className="flex flex-col items-center text-black/50">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
@@ -2234,7 +2237,7 @@ function WorkspacePage() {
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 min-h-0 flex items-center justify-center p-4 bg-neutral-100/50">
                 <div className="relative w-full max-w-full h-full max-h-full rounded-xl overflow-hidden border border-neutral-200 shadow-lg bg-white flex items-center justify-center">
-                  <img src={centerView.imageUrl} alt="Preview" className="max-w-full max-h-full w-auto h-auto object-contain" />
+                  <img src={displayImageUrl(centerView.imageUrl)} alt="Preview" className="max-w-full max-h-full w-auto h-auto object-contain" />
                 </div>
               </div>
               <div className="flex items-center justify-center gap-3 p-3 border-t border-neutral-100 bg-white">
@@ -2481,7 +2484,7 @@ function WorkspacePage() {
                           <>
                             <div className="text-neutral-400 font-medium">Source image</div>
                             <div className="flex items-center gap-1.5">
-                              <img src={selectedJobInfo.sourceImages[0]} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
+                              <img src={displayImageUrl(selectedJobInfo.sourceImages[0])} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
                             </div>
                           </>
                         )}
@@ -2534,19 +2537,19 @@ function WorkspacePage() {
                                     {showSourceImages && item.sourceImages && (
                                       <div className="flex gap-1 mt-1">
                                         {item.sourceImages.map((src, i) => (
-                                          <img key={i} src={src} alt={`Source ${i + 1}`} className="w-5 h-5 rounded object-cover border border-neutral-200" />
+                                          <img key={i} src={displayImageUrl(src)} alt={`Source ${i + 1}`} className="w-5 h-5 rounded object-cover border border-neutral-200" />
                                         ))}
                                       </div>
                                     )}
                                     {show3DSourceImage && (
                                       <div className="flex items-center gap-1 mt-1">
                                         <span className="text-[10px] text-neutral-400">Source image</span>
-                                        <img src={item.sourceImages![0]} alt="Source" className="w-5 h-5 rounded object-cover border border-neutral-200" />
+                                        <img src={displayImageUrl(item.sourceImages![0])} alt="Source" className="w-5 h-5 rounded object-cover border border-neutral-200" />
                                       </div>
                                     )}
                                   </div>
                                   {item.previewImageUrl ? (
-                                    <img src={item.previewImageUrl} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-neutral-200" />
+                                    <img src={displayImageUrl(item.previewImageUrl)} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-neutral-200" />
                                   ) : item.resultGlbUrl ? (
                                     <div className="w-7 h-7 rounded flex-shrink-0 border border-neutral-200 bg-neutral-100 flex items-center justify-center">
                                       <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
@@ -2635,7 +2638,7 @@ function WorkspacePage() {
                     <>
                       <div className="text-neutral-400 font-medium">Source image</div>
                       <div className="flex items-center gap-1.5">
-                        <img src={selectedJobInfo.sourceImages[0]} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
+                        <img src={displayImageUrl(selectedJobInfo.sourceImages[0])} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
                       </div>
                     </>
                   )}
@@ -2702,7 +2705,7 @@ function WorkspacePage() {
                               {showSourceImages && item.sourceImages && (
                                 <div className="flex gap-1 mt-1">
                                   {item.sourceImages.map((src, i) => (
-                                    <img key={i} src={src} alt={`Source ${i + 1}`} className="w-5 h-5 rounded object-cover border border-neutral-200" />
+                                    <img key={i} src={displayImageUrl(src)} alt={`Source ${i + 1}`} className="w-5 h-5 rounded object-cover border border-neutral-200" />
                                   ))}
                                 </div>
                               )}
@@ -2710,13 +2713,13 @@ function WorkspacePage() {
                               {show3DSourceImage && (
                                 <div className="flex items-center gap-1 mt-1">
                                   <span className="text-[10px] text-neutral-400">Source image</span>
-                                  <img src={item.sourceImages![0]} alt="Source" className="w-5 h-5 rounded object-cover border border-neutral-200" />
+                                  <img src={displayImageUrl(item.sourceImages![0])} alt="Source" className="w-5 h-5 rounded object-cover border border-neutral-200" />
                                 </div>
                               )}
                             </div>
                             {/* Thumbnail */}
                             {item.previewImageUrl ? (
-                              <img src={item.previewImageUrl} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-neutral-200" />
+                              <img src={displayImageUrl(item.previewImageUrl)} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-neutral-200" />
                             ) : item.resultGlbUrl ? (
                               <div className="w-7 h-7 rounded flex-shrink-0 border border-neutral-200 bg-neutral-100 flex items-center justify-center">
                                 <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>

@@ -329,6 +329,20 @@ function resolveImageUrl(url: string): string {
   return `${base}${url}`;
 }
 
+function resolveLoadableImageUrl(url: string | null | undefined): string {
+  const resolved = resolveImageUrl(url || "");
+  return getProxiedImageUrl(resolved) || resolved;
+}
+
+function isGatewayOutputImageUrl(url: string): boolean {
+  return (
+    url.includes("/outputs/preview/") ||
+    url.includes("/outputs/image/") ||
+    url.includes("/outputs/edit/") ||
+    url.includes("/outputs/combined/")
+  );
+}
+
 /**
  * Generate preview image from text prompt.
  * When getToken is provided, uses backend /api/3d/text-to-image so credits are deducted (2).
@@ -527,14 +541,14 @@ export async function editImage(
           const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
           return {
             edit_id: editId,
-            image_url: resolveImageUrl(imageUrlFromStatus),
+            image_url: resolveLoadableImageUrl(imageUrlFromStatus),
             prompt: result.prompt || prompt,
             strength: result.strength ?? 0.6,
           };
         }
         return {
           edit_id: editId,
-          image_url: resolveImageUrl(result.image_url || ""),
+          image_url: resolveLoadableImageUrl(result.image_url || ""),
           prompt: result.prompt || prompt,
           strength: result.strength ?? 0.6,
         };
@@ -549,7 +563,7 @@ export async function editImage(
       const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
       return {
         edit_id: editId,
-        image_url: resolveImageUrl(imageUrlFromStatus),
+        image_url: resolveLoadableImageUrl(imageUrlFromStatus),
         prompt: result.prompt || prompt,
         strength: result.strength ?? 0.6,
       };
@@ -557,7 +571,7 @@ export async function editImage(
 
     return {
       edit_id: editId,
-      image_url: resolveImageUrl(result.image_url || ""),
+      image_url: resolveLoadableImageUrl(result.image_url || ""),
       prompt: result.prompt || prompt,
       strength: result.strength ?? 0.6,
     };
@@ -580,7 +594,7 @@ export async function editImage(
  */
 async function urlToFile(url: string, filename: string): Promise<File> {
   // Use the backend proxy to avoid CORS when fetching S3 images
-  const proxyUrl = `${backendBase}/api/3d/image-proxy?url=${encodeURIComponent(url)}`;
+  const proxyUrl = getProxiedImageUrl(url) || url;
   const response = await fetch(proxyUrl);
   if (!response.ok) throw new Error(`Failed to fetch image: ${url}`);
   const blob = await response.blob();
@@ -683,7 +697,7 @@ export async function combinedEdit(
       const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
       return {
         combined_id: combinedId,
-        image_url: resolveImageUrl(imageUrlFromStatus),
+        image_url: resolveLoadableImageUrl(imageUrlFromStatus),
         prompt: result.prompt || prompt,
         prompt_used: (statusData.result as { prompt_used?: string })?.prompt_used ?? result.prompt ?? prompt,
       };
@@ -691,7 +705,7 @@ export async function combinedEdit(
 
     return {
       combined_id: combinedId,
-      image_url: resolveImageUrl(result.image_url || ""),
+      image_url: resolveLoadableImageUrl(result.image_url || ""),
       prompt: result.prompt || prompt,
       prompt_used: result.prompt_used || prompt,
     };
@@ -1392,7 +1406,7 @@ export async function fetchPipelineHealth(): Promise<PipelineHealth> {
  * - Empty / null / undefined → null
  * - Already a backend or proxy URL → returned as-is
  * - Data URL or blob URL → returned as-is
- * - S3 / amazonaws.com URL → wrapped with the image-proxy
+ * - S3 / amazonaws.com / gateway output URL → wrapped with the image-proxy
  * - Anything else → returned as-is (won't be proxied)
  */
 export function getProxiedImageUrl(url: string | null | undefined): string | null {
@@ -1404,10 +1418,11 @@ export function getProxiedImageUrl(url: string | null | undefined): string | nul
   if (s.startsWith(backendBase)) return s;
   if (s.includes("/api/3d/image-proxy")) return s;
 
-  if (s.includes("amazonaws.com") || s.includes("s3.")) {
-    return `${backendBase}/api/3d/image-proxy?url=${encodeURIComponent(s)}`;
+  const resolved = s.startsWith("/") ? resolveImageUrl(s) : s;
+  if (resolved.includes("amazonaws.com") || resolved.includes("s3.") || isGatewayOutputImageUrl(resolved)) {
+    return `${backendBase}/api/3d/image-proxy?url=${encodeURIComponent(resolved)}`;
   }
-  return s;
+  return resolved;
 }
 
 /**
@@ -1424,15 +1439,15 @@ export function getPreviewImageUrl(job: Job): string | null {
     null
   );
   
-  // If we have a URL, return it
-  if (url) return url;
+  // If we have a URL, proxy it so private S3 and gateway output URLs load reliably.
+  if (url) return getProxiedImageUrl(url);
   
   // If no URL but we have a job_id, try to construct preview path
   // This handles cases where preview images are in preview/{jobId}/preview_image.png
   if (job.job_id) {
-    const bucket = "hunyuan3d-outputs";
+    const bucket = "hydrilla-outputs-1";
     const region = "us-east-1";
-    return `https://${bucket}.s3.${region}.amazonaws.com/preview/${job.job_id}/preview_image.png`;
+    return getProxiedImageUrl(`https://${bucket}.s3.${region}.amazonaws.com/preview/${job.job_id}/preview_image.png`);
   }
   
   return null;

@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { fetchWorkspace, fetchWorkspaceJobs } from "../../lib/api";
+import { fetchWorkspace, fetchWorkspaceJobs, getProxiedImageUrl } from "../../lib/api";
 import { getCurrentWorkspaceId } from "../../lib/utils";
 import type { BackendJob } from "../../lib/api";
+
+const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
 
 export default function GenerationsPage() {
   const router = useRouter();
@@ -189,7 +191,7 @@ export default function GenerationsPage() {
                   >
                     {(item.previewImageUrl || item.imageUrl) ? (
                       <img
-                        src={item.previewImageUrl || item.imageUrl || ""}
+                        src={displayImageUrl(item.previewImageUrl || item.imageUrl)}
                         alt={item.prompt || "Image"}
                         className="w-full h-full object-cover pointer-events-none"
                       />
@@ -230,7 +232,7 @@ export default function GenerationsPage() {
                   >
                     {item.previewImageUrl ? (
                       <img
-                        src={item.previewImageUrl}
+                        src={displayImageUrl(item.previewImageUrl)}
                         alt={item.prompt || "3D Asset"}
                         className="w-full h-full object-cover"
                       />
@@ -265,7 +267,7 @@ export default function GenerationsPage() {
           >
             {(previewImage.previewImageUrl || previewImage.imageUrl) ? (
               <img
-                src={previewImage.previewImageUrl || previewImage.imageUrl || ""}
+                src={displayImageUrl(previewImage.previewImageUrl || previewImage.imageUrl)}
                 alt={previewImage.prompt || "Preview"}
                 className="max-w-full max-h-[85vh] w-auto h-auto object-contain"
               />

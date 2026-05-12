@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, SignInButton, SignedIn, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, cancelJob, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
+import { submitTextTo3D, submitImageTo3D, generatePreviewImage, registerJobWithPreview, editImage, fetchHistory, fetchStatus, fetchQueueInfo, cancelJob, BackendJob, Job, QueueInfo, getGlbUrl, getProxyGlbUrl, getProxiedImageUrl, notifyGpuOffline, fetchChats, fetchChat, createChat, getOrCreateActiveChat, Chat, deleteChat, updateChatName, Workspace, fetchWorkspaces, createWorkspaceApi, deleteWorkspaceApi } from "../../lib/api";
 import { setCurrentWorkspaceId } from "../../lib/utils";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { PromptBox } from "../../components/PromptBox";
@@ -13,6 +13,8 @@ import { HamburgerMenu } from "../../components/HamburgerMenu";
 import { ImageGeneration } from "../../components/ui/ai-chat-image-generation-1";
 
 type Mode = "text" | "image";
+
+const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
 
 interface ChatMessage {
   id: string;
@@ -1387,7 +1389,7 @@ export default function GeneratePage() {
               >
                 {message.imageUrl && (
                   <img 
-                    src={message.imageUrl} 
+                    src={displayImageUrl(message.imageUrl)} 
                     alt="Preview" 
                     className="w-full max-h-[300px] object-contain"
                   />
@@ -1662,7 +1664,7 @@ export default function GeneratePage() {
                   >
                     {job.previewImageUrl || job.imageUrl ? (
                       <img 
-                        src={job.previewImageUrl || job.imageUrl || ''} 
+                        src={displayImageUrl(job.previewImageUrl || job.imageUrl)} 
                         alt="Library image"
                         className="w-full h-full object-cover"
                       />
@@ -1919,7 +1921,7 @@ export default function GeneratePage() {
                   >
                     {job.previewImageUrl || job.imageUrl ? (
                       <img 
-                        src={job.previewImageUrl || job.imageUrl || ''} 
+                        src={displayImageUrl(job.previewImageUrl || job.imageUrl)} 
                         alt="Library image"
                         className="w-full h-full object-cover"
                       />
