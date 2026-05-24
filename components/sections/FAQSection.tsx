@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minus, Plus } from "lucide-react";
@@ -52,99 +52,34 @@ interface FAQItemProps {
 }
 
 function FAQChatItem({ question, answer, isOpen, onToggle, index }: FAQItemProps) {
-  const answerRef = useRef<HTMLDivElement>(null);
-
   return (
-    <div
-      style={{
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.25rem",
-        paddingBlock: "1rem",
-        borderLeft: "1px dashed transparent",
-        borderRight: "1px dashed transparent",
-        borderImage: "repeating-linear-gradient(#d5d5d5 0 10px,transparent 10px 20px) 1",
-      }}
-    >
-      {/* Question bubble – right side (user) */}
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.625rem" }}>
+    <div className="faq-chat-item">
+      <div className="faq-question-row">
         <button
           type="button"
           onClick={onToggle}
           aria-label={isOpen ? "Collapse answer" : "Expand answer"}
-          style={{
-            width: "2.25rem",
-            height: "2.25rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            backgroundColor: "#161616",
-            color: "#fff",
-            borderRadius: "50%",
-            border: "none",
-            cursor: "pointer",
-            transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
-            transform: isOpen ? "rotate(-12deg) scale(1.05)" : "rotate(0deg) scale(1)",
-          }}
+          aria-expanded={isOpen}
+          className="faq-toggle"
         >
-          {isOpen ? <Minus size={16} strokeWidth={1.5} /> : <Plus size={16} strokeWidth={1.5} />}
+          {isOpen ? <Minus size={16} strokeWidth={1.8} /> : <Plus size={16} strokeWidth={1.8} />}
         </button>
-        <p
-          style={{
-            padding: "1rem 1.25rem",
-            borderRadius: "1.5rem 1.5rem 0 1.5rem",
-            backgroundColor: "#161616",
-            color: "#fff",
-            fontFamily: "'DM Sans', Arial, sans-serif",
-            fontSize: "1rem",
-            fontWeight: 500,
-            lineHeight: 1.55,
-            margin: 0,
-            maxWidth: "480px",
-            cursor: "pointer",
-            userSelect: "none",
-          }}
-          onClick={onToggle}
-        >
+        <button type="button" className="faq-question-bubble" onClick={onToggle}>
           {question}
-        </p>
+        </button>
       </div>
 
-      {/* Answer bubble – left side (Hydrilla) */}
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
             key={`answer-${index}`}
-            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.97 }}
-            transition={{ duration: 0.28, ease: [0.215, 0.61, 0.355, 1] }}
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: "0.625rem",
-              maxWidth: "480px",
-              marginRight: "auto",
-              width: "100%",
-              transformOrigin: "top left",
-            }}
+            exit={{ opacity: 0, y: -5, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="faq-answer-row"
           >
-            {/* Hydrilla logo avatar */}
-            <div
-              style={{
-                position: "relative",
-                flexShrink: 0,
-                width: "2.125rem",
-                height: "2.125rem",
-                borderRadius: "50%",
-                border: "2px solid #fff",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
-                overflow: "hidden",
-                backgroundColor: "#f5f5f5",
-              }}
-            >
+            <div className="faq-avatar">
               <Image
                 src="/hyd01.png"
                 alt="Hydrilla"
@@ -153,23 +88,7 @@ function FAQChatItem({ question, answer, isOpen, onToggle, index }: FAQItemProps
                 sizes="34px"
               />
             </div>
-            <p
-              style={{
-                padding: "1.25rem 1.5rem",
-                borderRadius: "1.5rem 1.5rem 1.5rem 0.375rem",
-                backgroundColor: "#fff",
-                border: "1px solid rgba(17,17,17,0.07)",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-                fontFamily: "'DM Sans', Arial, sans-serif",
-                fontSize: "1rem",
-                color: "#222",
-                lineHeight: 1.7,
-                margin: 0,
-                flex: 1,
-              }}
-            >
-              {answer}
-            </p>
+            <p className="faq-answer-bubble">{answer}</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -181,60 +100,184 @@ export default function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   return (
-    <section
-      style={{
-        width: "100%",
-        backgroundColor: "#fff",
-        padding: "7rem 1.5rem 8rem",
-        boxSizing: "border-box",
-        WebkitFontSmoothing: "antialiased",
-      }}
-      className="max-sm:px-4 max-sm:py-12 max-sm:pb-14"
-    >
-      <div style={{ maxWidth: "44rem", margin: "0 auto" }} className="max-sm:px-0">
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: "4rem" }}>
-          <p
-            style={{
-              margin: "0 0 0.875rem",
-              fontFamily: "'DM Sans', Arial, sans-serif",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "#666",
-            }}
-          >
-            FAQ
-          </p>
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-              fontSize: "clamp(2rem, 4.5vw, 3.25rem)",
-              fontWeight: 700,
-              color: "#111",
-              letterSpacing: "-0.04em",
-              lineHeight: 1.15,
-            }}
-          >
-            Questions &amp; answers
-          </h2>
+    <section className="faq-section">
+      <style>{`
+        .faq-section {
+          width: 100%;
+          background: linear-gradient(180deg, #f7fafc 0%, #fff 24%, #fff 74%, #f8fafc 100%);
+          padding: 6.5rem 1.5rem 7.5rem;
+          box-sizing: border-box;
+          -webkit-font-smoothing: antialiased;
+        }
+        .faq-shell {
+          max-width: 46rem;
+          margin: 0 auto;
+        }
+        .faq-header {
+          text-align: center;
+          margin-bottom: 3.75rem;
+        }
+        .faq-kicker {
+          margin: 0 0 0.875rem;
+          font-family: 'DM Sans', Arial, sans-serif;
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #64748b;
+        }
+        .faq-title {
+          margin: 0;
+          font-family: 'Space Grotesk', 'DM Sans', Arial, sans-serif;
+          font-size: clamp(2rem, 4.5vw, 3.25rem);
+          font-weight: 700;
+          color: #111827;
+          letter-spacing: -0.04em;
+          line-height: 1.15;
+        }
+        .faq-chat {
+          display: flex;
+          flex-direction: column;
+          gap: 1.45rem;
+          padding: 2rem;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+          border-radius: 1.25rem;
+          background: rgba(255, 255, 255, 0.74);
+          box-shadow: 0 24px 70px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255,255,255,0.9);
+          backdrop-filter: blur(18px);
+        }
+        .faq-chat-item {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          padding-block: 0.75rem;
+          border-left: 1px dashed rgba(148, 163, 184, 0.45);
+          border-right: 1px dashed rgba(148, 163, 184, 0.22);
+        }
+        .faq-question-row {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 0.625rem;
+        }
+        .faq-toggle {
+          width: 2.25rem;
+          height: 2.25rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          background: #111827;
+          color: #fff;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.12);
+          cursor: pointer;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+          transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .faq-toggle:hover {
+          transform: translateY(-1px);
+          background: #0f172a;
+          box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+        }
+        .faq-question-bubble {
+          padding: 1rem 1.25rem;
+          border-radius: 1.45rem 1.45rem 0.25rem 1.45rem;
+          background: linear-gradient(135deg, #111827, #1f2937);
+          color: #fff;
+          font-family: 'DM Sans', Arial, sans-serif;
+          font-size: 1rem;
+          font-weight: 500;
+          line-height: 1.55;
+          margin: 0;
+          max-width: 500px;
+          cursor: pointer;
+          text-align: left;
+          border: 0;
+          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.13);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .faq-question-bubble:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+        }
+        .faq-answer-row {
+          display: flex;
+          align-items: flex-end;
+          gap: 0.625rem;
+          max-width: 500px;
+          margin-right: auto;
+          width: 100%;
+          transform-origin: top left;
+        }
+        .faq-avatar {
+          position: relative;
+          flex-shrink: 0;
+          width: 2.125rem;
+          height: 2.125rem;
+          border-radius: 50%;
+          border: 2px solid #fff;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+          overflow: hidden;
+          background: #f8fafc;
+        }
+        .faq-answer-bubble {
+          padding: 1.15rem 1.35rem;
+          border-radius: 1.45rem 1.45rem 1.45rem 0.375rem;
+          background: #fff;
+          border: 1px solid rgba(148, 163, 184, 0.24);
+          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+          font-family: 'DM Sans', Arial, sans-serif;
+          font-size: 0.98rem;
+          color: #334155;
+          line-height: 1.7;
+          margin: 0;
+          flex: 1;
+        }
+        @media (max-width: 640px) {
+          .faq-section {
+            padding: 3.25rem 1rem 3.75rem;
+          }
+          .faq-header {
+            margin-bottom: 2rem;
+          }
+          .faq-chat {
+            gap: 1.15rem;
+            padding: 1.15rem;
+            border-radius: 1rem;
+          }
+          .faq-chat-item {
+            gap: 0.85rem;
+            padding-block: 0.5rem;
+          }
+          .faq-question-row {
+            gap: 0.5rem;
+          }
+          .faq-toggle {
+            width: 2rem;
+            height: 2rem;
+          }
+          .faq-question-bubble {
+            padding: 0.875rem 1rem;
+            font-size: 0.92rem;
+            line-height: 1.5;
+          }
+          .faq-answer-bubble {
+            padding: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.65;
+          }
+        }
+      `}</style>
+
+      <div className="faq-shell">
+        <div className="faq-header">
+          <p className="faq-kicker">FAQ</p>
+          <h2 className="faq-title">Questions &amp; answers</h2>
         </div>
 
-        {/* Chat-style FAQ — clear border and spacing; mobile: tighter padding */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "1.75rem",
-            padding: "2.5rem 2rem",
-            border: "1px solid rgba(17,17,17,0.1)",
-            borderRadius: "1rem",
-            backgroundColor: "rgba(17,17,17,0.02)",
-          }}
-          className="max-sm:px-4 max-sm:py-5 max-sm:gap-5"
-        >
+        <div className="faq-chat">
           {FAQ_ITEMS.map((item, i) => (
             <FAQChatItem
               key={i}

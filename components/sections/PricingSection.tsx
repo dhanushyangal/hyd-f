@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuth } from "@clerk/nextjs";
 import {
   Zap,
@@ -13,6 +13,9 @@ import {
   CheckCircle2,
   ChevronRight,
   Info,
+  Gauge,
+  Gem,
+  ShieldCheck,
 } from "lucide-react";
 
 const BACKEND_URL = (
@@ -87,9 +90,36 @@ interface Plan {
 }
 
 const CREDIT_LEGEND = [
-  { label: "Standard model", credits: "10 credits" },
-  { label: "HD model", credits: "20 credits" },
-  { label: "Ultra model", credits: "40 credits" },
+  {
+    label: "Standard model",
+    detail: "Fast drafts and everyday assets",
+    credits: "10",
+    tone: "#4f8ef7",
+    bg: "rgba(79,142,247,0.1)",
+    Icon: Layers,
+  },
+  {
+    label: "HD model",
+    detail: "Sharper materials and cleaner detail",
+    credits: "20",
+    tone: "#14a78b",
+    bg: "rgba(20,167,139,0.1)",
+    Icon: Sparkles,
+  },
+  {
+    label: "Ultra model",
+    detail: "Final-quality detail for hero assets",
+    credits: "40",
+    tone: "#8b5cf6",
+    bg: "rgba(139,92,246,0.1)",
+    Icon: Gem,
+  },
+];
+
+const CREDIT_HIGHLIGHTS = [
+  { label: "Monthly reset", value: "Fresh credits every cycle", Icon: Gauge },
+  { label: "Private assets", value: "Paid plans keep ownership with you", Icon: ShieldCheck },
+  { label: "Quality tiers", value: "Spend more only when detail matters", Icon: Gem },
 ];
 
 const PLANS: Plan[] = [
@@ -195,23 +225,18 @@ const PLANS: Plan[] = [
 ];
 
 function CreditsBox({ plan, yearly }: { plan: Plan; yearly: boolean }) {
-  const [showLegend, setShowLegend] = useState(false);
-
   return (
     <div
-      onMouseEnter={() => setShowLegend(true)}
-      onMouseLeave={() => setShowLegend(false)}
       style={{
         position: "relative",
-        padding: "0.875rem 1rem",
-        paddingTop: plan.hasYearlyToggle && yearly ? "1.5rem" : "0.875rem",
-        borderRadius: "0.75rem",
-        backgroundColor: plan.popular
-          ? "rgba(59,142,232,0.07)"
-          : "rgba(17,17,17,0.04)",
-        border: plan.popular
-          ? "1px solid rgba(59,142,232,0.18)"
-          : "1px solid rgba(17,17,17,0.07)",
+        padding: "1rem",
+        paddingTop: plan.hasYearlyToggle && yearly ? "1.65rem" : "1rem",
+        borderRadius: "1rem",
+        background: plan.popular
+          ? "linear-gradient(135deg, rgba(59,142,232,0.11), rgba(255,255,255,0.9))"
+          : "linear-gradient(135deg, rgba(17,17,17,0.045), rgba(255,255,255,0.92))",
+        border: plan.popular ? "1px solid rgba(59,142,232,0.2)" : "1px solid rgba(17,17,17,0.08)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.75)",
         cursor: "default",
         userSelect: "none",
       }}
@@ -262,63 +287,6 @@ function CreditsBox({ plan, yearly }: { plan: Plan; yearly: boolean }) {
       >
         {plan.models}
       </p>
-
-      <AnimatePresence>
-        {showLegend && (
-          <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.97 }}
-            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
-            style={{
-              position: "absolute",
-              bottom: "calc(100% + 10px)",
-              left: 0,
-              width: "100%",
-              minWidth: "220px",
-              padding: "0.875rem 1rem",
-              borderRadius: "0.875rem",
-              backgroundColor: "#111",
-              border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-              zIndex: 40,
-              boxSizing: "border-box",
-            }}
-          >
-            <p
-              style={{
-                margin: "0 0 0.625rem",
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: "0.625rem",
-                fontWeight: 700,
-                color: "rgba(255,255,255,0.35)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-              }}
-            >
-              Credit breakdown
-            </p>
-            {CREDIT_LEGEND.map((c) => (
-              <div
-                key={c.label}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "0.3rem 0",
-                }}
-              >
-                <span style={{ fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.8125rem", color: "rgba(255,255,255,0.65)" }}>
-                  1 {c.label}
-                </span>
-                <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, color: "#6cbcf5", fontSize: "0.8125rem" }}>
-                  {c.credits}
-                </span>
-              </div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -644,6 +612,105 @@ function PlanCard({ plan, userPlan, planLoading }: { plan: Plan; userPlan: UserP
   );
 }
 
+function CreditBreakdownPanel() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-60px" }}
+      transition={{ duration: 0.5, delay: 0.08 }}
+      className="mt-8 grid grid-cols-[0.9fr_1.5fr] gap-5 rounded-[1.65rem] border border-[#dfe7ef] bg-white/85 p-5 shadow-[0_26px_80px_rgba(15,23,42,0.09),inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-xl max-lg:grid-cols-1 max-sm:mt-6 max-sm:rounded-2xl max-sm:p-4"
+    >
+      <div className="relative isolate flex flex-col justify-between gap-6 overflow-hidden rounded-[1.2rem] bg-[#10141d] p-5 text-white max-sm:p-4">
+        <div className="absolute inset-x-0 top-0 -z-10 h-32 bg-[radial-gradient(circle_at_30%_0%,rgba(79,142,247,0.42),transparent_55%),radial-gradient(circle_at_80%_10%,rgba(139,92,246,0.32),transparent_50%)]" />
+        <div>
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5">
+            <Gauge size={14} strokeWidth={2.2} className="text-[#8ec5ff]" aria-hidden />
+            <span
+              className="text-[0.7rem] font-bold uppercase tracking-[0.11em] text-white/62"
+              style={{ fontFamily: "'DM Sans', Arial, sans-serif" }}
+            >
+              Credit breakdown
+            </span>
+          </div>
+          <h3
+            className="text-2xl font-bold leading-tight tracking-tight max-sm:text-xl"
+            style={{ fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif" }}
+          >
+            Use credits where quality matters most.
+          </h3>
+        </div>
+        <p
+          className="max-w-md text-sm leading-6 text-white/68"
+          style={{ fontFamily: "'DM Sans', Arial, sans-serif" }}
+        >
+          Every model tier consumes a clear amount of credits, so creators can move fast on drafts and spend more on final assets.
+        </p>
+      </div>
+
+      <div className="grid gap-4">
+        <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+          {CREDIT_LEGEND.map((item) => (
+            <div
+              key={item.label}
+              className="group rounded-[1.125rem] border border-black/[0.06] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+            >
+              <div
+                className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
+                style={{ backgroundColor: item.bg, color: item.tone }}
+              >
+                <item.Icon size={18} strokeWidth={2.2} aria-hidden />
+              </div>
+              <p
+                className="mb-1 text-sm font-semibold text-[#1f2937]"
+                style={{ fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif" }}
+              >
+                {item.label}
+              </p>
+              <p className="mb-3 min-h-8 text-xs leading-4 text-neutral-500" style={{ fontFamily: "'DM Sans', Arial, sans-serif" }}>
+                {item.detail}
+              </p>
+              <div className="flex items-end justify-between gap-2 border-t border-[#edf1f5] pt-3">
+                <span className="text-[0.68rem] font-bold uppercase tracking-[0.08em] text-neutral-400">Cost</span>
+                <div className="flex items-baseline gap-1">
+                <span
+                  className="text-3xl font-bold tracking-tight"
+                  style={{ color: item.tone, fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif" }}
+                >
+                  {item.credits}
+                </span>
+                <span className="text-xs font-medium text-neutral-500">credits</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+          {CREDIT_HIGHLIGHTS.map(({ label, value, Icon }) => (
+            <div key={label} className="flex items-start gap-3 rounded-2xl border border-[#e7edf3] bg-[#f8fbfd] p-3.5">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#4f8ef7] shadow-[0_5px_18px_rgba(15,23,42,0.06)]">
+                <Icon size={17} strokeWidth={2.2} aria-hidden />
+              </span>
+              <div>
+                <p
+                  className="text-sm font-semibold text-[#18212f]"
+                  style={{ fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif" }}
+                >
+                  {label}
+                </p>
+                <p className="mt-0.5 text-xs leading-5 text-neutral-500" style={{ fontFamily: "'DM Sans', Arial, sans-serif" }}>
+                  {value}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function PricingSection() {
   const { getToken, isSignedIn } = useAuth();
   const [userPlan, setUserPlan] = useState<UserPlan>(null);
@@ -674,8 +741,13 @@ export default function PricingSection() {
 
   return (
     <section
-      style={{ width: "100%", backgroundColor: "#faf9f7", boxSizing: "border-box", WebkitFontSmoothing: "antialiased" }}
-      className="px-6 py-24 pb-28 max-md:px-4 max-md:pt-10 max-md:pb-12 max-sm:px-4 max-sm:pt-6 max-sm:pb-8"
+      style={{
+        width: "100%",
+        background: "linear-gradient(180deg, #f7fafc 0%, #ffffff 58%, #f7fafc 100%)",
+        boxSizing: "border-box",
+        WebkitFontSmoothing: "antialiased",
+      }}
+      className="px-6 py-24 pb-24 max-md:px-4 max-md:pt-12 max-md:pb-14 max-sm:px-4 max-sm:pt-10 max-sm:pb-12"
     >
       <style>{`
         .pricing-cta-btn:hover { opacity: 0.88; transform: scale(1.01); }
@@ -718,8 +790,8 @@ export default function PricingSection() {
           >
             Flexible plans that grow with you
           </h2>
-          <p style={{ margin: "0 auto", fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "1.0625rem", color: "#6b6966", lineHeight: 1.65 }}>
-            Start for free, upgrade when you&apos;re ready.
+          <p style={{ margin: "0 auto", maxWidth: "38rem", fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "1.0625rem", color: "#5f6b7a", lineHeight: 1.65 }}>
+            Start free, scale into production, and keep credits transparent across every model tier.
           </p>
 
           {/* Active plan banner */}
@@ -758,6 +830,8 @@ export default function PricingSection() {
             <PlanCard key={plan.id} plan={plan} userPlan={isSignedIn ? userPlan : null} planLoading={planLoading} />
           ))}
         </div>
+
+        <CreditBreakdownPanel />
       </div>
     </section>
   );
