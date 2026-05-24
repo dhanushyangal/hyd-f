@@ -262,58 +262,6 @@ export default function Hero() {
       >
         <HeroBackdropMedia reduceMotion={reduceMotion ?? false} />
 
-        {/* Colored atmosphere — wide, soft washes (not tight stacked circles) */}
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" aria-hidden>
-          {/* Tall base: full viewport vertical breath */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 18%, rgba(240,249,255,0.18) 42%, rgba(245,243,255,0.1) 62%, rgba(248,250,252,0.28) 100%)",
-            }}
-          />
-          {/* Huge sky–violet field: ellipse wider than viewport, sits high — fills laptop screens */}
-          <div
-            className="absolute left-1/2 top-[28%] min-h-[70vh] w-[min(200vw,2400px)] -translate-x-1/2 -translate-y-1/2 opacity-75"
-            style={{
-              background:
-                "radial-gradient(ellipse 85% 65% at 50% 50%, rgba(125, 211, 252, 0.38) 0%, rgba(196, 181, 253, 0.22) 42%, rgba(251, 207, 232, 0.08) 65%, transparent 78%)",
-              filter: "blur(72px)",
-            }}
-          />
-          {/* Lower open wash — anchors color through mid & lower hero without a small “blob” */}
-          <div
-            className="absolute left-1/2 top-[58%] min-h-[85vh] w-[min(180vw,2200px)] -translate-x-1/2 -translate-y-1/2 opacity-65"
-            style={{
-              background:
-                "radial-gradient(ellipse 90% 70% at 50% 55%, rgba(165, 243, 252, 0.2) 0%, rgba(224, 231, 255, 0.18) 38%, rgba(254, 243, 199, 0.12) 58%, transparent 75%)",
-              filter: "blur(88px)",
-            }}
-          />
-          {/* Gentle top highlight — very diffuse */}
-          <div
-            className="absolute inset-x-[-15%] top-0 h-[55vh] opacity-45"
-            style={{
-              background: "radial-gradient(ellipse 100% 80% at 50% 0%, rgba(255,255,255,0.32) 0%, rgba(240,249,255,0.12) 48%, transparent 74%)",
-            }}
-          />
-          {/* Light vignette: wide center, soft edge fade only (not a tight ring) */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse 110% 100% at 50% 48%, transparent 0%, transparent 58%, rgba(255,255,255,0.06) 80%, rgba(248,250,252,0.38) 100%)",
-            }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 35%, transparent 65%, rgba(255,255,255,0.14) 100%)",
-            }}
-          />
-        </div>
-
         <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 md:px-8 lg:px-10 py-24 sm:py-32">
           <div className="mx-auto w-full max-w-2xl lg:max-w-3xl flex flex-col items-center gap-4 sm:gap-5 lg:gap-6">
             <h1 className="sr-only">Build 3D Better</h1>

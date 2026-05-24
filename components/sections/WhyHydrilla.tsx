@@ -123,7 +123,7 @@ export default function WhyHydrilla() {
             background: "#fff",
             boxShadow: "0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
           }}
-          className="max-sm:rounded-xl max-sm:overflow-x-auto"
+          className="max-sm:hidden"
         >
           <div
             style={{
@@ -215,6 +215,49 @@ export default function WhyHydrilla() {
         </motion.div>
 
         <motion.div
+          variants={stagger}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: "-60px" }}
+          className="hidden max-sm:grid gap-3"
+        >
+          {ROWS.map((row) => (
+            <motion.div
+              key={row.feature}
+              variants={fadeUp}
+              className="rounded-xl border border-[#e8e8e8] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+            >
+              <h3
+                className="mb-4 text-[0.95rem] font-semibold leading-snug text-[#242424]"
+                style={{ fontFamily: "'DM Sans', Arial, sans-serif" }}
+              >
+                {row.feature}
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex min-h-16 flex-col items-center justify-center gap-2 rounded-lg border border-[#d8ecfd] bg-[#f3f9ff] px-2 py-3 text-center">
+                  <span
+                    className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-[#0c84ed]"
+                    style={{ fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif" }}
+                  >
+                    Hydrilla
+                  </span>
+                  {row.hydrilla ? CHECK_NODE : CROSS_NODE}
+                </div>
+                <div className="flex min-h-16 flex-col items-center justify-center gap-2 rounded-lg border border-[#ececec] bg-[#fafafa] px-2 py-3 text-center">
+                  <span
+                    className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-[#737373]"
+                    style={{ fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif" }}
+                  >
+                    Others
+                  </span>
+                  {row.others ? CHECK_NODE : CROSS_NODE}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -244,7 +287,7 @@ export default function WhyHydrilla() {
                 color: "#565656",
                 letterSpacing: "-0.01em",
               }}
-              className="max-sm:px-3 max-sm:py-2 max-sm:text-sm"
+              className="max-sm:w-full max-sm:justify-start max-sm:rounded-xl max-sm:px-3.5 max-sm:py-3 max-sm:text-sm"
             >
               <Icon className="h-5 w-5 shrink-0 text-[#0c84ed]" aria-hidden />
               {label}

@@ -40,3 +40,5 @@ next-env.d.ts
 public/3d-models/
 public/3dheroimages/
 public/reference/
+# clerk configuration (can include secrets)
+/.clerk/

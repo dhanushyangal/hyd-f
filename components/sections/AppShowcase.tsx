@@ -23,9 +23,9 @@ const FLOATING_TAGS = [
 ];
 
 const positionClasses: Record<string, string> = {
-  "top-left": "left-4 sm:left-6 md:left-8 top-4 sm:top-6 md:top-8",
-  "top-right": "right-4 sm:right-6 md:right-8 top-4 sm:top-6 md:top-8",
-  "bottom-left": "left-4 sm:left-6 md:left-8 bottom-4 sm:bottom-6 md:bottom-8",
+  "top-left": "left-3 top-3 sm:left-6 sm:top-6 md:left-8 md:top-8",
+  "top-right": "right-3 top-3 sm:right-6 sm:top-6 md:right-8 md:top-8",
+  "bottom-left": "left-3 bottom-3 sm:left-6 sm:bottom-6 md:left-8 md:bottom-8",
 };
 
 export default function AppShowcase() {
@@ -45,7 +45,7 @@ export default function AppShowcase() {
         </div>
 
         {/* Main visual: back.gif with floating tags + center screenshot */}
-        <div className="relative w-full min-h-[480px] sm:min-h-[540px] md:min-h-[600px] rounded-2xl overflow-hidden bg-neutral-100">
+        <div className="relative w-full min-h-[620px] sm:min-h-[620px] md:min-h-[600px] rounded-2xl overflow-hidden bg-neutral-100">
           {/* Background: back.gif — keep unoptimized for animation, lazy load since below fold */}
           <div className="absolute inset-0 bg-neutral-100">
             <Image
@@ -63,22 +63,22 @@ export default function AppShowcase() {
           {FLOATING_TAGS.map((tag) => (
             <div
               key={tag.title}
-              className={`absolute z-10 w-[calc(100%-2rem)] sm:w-auto sm:max-w-[200px] md:max-w-[220px] rounded-lg bg-white/95 backdrop-blur-sm border border-[#11111114] p-3 sm:p-3.5 shadow-[0_6px_20px_rgba(0,0,0,0.06)] ${positionClasses[tag.position]}`}
+              className={`absolute z-30 w-[min(42vw,170px)] sm:w-auto sm:max-w-[200px] md:max-w-[220px] rounded-lg bg-white/90 backdrop-blur-md border border-white/70 p-2.5 sm:p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.1)] ring-1 ring-black/[0.03] ${positionClasses[tag.position]}`}
             >
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2 max-[390px]:gap-1.5">
                 <div
-                  className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ring-2 ring-white/80"
+                  className="flex-shrink-0 w-2.5 h-2.5 sm:w-7 sm:h-7 mt-1 rounded-full flex items-center justify-center ring-2 ring-white/80"
                   style={{ backgroundColor: "rgba(99, 179, 237, 0.85)" }}
                 />
                 <div className="min-w-0">
                   <h3
-                    className="font-bold text-[#111] text-xs sm:text-sm mb-0.5 leading-tight"
+                    className="font-bold text-[#111] text-[11px] sm:text-sm mb-0.5 leading-tight"
                     style={{ fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif" }}
                   >
                     {tag.title}
                   </h3>
                   <p
-                    className="text-neutral-500 text-[11px] sm:text-xs leading-relaxed"
+                    className="text-neutral-500 text-[10px] sm:text-xs leading-snug sm:leading-relaxed"
                     style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
                   >
                     {tag.description}
@@ -89,15 +89,16 @@ export default function AppShowcase() {
           ))}
 
           {/* Center: mobile = square mbworkflow image; desktop = workspace screenshot in card */}
-          <div className="absolute inset-0 flex items-center justify-center p-6 sm:p-8 md:p-10">
+          <div className="absolute inset-0 flex items-center justify-center px-4 py-24 sm:p-8 md:p-10">
             {/* Mobile only: square workflow image (no card), on top */}
-            <div className="md:hidden relative w-full max-w-[82vw] aspect-square rounded-lg overflow-hidden z-20">
+            <div className="md:hidden relative w-full max-w-[78vw] aspect-square rounded-xl overflow-hidden z-20 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/60">
               <Image
-                src="/workflow/mbworkflow.png"
+                src="/workflow/worflow-image-mobile.png"
                 alt="Hydrilla workflow across industries"
                 fill
                 className="object-cover object-center"
-                sizes="82vw"
+                sizes="78vw"
+                priority={false}
               />
             </div>
             {/* Desktop: workspace screenshot in card */}
