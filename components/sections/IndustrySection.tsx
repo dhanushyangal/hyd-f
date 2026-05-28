@@ -9,7 +9,7 @@ const INDUSTRIES = [
   {
     id: "game",
     title: "Game Development",
-    image: "/industrypower/dino.png",
+    image: "/industrypower/dino.webp",
     leftHeading: "Assets built for real-time production",
     ctaLabel: "Explore Game Development",
     ctaHref: "/usecase/gamedev",
@@ -27,7 +27,7 @@ const INDUSTRIES = [
   {
     id: "film",
     title: "Film & Animation",
-    image: "/industrypower/films%26a.png",
+    image: "/industrypower/films-a.webp",
     leftHeading: "Production assets for cinematic pipelines",
     ctaLabel: "Explore Film & Animation",
     ctaHref: "/usecase/filmproduction",
@@ -45,7 +45,7 @@ const INDUSTRIES = [
   {
     id: "arc",
     title: "Architecture & Interiors",
-    image: "/industrypower/architecture.png",
+    image: "/industrypower/architecture.webp",
     leftHeading: "Architectural visualization assets",
     ctaLabel: "Explore Architecture",
     ctaHref: "/usecase/architecture",
@@ -63,7 +63,7 @@ const INDUSTRIES = [
   {
     id: "arch",
     title: "AR / VR & XR",
-    image: "/industrypower/arvr1.png",
+    image: "/industrypower/arvr1.webp",
     leftHeading: "Assets designed for immersive environments",
     ctaLabel: "Explore XR Solutions",
     ctaHref: "/usecase/arvr",
@@ -81,7 +81,7 @@ const INDUSTRIES = [
   {
     id: "prop",
     title: "Product Visualization",
-    image: "/industrypower/lampprop.png",
+    image: "/industrypower/lampprop.webp",
     leftHeading: "Product assets for visualization and marketing",
     ctaLabel: "Explore Product Visualization",
     ctaHref: "/usecase/productdesign",
@@ -280,6 +280,7 @@ export default function IndustrySection() {
                             style={{ objectFit: "cover", objectPosition: "center" }}
                             sizes="100vw"
                             loading="lazy"
+                            decoding="async"
                           />
                           <CardGradient active={true} />
                         </div>
@@ -442,6 +443,7 @@ export default function IndustrySection() {
                         }}
                         sizes="(max-width: 640px) 22vw, (max-width: 1024px) 18vw, 161px"
                         loading="lazy"
+                        decoding="async"
                       />
                     </div>
 

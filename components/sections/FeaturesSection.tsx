@@ -10,49 +10,49 @@ const FEATURES = [
     number: "01",
     title: "Text & Image to 3D Generation",
     body: "Hydrilla transforms natural language descriptions and reference images into structured 3D assets. This enables artists and technical teams to translate concepts into editable geometry without manual base modeling.",
-    image: "/features/3d1.png",
+    image: "/features/3d1.webp",
   },
   {
     id: 2,
     number: "02",
     title: "Intelligent Asset Segmentation",
     body: "Hydrilla isolates objects and structural components from source imagery using AI-driven segmentation. Separated visual elements are reconstructed into organised geometry for accurate model generation and downstream editing.",
-    image: "/features/3d2.png",
+    image: "/features/3d2.webp",
   },
   {
     id: 3,
     number: "03",
     title: "Automatic UV Mapping",
     body: "Generated assets include UV-mapped surfaces prepared for standard texturing workflows. Materials, texture maps, and surface details can be applied immediately within professional rendering pipelines.",
-    image: "/features/3d3.png",
+    image: "/features/3d3.webp",
   },
   {
     id: 4,
     number: "04",
     title: "Iterative Asset Generation",
     body: "Hydrilla enables iterative generation of asset variations while maintaining structural coherence. Teams can explore design directions, proportions, and stylistic changes without rebuilding models from scratch.",
-    image: "/features/3d4.png",
+    image: "/features/3d4.webp",
   },
   {
     id: 5,
     number: "05",
     title: "Refinement Workspace",
     body: "Models can be inspected and refined inside the Hydrilla workspace prior to export. The workspace provides controls for material adjustments, geometry inspection, and asset preparation within an interactive viewport.",
-    image: "/features/3d5.png",
+    image: "/features/3d5.webp",
   },
   {
     id: 6,
     number: "06",
     title: "Production-Ready Topology",
     body: "Hydrilla generates structured meshes designed for integration into real production environments. Assets are suitable for use in real-time engines, rendering systems, and animation workflows.",
-    image: "/features/3d6.png",
+    image: "/features/3d6.webp",
   },
   {
     id: 7,
     number: "07",
     title: "Export for Professional Pipelines",
     body: "Assets can be exported in widely supported formats compatible with major 3D tools and engines — GLB, FBX, OBJ, and USDZ — ready for immediate use in your pipeline.",
-    image: "/features/3d7.png",
+    image: "/features/3d7.webp",
     tags: ["GLB", "FBX", "OBJ", "USDZ"],
   },
   {
@@ -60,7 +60,7 @@ const FEATURES = [
     number: "08",
     title: "API and Pipeline Integration",
     body: "Hydrilla provides a generation API that allows teams to integrate asset creation directly into internal production pipelines. Automated workflows can trigger asset generation, iteration, and export programmatically.",
-    image: "/features/3d8.png",
+    image: "/features/3d8.webp",
   },
 ];
 
@@ -370,12 +370,13 @@ export default function FeaturesSection() {
                   style={{ position: "absolute", inset: 0 }}
                 >
                   <Image
-                    src={FEATURES[activeIndex]?.image ?? "/features/3d1.png"}
+                    src={FEATURES[activeIndex]?.image ?? "/features/3d1.webp"}
                     alt={FEATURES[activeIndex]?.title ?? ""}
                     fill
                     style={{ objectFit: "contain", objectPosition: "center" }}
                     sizes="(max-width: 1200px) 50vw, 960px"
-                    unoptimized
+                    loading="lazy"
+                    decoding="async"
                   />
                 </motion.div>
               </AnimatePresence>
@@ -456,7 +457,8 @@ export default function FeaturesSection() {
                   fill
                   className="object-contain object-center"
                   sizes="(max-width: 768px) 100vw, 50vw"
-                  unoptimized
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             </motion.article>

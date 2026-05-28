@@ -108,16 +108,29 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f5f5f5;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
+  background: transparent;
   border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+body.is-scrolling::-webkit-scrollbar-thumb {
+  background: rgba(17, 17, 17, 0.22);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a3a3a3;
+  background: rgba(17, 17, 17, 0.38);
+}
+
+html {
+  scrollbar-color: transparent transparent;
+}
+
+body.is-scrolling {
+  scrollbar-color: rgba(17, 17, 17, 0.22) transparent;
 }
 
 /* Animations */
@@ -344,6 +357,11 @@ button:active:not(:disabled) {
 .cl-poweredByClerk,
 .cl-formFooter,
 .cl-footerText,
+[class*="cl-internal-maw46"],
+[class*="cl-internal-1mc2502"],
+[class*="cl-internal-1ayelrt"],
+[class*="cl-internal-nmrdmm"],
+[class*="cl-internal-o2kwkh"],
 [class*="cl-footer"],
 [class*="cl-poweredBy"],
 div[class*="footer"] {

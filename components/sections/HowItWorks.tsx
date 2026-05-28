@@ -12,7 +12,7 @@ const STEPS = [
     number: "01",
     title: "Describe your asset",
     body: "Type a prompt or upload a reference image. Describe your character, environment, or prop in plain language—our AI understands context and intent.",
-    image: "/workflow/describe.png",
+    image: "/workflow/describe.webp",
     hoverImage: null as string | null,
   },
   {
@@ -20,15 +20,15 @@ const STEPS = [
     number: "02",
     title: "Generate in seconds",
     body: "Hydrilla's models produce a production-quality 3D asset instantly. View the result from every angle—wireframe to full texture.",
-    image: "/workflow/generated-model1.png",
-    hoverImage: "/workflow/generated-model2.png",
+    image: "/workflow/generated-model1.webp",
+    hoverImage: "/workflow/generated-model2.webp",
   },
   {
     id: "refine",
     number: "03",
     title: "Refine and export",
     body: "Iterate on your asset, adjust details, and export in the format your pipeline requires—GLB, FBX, OBJ, or USD.",
-    image: "/workflow/refine.png",
+    image: "/workflow/refine.webp",
     hoverImage: null as string | null,
   },
 ];
@@ -110,6 +110,8 @@ export default function HowItWorks() {
                     fill
                     className="object-contain object-center"
                     sizes="(max-width: 768px) 100vw, 50vw"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </motion.div>
               </AnimatePresence>
@@ -153,6 +155,7 @@ export default function HowItWorks() {
                         className="object-contain object-center"
                         sizes="100vw"
                         loading="lazy"
+                        decoding="async"
                       />
                     </div>
                     {/* Text content */}

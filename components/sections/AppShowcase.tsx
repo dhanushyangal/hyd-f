@@ -47,7 +47,7 @@ export default function AppShowcase() {
         {/* Main visual: back.gif with floating tags + center screenshot */}
         <div className="relative w-full min-h-[620px] sm:min-h-[620px] md:min-h-[600px] rounded-2xl overflow-hidden bg-neutral-100">
           {/* Background: back.gif — keep unoptimized for animation, lazy load since below fold */}
-          <div className="absolute inset-0 bg-neutral-100">
+          <div className="absolute inset-0 h-full w-full bg-neutral-100">
             <Image
               src="/workflow/back.gif"
               alt=""
@@ -56,6 +56,7 @@ export default function AppShowcase() {
               sizes="(max-width: 1280px) 100vw, 1152px"
               unoptimized
               loading="lazy"
+              decoding="async"
             />
           </div>
 
