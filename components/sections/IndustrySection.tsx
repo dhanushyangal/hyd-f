@@ -4,12 +4,19 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 
+const CLOUDINARY_LANDING_BASE =
+  "https://res.cloudinary.com/dqizbxc9e/image/upload";
+
+const industryImage = (id: string, transform = "f_auto,q_auto,c_fill,w_420,h_590") =>
+  `${CLOUDINARY_LANDING_BASE}/${transform}/v1/hydrilla-landing/industrypower/${id}`;
+
 /* ─────────────────────────── data ─────────────────────────── */
 const INDUSTRIES = [
   {
     id: "game",
     title: "Game Development",
-    image: "/industrypower/dino.webp",
+    image: industryImage("dino"),
+    mobileImage: industryImage("dino", "f_auto,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Assets built for real-time production",
     ctaLabel: "Explore Game Development",
     ctaHref: "/usecase/gamedev",
@@ -27,7 +34,8 @@ const INDUSTRIES = [
   {
     id: "film",
     title: "Film & Animation",
-    image: "/industrypower/films-a.webp",
+    image: industryImage("films-a"),
+    mobileImage: industryImage("films-a", "f_auto,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Production assets for cinematic pipelines",
     ctaLabel: "Explore Film & Animation",
     ctaHref: "/usecase/filmproduction",
@@ -45,7 +53,8 @@ const INDUSTRIES = [
   {
     id: "arc",
     title: "Architecture & Interiors",
-    image: "/industrypower/architecture.webp",
+    image: industryImage("architecture"),
+    mobileImage: industryImage("architecture", "f_auto,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Architectural visualization assets",
     ctaLabel: "Explore Architecture",
     ctaHref: "/usecase/architecture",
@@ -63,7 +72,8 @@ const INDUSTRIES = [
   {
     id: "arch",
     title: "AR / VR & XR",
-    image: "/industrypower/arvr1.webp",
+    image: industryImage("arvr1"),
+    mobileImage: industryImage("arvr1", "f_auto,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Assets designed for immersive environments",
     ctaLabel: "Explore XR Solutions",
     ctaHref: "/usecase/arvr",
@@ -81,7 +91,8 @@ const INDUSTRIES = [
   {
     id: "prop",
     title: "Product Visualization",
-    image: "/industrypower/lampprop.webp",
+    image: industryImage("lampprop"),
+    mobileImage: industryImage("lampprop", "f_auto,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Product assets for visualization and marketing",
     ctaLabel: "Explore Product Visualization",
     ctaHref: "/usecase/productdesign",
@@ -274,13 +285,14 @@ export default function IndustrySection() {
                           }}
                         >
                           <Image
-                            src={item.image}
+                            src={item.mobileImage}
                             alt={item.title}
                             fill
                             style={{ objectFit: "cover", objectPosition: "center" }}
                             sizes="100vw"
                             loading="lazy"
                             decoding="async"
+                            unoptimized
                           />
                           <CardGradient active={true} />
                         </div>
@@ -442,8 +454,10 @@ export default function IndustrySection() {
                           transition: "opacity 0.3s cubic-bezier(0.215,0.61,0.355,1)",
                         }}
                         sizes="(max-width: 640px) 22vw, (max-width: 1024px) 18vw, 161px"
-                        loading="lazy"
+                        loading="eager"
                         decoding="async"
+                        fetchPriority={isActive ? "high" : "auto"}
+                        unoptimized
                       />
                     </div>
 

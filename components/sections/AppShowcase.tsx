@@ -4,6 +4,16 @@ import React, { useState } from "react";
 import Image from "next/image";
 import SeeWorkspaceButton from "../SeeWorkspaceButton";
 
+const CLOUDINARY_WORKFLOW_BASE =
+  "https://res.cloudinary.com/dqizbxc9e/image/upload";
+
+const workflowImage = (id: string, transform: string) =>
+  `${CLOUDINARY_WORKFLOW_BASE}/${transform}/v1/hydrilla-landing/workflow/${id}`;
+
+const WORKFLOW_BACKDROP = workflowImage("back", "f_auto,q_auto,w_1280");
+const WORKFLOW_DESKTOP = workflowImage("workspace", "f_auto,q_auto,c_fit,w_1200");
+const WORKFLOW_MOBILE = workflowImage("workflow-mobile", "f_auto,q_auto,c_fill,w_760,h_760");
+
 const FLOATING_TAGS = [
   {
     title: "Prompt to 3D",
@@ -34,11 +44,10 @@ export default function AppShowcase() {
   return (
     <section className="relative w-full bg-neutral-50 py-16 sm:py-20 md:py-24 overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8">
-        {/* Headline: Space Grotesk */}
         <div className="text-center mb-12 sm:mb-14 md:mb-16">
           <h2
             className="text-3xl sm:text-4xl md:text-5xl lg:text-[2.75rem] font-bold text-[#111] tracking-tight leading-[1.12]"
-            style={{ fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif" }}
+            style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
           >
             Workflow for you
           </h2>
@@ -49,7 +58,7 @@ export default function AppShowcase() {
           {/* Background: back.gif — keep unoptimized for animation, lazy load since below fold */}
           <div className="absolute inset-0 h-full w-full bg-neutral-100">
             <Image
-              src="/workflow/back.gif"
+              src={WORKFLOW_BACKDROP}
               alt=""
               fill
               className="object-cover object-center"
@@ -74,7 +83,7 @@ export default function AppShowcase() {
                 <div className="min-w-0">
                   <h3
                     className="font-bold text-[#111] text-[11px] sm:text-sm mb-0.5 leading-tight"
-                    style={{ fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif" }}
+                    style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
                   >
                     {tag.title}
                   </h3>
@@ -94,12 +103,14 @@ export default function AppShowcase() {
             {/* Mobile only: square workflow image (no card), on top */}
             <div className="md:hidden relative w-full max-w-[78vw] aspect-square rounded-xl overflow-hidden z-20 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/60">
               <Image
-                src="/workflow/worflow-image-mobile.png"
+                src={WORKFLOW_MOBILE}
                 alt="Hydrilla workflow across industries"
                 fill
                 className="object-cover object-center"
                 sizes="78vw"
-                priority={false}
+                loading="lazy"
+                decoding="async"
+                unoptimized
               />
             </div>
             {/* Desktop: workspace screenshot in card */}
@@ -123,12 +134,14 @@ export default function AppShowcase() {
                 />
               )}
               <Image
-                src="/workflow/image.png"
+                src={WORKFLOW_DESKTOP}
                 alt="Hydrilla workspace"
                 fill
                 className="object-contain object-top"
                 sizes="(max-width: 1024px) 100vw, 960px"
                 loading="lazy"
+                decoding="async"
+                unoptimized
                 onLoad={() => setImgLoaded(true)}
               />
             </div>

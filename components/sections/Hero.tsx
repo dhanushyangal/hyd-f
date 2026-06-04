@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useLayoutEffect, useRef, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { MotionValue } from "framer-motion";
@@ -37,58 +37,17 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HERO_BACKDROP_VIDEO = "/herohydrilla.mp4";
 const HERO_BACKDROP_POSTER = "/herohydrillasrc.jpg";
 
-type NavigatorWithConnection = Navigator & {
-  connection?: {
-    saveData?: boolean;
-    effectiveType?: string;
-    addEventListener?: (type: "change", fn: () => void) => void;
-    removeEventListener?: (type: "change", fn: () => void) => void;
-  };
-};
-
 /**
- * Hero backdrop: always load JPG first (LCP). MP4 mounts only after the poster image has loaded
- * and the network is not slow / save-data. Video fades in on first frame; slow connections never fetch video.
+ * Hero backdrop: mount the MP4 immediately and keep the JPG poster underneath as a fallback.
+ * The video fades in once it is actually playing.
  */
 function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [posterLoaded, setPosterLoaded] = useState(false);
-  const [connectionSlow, setConnectionSlow] = useState<boolean | null>(null);
   const [videoFailed, setVideoFailed] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
 
   useEffect(() => {
-    if (typeof navigator === "undefined") return;
-    const c = (navigator as NavigatorWithConnection).connection;
-    if (!c) {
-      setConnectionSlow(false);
-      return;
-    }
-    const update = () => {
-      if (c.saveData) {
-        setConnectionSlow(true);
-        return;
-      }
-      const t = c.effectiveType ?? "";
-      // No video on slow / metered-style labels (includes 3g — hero video is heavy).
-      setConnectionSlow(
-        t === "slow-2g" || t === "2g" || t === "3g"
-      );
-    };
-    update();
-    c.addEventListener?.("change", update);
-    return () => c.removeEventListener?.("change", update);
-  }, []);
-
-  const networkAllowsVideo =
-    !reduceMotion && connectionSlow !== true && !videoFailed;
-
-  /** JPG must finish first; only then mount & fetch MP4 (saves bandwidth on slow nets: we never mount video). */
-  const shouldMountVideo = posterLoaded && networkAllowsVideo;
-
-  // Muted autoplay still needs an explicit play() on many mobile browsers after mount.
-  useLayoutEffect(() => {
-    if (!shouldMountVideo) return;
+    if (reduceMotion || videoFailed) return;
     const v = videoRef.current;
     if (!v) return;
     v.muted = true;
@@ -108,7 +67,7 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
       v.removeEventListener("loadeddata", kickPlay);
       v.removeEventListener("canplay", kickPlay);
     };
-  }, [shouldMountVideo]);
+  }, [reduceMotion, videoFailed]);
 
   return (
     <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
@@ -120,10 +79,9 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
         fetchPriority="high"
         decoding="async"
         loading="eager"
-        onLoad={() => setPosterLoaded(true)}
       />
-      {/* Layer 2: video only after JPG loaded + fast connection; hidden until actually playing */}
-      {shouldMountVideo ? (
+      {/* Layer 2: video is the intended hero background; poster remains visible until playback starts. */}
+      {!reduceMotion && !videoFailed ? (
         <video
           ref={videoRef}
           className={`absolute inset-0 z-10 h-full w-full object-cover scale-[1.02] transition-opacity duration-700 ease-out ${

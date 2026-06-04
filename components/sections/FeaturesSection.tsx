@@ -1,8 +1,24 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from "react";
+import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
+
+const CLOUDINARY_BASE = "https://res.cloudinary.com/dqizbxc9e/image/upload";
+const img = (id: string, t = "f_auto,q_auto,c_fit,w_1120,h_720") =>
+  `${CLOUDINARY_BASE}/${t}/v1/hydrilla-landing/features/${id}`;
+
+const F = "'DM Sans', system-ui, sans-serif";
+
+// Light theme palette
+const BG = "#ffffff";
+const BG_CARD = "#f7f7f7";
+const DIVIDER = "#f0f0f0";
+const ACCENT = "#3b8ee8";
+const TXT_HI = "#111111";
+const TXT_BODY = "#606060";
+const TXT_MUTED = "#888888";
+const TXT_DIM = "#c0c0c0";
 
 const FEATURES = [
   {
@@ -10,49 +26,56 @@ const FEATURES = [
     number: "01",
     title: "Text & Image to 3D Generation",
     body: "Hydrilla transforms natural language descriptions and reference images into structured 3D assets. This enables artists and technical teams to translate concepts into editable geometry without manual base modeling.",
-    image: "/features/3d1.webp",
+    image: img("3d1"),
+    mobileImage: img("3d1", "f_auto,q_auto,c_fit,w_900,h_600"),
   },
   {
     id: 2,
     number: "02",
     title: "Intelligent Asset Segmentation",
     body: "Hydrilla isolates objects and structural components from source imagery using AI-driven segmentation. Separated visual elements are reconstructed into organised geometry for accurate model generation and downstream editing.",
-    image: "/features/3d2.webp",
+    image: img("3d2"),
+    mobileImage: img("3d2", "f_auto,q_auto,c_fit,w_900,h_600"),
   },
   {
     id: 3,
     number: "03",
     title: "Automatic UV Mapping",
     body: "Generated assets include UV-mapped surfaces prepared for standard texturing workflows. Materials, texture maps, and surface details can be applied immediately within professional rendering pipelines.",
-    image: "/features/3d3.webp",
+    image: img("3d3"),
+    mobileImage: img("3d3", "f_auto,q_auto,c_fit,w_900,h_600"),
   },
   {
     id: 4,
     number: "04",
     title: "Iterative Asset Generation",
     body: "Hydrilla enables iterative generation of asset variations while maintaining structural coherence. Teams can explore design directions, proportions, and stylistic changes without rebuilding models from scratch.",
-    image: "/features/3d4.webp",
+    image: img("3d4"),
+    mobileImage: img("3d4", "f_auto,q_auto,c_fit,w_900,h_600"),
   },
   {
     id: 5,
     number: "05",
     title: "Refinement Workspace",
     body: "Models can be inspected and refined inside the Hydrilla workspace prior to export. The workspace provides controls for material adjustments, geometry inspection, and asset preparation within an interactive viewport.",
-    image: "/features/3d5.webp",
+    image: img("3d5"),
+    mobileImage: img("3d5", "f_auto,q_auto,c_fit,w_900,h_600"),
   },
   {
     id: 6,
     number: "06",
     title: "Production-Ready Topology",
     body: "Hydrilla generates structured meshes designed for integration into real production environments. Assets are suitable for use in real-time engines, rendering systems, and animation workflows.",
-    image: "/features/3d6.webp",
+    image: img("3d6"),
+    mobileImage: img("3d6", "f_auto,q_auto,c_fit,w_900,h_600"),
   },
   {
     id: 7,
     number: "07",
     title: "Export for Professional Pipelines",
     body: "Assets can be exported in widely supported formats compatible with major 3D tools and engines — GLB, FBX, OBJ, and USDZ — ready for immediate use in your pipeline.",
-    image: "/features/3d7.webp",
+    image: img("3d7"),
+    mobileImage: img("3d7", "f_auto,q_auto,c_fit,w_900,h_600"),
     tags: ["GLB", "FBX", "OBJ", "USDZ"],
   },
   {
@@ -60,7 +83,8 @@ const FEATURES = [
     number: "08",
     title: "API and Pipeline Integration",
     body: "Hydrilla provides a generation API that allows teams to integrate asset creation directly into internal production pipelines. Automated workflows can trigger asset generation, iteration, and export programmatically.",
-    image: "/features/3d8.webp",
+    image: img("3d8"),
+    mobileImage: img("3d8", "f_auto,q_auto,c_fit,w_900,h_600"),
   },
 ];
 
@@ -72,17 +96,22 @@ export default function FeaturesSection() {
   const leftColRef = useRef<HTMLDivElement>(null);
   const leftContentRef = useRef<HTMLDivElement>(null);
 
+  // ── Size the tall scroll driver based on left-column content height ───────
   useLayoutEffect(() => {
-    const leftContent = leftContentRef.current;
-    const leftCol = leftColRef.current;
-    if (!leftContent || !leftCol) return;
-    const contentH = leftContent.scrollHeight;
-    const colH = leftCol.clientHeight;
-    const viewportH = typeof window !== "undefined" ? window.innerHeight : 900;
-    const scrollRange = Math.max(0, contentH - colH);
-    setWrapperHeight(viewportH + scrollRange);
+    if (typeof window === "undefined") return;
+    const recalc = () => {
+      const leftContent = leftContentRef.current;
+      const leftCol = leftColRef.current;
+      if (!leftContent || !leftCol) return;
+      const scrollRange = Math.max(0, leftContent.scrollHeight - leftCol.clientHeight);
+      setWrapperHeight(window.innerHeight + scrollRange);
+    };
+    recalc();
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
   }, []);
 
+  // ── Page scroll → drive left-column scroll + active index in sync ─────────
   useEffect(() => {
     const wrapper = wrapperRef.current;
     const leftCol = leftColRef.current;
@@ -90,9 +119,8 @@ export default function FeaturesSection() {
     if (!wrapper || !leftCol || !leftContent) return;
 
     const onScroll = () => {
-      const contentH = leftContent.scrollHeight;
       const colH = leftCol.clientHeight;
-      const maxScroll = Math.max(0, contentH - colH);
+      const maxScroll = Math.max(0, leftContent.scrollHeight - colH);
       if (maxScroll <= 0) return;
 
       const winH = window.innerHeight;
@@ -100,12 +128,10 @@ export default function FeaturesSection() {
       if (scrollRange <= 0) return;
 
       const wrapperTop = wrapper.getBoundingClientRect().top + window.scrollY;
-      const scrollY = window.scrollY;
-      const progress = Math.max(0, Math.min(1, (scrollY - wrapperTop) / scrollRange));
+      const progress = Math.max(0, Math.min(1, (window.scrollY - wrapperTop) / scrollRange));
+
       leftCol.scrollTop = progress * maxScroll;
-      // Drive active index from scroll so steps advance one-by-one without skipping
-      const n = FEATURES.length;
-      const idx = Math.min(n - 1, Math.floor(progress * n));
+      const idx = Math.min(FEATURES.length - 1, Math.floor(progress * FEATURES.length));
       setActiveIndex(idx);
     };
 
@@ -114,357 +140,389 @@ export default function FeaturesSection() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [wrapperHeight]);
 
-  // When user scrolls the left column (e.g. click-to-feature), keep activeIndex in sync
-  useEffect(() => {
-    const leftCol = leftColRef.current;
-    const leftContent = leftContentRef.current;
-    if (!leftCol || !leftContent) return;
-    const onColScroll = () => {
-      const maxScroll = Math.max(0, leftContent.scrollHeight - leftCol.clientHeight);
-      if (maxScroll <= 0) return;
-      const progress = Math.max(0, Math.min(1, leftCol.scrollTop / maxScroll));
-      const n = FEATURES.length;
-      setActiveIndex(Math.min(n - 1, Math.floor(progress * n)));
-    };
-    leftCol.addEventListener("scroll", onColScroll, { passive: true });
-    return () => leftCol.removeEventListener("scroll", onColScroll);
-  }, []);
-
   const scrollToFeature = (i: number) => {
-    const leftCol = leftColRef.current;
-    const el = itemRefs.current[i];
-    if (!leftCol || !el) return;
-    const colH = leftCol.clientHeight;
-    const target = el.offsetTop - colH / 2 + el.offsetHeight / 2;
-    leftCol.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const scrollRange = wrapper.offsetHeight - window.innerHeight;
+    const wrapperTop = wrapper.getBoundingClientRect().top + window.scrollY;
+    const progress = FEATURES.length > 1 ? i / (FEATURES.length - 1) : 0;
+    window.scrollTo({ top: wrapperTop + scrollRange * progress, behavior: "smooth" });
   };
 
+  const progressPct = ((activeIndex + 1) / FEATURES.length) * 100;
+
   return (
-    <>
-      {/* Separate header section – scrolls away; sticky starts after this */}
-      <section
-        style={{
-          width: "100%",
-          backgroundColor: "#fff",
-          padding: "6rem 1.5rem 3rem",
-          boxSizing: "border-box",
-          WebkitFontSmoothing: "antialiased",
-        }}
-        className="max-sm:px-4 max-sm:pt-12 max-sm:pb-8"
-      >
-        <div
-          style={{
-            maxWidth: "72rem",
-            margin: "0 auto",
-            padding: "0 1.5rem",
-            textAlign: "center",
-          }}
-        >
-          <p
-            style={{
-              margin: "0 0 0.75rem",
-              fontFamily: "'DM Sans', Arial, sans-serif",
-              fontSize: "0.6875rem",
-              fontWeight: 600,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "#666",
-            }}
-          >
+    <div style={{ backgroundColor: BG, WebkitFontSmoothing: "antialiased" }}>
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <section style={{ padding: "6rem 1.5rem 3.5rem", boxSizing: "border-box" }}
+        className="max-sm:px-4 max-sm:pt-12 max-sm:pb-8">
+        <div style={{ maxWidth: "72rem", margin: "0 auto", textAlign: "center" }}>
+          <p style={{
+            margin: "0 0 1rem",
+            fontFamily: F,
+            fontSize: "0.6875rem",
+            fontWeight: 600,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: TXT_MUTED,
+          }}>
             Platform Capabilities
           </p>
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-              fontSize: "clamp(2rem, 4.5vw, 3.25rem)",
-              fontWeight: 700,
-              color: "#111",
-              letterSpacing: "-0.04em",
-              lineHeight: 1.1,
-            }}
-          >
+          <h2 style={{
+            margin: 0,
+            fontFamily: F,
+            fontSize: "clamp(2rem, 4.5vw, 3.25rem)",
+            fontWeight: 700,
+            color: TXT_HI,
+            letterSpacing: "-0.04em",
+            lineHeight: 1.1,
+          }}>
             Everything you need for{" "}
-            <span
-              style={{
-                backgroundImage: "linear-gradient(135deg, #6cbcf5 0%, #3b8ee8 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              production grade 3D assets
-            </span>
+            <span style={{ color: ACCENT }}>production grade 3D assets</span>
           </h2>
         </div>
       </section>
 
-      {/* Desktop: Sticky wrapper with two-column block */}
+      {/* ── Desktop: tall scroll driver + sticky two-column panel ──────────── */}
       <div
         ref={wrapperRef}
-        style={{
-          width: "100%",
-          height: wrapperHeight,
-          boxSizing: "border-box",
-        }}
-        className="max-md:!h-auto hidden md:block"
+        style={{ width: "100%", height: wrapperHeight, boxSizing: "border-box" }}
+        className="hidden md:block"
       >
-        <section
-          style={{
-            position: "sticky",
-            top: 0,
-            left: 0,
-            right: 0,
-            width: "100%",
-            height: "100vh",
-            backgroundColor: "#fff",
-            padding: 0,
-            boxSizing: "border-box",
-            WebkitFontSmoothing: "antialiased",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}
-          className="max-md:!relative max-md:!h-auto max-md:min-h-0"
-        >
-        <div
-          style={{
+        <section style={{
+          position: "sticky",
+          top: 0,
+          width: "100%",
+          height: "100vh",
+          backgroundColor: BG,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}>
+          {/* Progress bar — very top of the sticky panel */}
+          <div style={{ height: 2, backgroundColor: "#f0f0f0", flexShrink: 0 }}>
+            <motion.div
+              style={{ height: "100%", backgroundColor: ACCENT, originX: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+            />
+          </div>
+
+          <div style={{
             flex: 1,
             minHeight: 0,
             maxWidth: "90rem",
             margin: "0 auto",
+            width: "100%",
             padding: "0 2.5rem",
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: 0,
             alignItems: "stretch",
-          }}
-          className="max-md:grid-cols-1 max-md:gap-6"
-        >
-          {/* LEFT: only this column scrolls; invisible scrollbar on desktop, driven by page scroll */}
-          <div
-            ref={leftColRef}
-            className="order-2 md:order-1 features-left-col"
-            style={{
-              paddingRight: "3rem",
-              borderRight: "1px solid rgba(17,17,17,0.08)",
-              overflowY: "auto",
-              overflowX: "hidden",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            <style>{`.features-left-col::-webkit-scrollbar { display: none; }`}</style>
-            <div ref={leftContentRef}>
-              {FEATURES.map((feat, idx) => (
-                <div
-                  key={feat.id}
-                  ref={(el) => { itemRefs.current[idx] = el; }}
-                  data-feature-idx={idx}
-                  style={{
-                    padding: "5rem 0",
-                    borderTop: idx === 0 ? "none" : "1px solid rgba(17,17,17,0.06)",
-                    transition: "opacity 0.28s cubic-bezier(0.4,0,0.2,1)",
-                    opacity: activeIndex === idx ? 1 : 0.4,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "1.25rem", marginBottom: "1.5rem" }}>
-                    <span
-                      style={{
-                        flexShrink: 0,
-                        fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                        fontSize: "0.8125rem",
-                        fontWeight: 700,
-                        color: activeIndex === idx ? "#3b8ee8" : "#bbb",
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase",
-                        marginTop: "0.35rem",
-                        transition: "color 0.28s",
-                      }}
-                    >
-                      {feat.number}
-                    </span>
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                        fontSize: "clamp(1.5rem, 2.6vw, 1.9375rem)",
-                        fontWeight: 700,
-                        color: "#111",
-                        letterSpacing: "-0.03em",
-                        lineHeight: 1.25,
-                      }}
-                    >
-                      {feat.title}
-                    </h3>
-                  </div>
-                  <p
-                    style={{
-                      margin: "0 0 1.5rem 2.75rem",
-                      fontFamily: "'DM Sans', Arial, sans-serif",
-                      fontSize: "1.125rem",
-                      color: "#565656",
-                      lineHeight: 1.7,
-                      letterSpacing: "-0.01em",
-                    }}
-                  >
-                    {feat.body}
-                  </p>
-                  {feat.tags && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginLeft: "2.75rem" }}>
-                      {feat.tags.map((t) => (
-                        <span
-                          key={t}
-                          style={{
-                            padding: "0.35rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: "1px solid rgba(59,142,232,0.25)",
-                            backgroundColor: "rgba(59,142,232,0.06)",
-                            fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                            fontSize: "0.8125rem",
-                            fontWeight: 600,
-                            color: "#3b8ee8",
-                            letterSpacing: "0.02em",
-                          }}
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div style={{ height: "2rem" }} />
-            </div>
-          </div>
+          }}>
 
-          {/* RIGHT: fixed canvas */}
-          <div
-            className="order-1 md:order-2 hidden md:flex"
-            style={{
+            {/* LEFT ─────────────────────────────────────────────────────── */}
+            <div
+              ref={leftColRef}
+              className="features-left-col"
+              style={{
+                paddingRight: "3rem",
+                borderRight: `1px solid ${DIVIDER}`,
+                overflowY: "auto",
+                overflowX: "hidden",
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+              }}
+            >
+              <style>{`.features-left-col::-webkit-scrollbar{display:none}`}</style>
+              <div ref={leftContentRef}>
+                {FEATURES.map((feat, idx) => {
+                  const active = activeIndex === idx;
+                  return (
+                    <div
+                      key={feat.id}
+                      ref={(el) => { itemRefs.current[idx] = el; }}
+                      onClick={() => scrollToFeature(idx)}
+                      style={{
+                        position: "relative",
+                        padding: "4.5rem 0 4.5rem 1.25rem",
+                        borderTop: idx === 0 ? "none" : `1px solid ${DIVIDER}`,
+                        opacity: active ? 1 : 0.38,
+                        backgroundColor: active ? "rgba(59,142,232,0.04)" : "transparent",
+                        borderRadius: active ? "0 0.5rem 0.5rem 0" : 0,
+                        transition: "opacity 0.3s ease, background-color 0.3s ease",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {/* Left accent bar */}
+                      <motion.div
+                        animate={{
+                          opacity: active ? 1 : 0,
+                          scaleY: active ? 1 : 0.4,
+                        }}
+                        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: "4.5rem",
+                          bottom: "4.5rem",
+                          width: 3,
+                          borderRadius: 2,
+                          backgroundColor: ACCENT,
+                          transformOrigin: "top",
+                        }}
+                      />
+
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "1.25rem", marginBottom: "1.125rem" }}>
+                        <span style={{
+                          flexShrink: 0,
+                          fontFamily: F,
+                          fontSize: "0.6875rem",
+                          fontWeight: 700,
+                          letterSpacing: "0.1em",
+                          textTransform: "uppercase",
+                          color: active ? ACCENT : TXT_DIM,
+                          marginTop: "0.4rem",
+                          transition: "color 0.3s ease",
+                        }}>
+                          {feat.number}
+                        </span>
+                        <h3 style={{
+                          margin: 0,
+                          fontFamily: F,
+                          fontSize: "clamp(1.25rem, 2.2vw, 1.75rem)",
+                          fontWeight: 700,
+                          color: TXT_HI,
+                          letterSpacing: "-0.03em",
+                          lineHeight: 1.25,
+                        }}>
+                          {feat.title}
+                        </h3>
+                      </div>
+
+                      <p style={{
+                        margin: "0 0 0 2.5rem",
+                        fontFamily: F,
+                        fontSize: "1rem",
+                        fontWeight: 400,
+                        color: TXT_BODY,
+                        lineHeight: 1.75,
+                      }}>
+                        {feat.body}
+                      </p>
+
+                      {feat.tags && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1.125rem", marginLeft: "2.5rem" }}>
+                          {feat.tags.map((t) => (
+                            <span key={t} style={{
+                              padding: "0.3rem 0.75rem",
+                              borderRadius: "0.375rem",
+                              border: "1px solid rgba(59,142,232,0.22)",
+                              backgroundColor: "rgba(59,142,232,0.05)",
+                              fontFamily: F,
+                              fontSize: "0.8125rem",
+                              fontWeight: 600,
+                              color: ACCENT,
+                              letterSpacing: "0.03em",
+                            }}>
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div style={{ height: "2rem" }} />
+              </div>
+            </div>
+
+            {/* RIGHT ────────────────────────────────────────────────────── */}
+            <div style={{
               paddingLeft: "3rem",
+              display: "flex",
               alignItems: "center",
               justifyContent: "center",
-            }}
-          >
-            <div
-              style={{
+            }}>
+              <div style={{
                 position: "relative",
                 width: "100%",
                 maxWidth: "960px",
                 aspectRatio: "16 / 9",
-                borderRadius: "0.75rem",
+                borderRadius: "1rem",
                 overflow: "hidden",
-                backgroundColor: "#f8f8f8",
-                boxShadow: "0 4px 40px rgba(17,17,17,0.06), 0 1px 3px rgba(17,17,17,0.04)",
-              }}
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeIndex}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.32, ease: [0.4, 0, 0.2, 1] }}
-                  style={{ position: "absolute", inset: 0 }}
-                >
-                  <Image
-                    src={FEATURES[activeIndex]?.image ?? "/features/3d1.webp"}
-                    alt={FEATURES[activeIndex]?.title ?? ""}
-                    fill
-                    style={{ objectFit: "contain", objectPosition: "center" }}
-                    sizes="(max-width: 1200px) 50vw, 960px"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </motion.div>
-              </AnimatePresence>
-              <div
-                style={{
+                backgroundColor: BG_CARD,
+                border: "1px solid #ebebeb",
+                boxShadow: "0 2px 24px rgba(17,17,17,0.06), 0 1px 3px rgba(17,17,17,0.04)",
+              }}>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeIndex}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                    style={{ position: "absolute", inset: 0 }}
+                  >
+                    <Image
+                      src={FEATURES[activeIndex]?.image ?? img("3d1")}
+                      alt={FEATURES[activeIndex]?.title ?? ""}
+                      fill
+                      style={{ objectFit: "contain", objectPosition: "center" }}
+                      sizes="(max-width: 1200px) 50vw, 960px"
+                      loading={activeIndex === 0 ? "eager" : "lazy"}
+                      decoding="async"
+                      unoptimized
+                    />
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Step dots */}
+                <div style={{
                   position: "absolute",
-                  top: "1rem",
-                  right: "1rem",
+                  top: "1.125rem",
+                  right: "1.125rem",
                   zIndex: 10,
                   display: "flex",
                   flexDirection: "column",
-                  gap: "0.375rem",
-                }}
-              >
-                {FEATURES.map((feat, i) => (
-                  <button
-                    key={i}
-                    aria-label={`Go to step ${feat.number}: ${feat.title}`}
-                    onClick={() => scrollToFeature(i)}
-                    style={{
-                      width: "6px",
-                      height: i === activeIndex ? "22px" : "6px",
-                      borderRadius: "100px",
-                      backgroundColor: i === activeIndex ? "#3b8ee8" : "rgba(17,17,17,0.18)",
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      transition: "height 0.2s cubic-bezier(0.4,0,0.2,1), background-color 0.2s",
-                    }}
-                  />
-                ))}
+                  gap: 5,
+                }}>
+                  {FEATURES.map((_, i) => (
+                    <button
+                      key={i}
+                      aria-label={`Step ${i + 1}`}
+                      onClick={() => scrollToFeature(i)}
+                      style={{
+                        width: 5,
+                        height: i === activeIndex ? 20 : 5,
+                        borderRadius: 100,
+                        backgroundColor: i === activeIndex ? ACCENT : "rgba(17,17,17,0.15)",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        transition: "height 0.22s ease, background-color 0.22s ease",
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Step counter */}
+                <div style={{
+                  position: "absolute",
+                  bottom: "1.125rem",
+                  left: "1.125rem",
+                  fontFamily: F,
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "rgba(17,17,17,0.35)",
+                  letterSpacing: "0.06em",
+                  userSelect: "none",
+                }}>
+                  {String(activeIndex + 1).padStart(2, "0")} / 08
+                </div>
               </div>
             </div>
+
           </div>
-        </div>
         </section>
       </div>
 
-      {/* Mobile: cards one after another — matter then image, normal scroll, premium UI */}
-      <div className="md:hidden w-full max-w-6xl mx-auto px-4 py-6 pb-12">
-        <div className="flex flex-col gap-8">
-          {FEATURES.map((feat) => (
+      {/* ── Mobile: stacked cards ──────────────────────────────────────────── */}
+      <div className="md:hidden w-full max-w-4xl mx-auto px-4 py-6 pb-12" style={{ backgroundColor: BG }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          {FEATURES.map((feat, i) => (
             <motion.article
               key={feat.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4 }}
-              className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm overflow-hidden"
+              transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
+              style={{
+                borderRadius: "1rem",
+                border: "1px solid #ebebeb",
+                backgroundColor: BG,
+                overflow: "hidden",
+                boxShadow: "0 1px 6px rgba(17,17,17,0.05)",
+              }}
             >
-              <div className="flex items-start gap-3 mb-4">
-                <span className="text-xs font-bold tracking-widest uppercase text-[#3b8ee8] shrink-0 pt-0.5">
-                  {feat.number}
-                </span>
-                <h3 className="text-xl font-bold text-neutral-900 tracking-tight leading-tight m-0">
-                  {feat.title}
-                </h3>
-              </div>
-              <p className="text-[1rem] text-neutral-600 leading-relaxed mb-5 pl-9">
-                {feat.body}
-              </p>
-              {feat.tags && (
-                <div className="flex flex-wrap gap-2 mb-5 pl-9">
-                  {feat.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="inline-block px-3 py-1 rounded-md text-xs font-semibold text-[#3b8ee8] border border-[#3b8ee8]/30 bg-[#3b8ee8]/10"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="relative w-full aspect-[16/10] rounded-xl overflow-hidden bg-neutral-100 -mx-1">
+              <div style={{
+                position: "relative",
+                width: "100%",
+                aspectRatio: "16 / 10",
+                backgroundColor: BG_CARD,
+                borderBottom: `1px solid ${DIVIDER}`,
+              }}>
                 <Image
-                  src={feat.image}
+                  src={feat.mobileImage}
                   alt={feat.title}
                   fill
-                  className="object-contain object-center"
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  loading="lazy"
+                  style={{ objectFit: "contain", objectPosition: "center", padding: "0.75rem" }}
+                  sizes="100vw"
+                  loading={i < 2 ? "eager" : "lazy"}
                   decoding="async"
+                  unoptimized
                 />
+              </div>
+              <div style={{ padding: "1.25rem 1.25rem 1.5rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", marginBottom: "0.625rem" }}>
+                  <span style={{
+                    fontFamily: F,
+                    fontSize: "0.6875rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: ACCENT,
+                    flexShrink: 0,
+                    marginTop: "0.2rem",
+                  }}>
+                    {feat.number}
+                  </span>
+                  <h3 style={{
+                    margin: 0,
+                    fontFamily: F,
+                    fontSize: "1.0625rem",
+                    fontWeight: 700,
+                    color: TXT_HI,
+                    lineHeight: 1.3,
+                    letterSpacing: "-0.02em",
+                  }}>
+                    {feat.title}
+                  </h3>
+                </div>
+                <p style={{
+                  margin: "0 0 0 1.375rem",
+                  fontFamily: F,
+                  fontSize: "0.9375rem",
+                  fontWeight: 400,
+                  color: TXT_BODY,
+                  lineHeight: 1.68,
+                }}>
+                  {feat.body}
+                </p>
+                {feat.tags && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.875rem", marginLeft: "1.375rem" }}>
+                    {feat.tags.map((t) => (
+                      <span key={t} style={{
+                        padding: "0.25rem 0.625rem",
+                        borderRadius: "0.3125rem",
+                        border: "1px solid rgba(59,142,232,0.22)",
+                        backgroundColor: "rgba(59,142,232,0.05)",
+                        fontFamily: F,
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        color: ACCENT,
+                      }}>
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.article>
           ))}
         </div>
       </div>
-    </>
+
+    </div>
   );
 }

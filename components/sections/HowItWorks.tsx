@@ -5,6 +5,8 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 
 const DASHED = "repeating-linear-gradient(90deg, #d0d0d0 0 10px, transparent 10px 20px)";
+const CLOUDINARY_LANDING_BASE =
+  "https://res.cloudinary.com/dqizbxc9e/image/upload/f_auto,q_auto/v1/hydrilla-landing";
 
 const STEPS = [
   {
@@ -12,7 +14,7 @@ const STEPS = [
     number: "01",
     title: "Describe your asset",
     body: "Type a prompt or upload a reference image. Describe your character, environment, or prop in plain language—our AI understands context and intent.",
-    image: "/workflow/describe.webp",
+    image: `${CLOUDINARY_LANDING_BASE}/workflow/describe`,
     hoverImage: null as string | null,
   },
   {
@@ -20,15 +22,15 @@ const STEPS = [
     number: "02",
     title: "Generate in seconds",
     body: "Hydrilla's models produce a production-quality 3D asset instantly. View the result from every angle—wireframe to full texture.",
-    image: "/workflow/generated-model1.webp",
-    hoverImage: "/workflow/generated-model2.webp",
+    image: `${CLOUDINARY_LANDING_BASE}/workflow/generated-model1`,
+    hoverImage: `${CLOUDINARY_LANDING_BASE}/workflow/generated-model2`,
   },
   {
     id: "refine",
     number: "03",
     title: "Refine and export",
     body: "Iterate on your asset, adjust details, and export in the format your pipeline requires—GLB, FBX, OBJ, or USD.",
-    image: "/workflow/refine.webp",
+    image: `${CLOUDINARY_LANDING_BASE}/workflow/refine`,
     hoverImage: null as string | null,
   },
 ];
