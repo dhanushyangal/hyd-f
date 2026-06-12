@@ -128,7 +128,7 @@ export default function GenerationsPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={tab === "images"}
+            {...(tab === "images" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
             onClick={() => setTab("images")}
             title="Images"
             className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg h-full text-sm font-semibold transition-all duration-200 ${
@@ -145,7 +145,7 @@ export default function GenerationsPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={tab === "3d"}
+            {...(tab === "3d" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
             onClick={() => setTab("3d")}
             title="3D Assets"
             className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg h-full text-sm font-semibold transition-all duration-200 ${

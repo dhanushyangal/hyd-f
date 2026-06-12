@@ -1833,6 +1833,100 @@ export async function syncUser(getToken: () => Promise<string | null>): Promise<
   }
 }
 
+// ============================================
+// INVITE & ACCESS API
+// ============================================
+
+export type InviteValidation = {
+  valid: boolean;
+  expired: boolean;
+  used: boolean;
+};
+
+export async function validateInvite(token: string): Promise<InviteValidation> {
+  try {
+    const res = await fetch(`${backendBase}/api/invites/${encodeURIComponent(token)}/validate`);
+    if (!res.ok) return { valid: false, expired: false, used: false };
+    return await res.json();
+  } catch {
+    return { valid: false, expired: false, used: false };
+  }
+}
+
+export async function redeemInvite(
+  token: string,
+  email: string
+): Promise<{ success: boolean; message?: string; email?: string; error?: string }> {
+  try {
+    const res = await fetch(`${backendBase}/api/invites/${encodeURIComponent(token)}/redeem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { success: false, error: data.error || "Failed to redeem invite" };
+    }
+    return { success: true, message: data.message, email: data.email };
+  } catch {
+    return { success: false, error: "Failed to redeem invite" };
+  }
+}
+
+export type AdminInvite = {
+  id: string;
+  inviteUrl: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  usedByEmail: string | null;
+  status: "active" | "used" | "expired";
+};
+
+export async function createInvite(
+  getToken: () => Promise<string | null>
+): Promise<{ inviteUrl: string; expiresAt: string } | { error: string } | null> {
+  const token = await getToken();
+  if (!token) return { error: "Not signed in" };
+
+  try {
+    const res = await fetch(`${backendBase}/api/admin/invites`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: data.error || "Failed to create invite" };
+    }
+    return data;
+  } catch {
+    return { error: "Failed to create invite" };
+  }
+}
+
+export async function listInvites(
+  getToken: () => Promise<string | null>
+): Promise<{ invites: AdminInvite[]; error?: string }> {
+  const token = await getToken();
+  if (!token) return { invites: [] };
+
+  try {
+    const res = await fetch(`${backendBase}/api/admin/invites`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { invites: data.invites || [], error: data.error || "Failed to list invites" };
+    }
+    return { invites: data.invites || [] };
+  } catch {
+    return { invites: [], error: "Failed to list invites" };
+  }
+}
+
 /**
  * Get current user profile from backend
  */
