@@ -13,8 +13,7 @@ export function ConditionalNavbar() {
     pathname?.startsWith("/workspace") ||
     pathname === "/generations" ||
     pathname?.startsWith("/sign-in") ||
-    pathname?.startsWith("/sign-up") ||
-    pathname === "/access-denied"
+    pathname?.startsWith("/sign-up")
   ) {
     return null;
   }

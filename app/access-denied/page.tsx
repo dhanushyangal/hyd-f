@@ -5,7 +5,7 @@ const adminEmail =
 
 export default function AccessDeniedPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-16 bg-neutral-50">
+    <div className="min-h-screen flex items-center justify-center px-4 pt-24 pb-16 bg-neutral-50">
       <div className="w-full max-w-md text-center">
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
           <h1 className="text-2xl font-semibold text-gray-900 mb-3">

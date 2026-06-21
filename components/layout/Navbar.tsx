@@ -16,6 +16,25 @@ interface NavbarProps {
   pathname?: string;
 }
 
+/** Marketing and access pages where the Hydrilla wordmark stays black. */
+function hasBlackNavbarLogo(pathname: string): boolean {
+  const blackLogoPaths = new Set([
+    "/",
+    "/pricing",
+    "/features",
+    "/faq",
+    "/contact",
+    "/docs",
+    "/access-denied",
+  ]);
+
+  if (blackLogoPaths.has(pathname)) return true;
+  if (pathname.startsWith("/usecase")) return true;
+  if (pathname.startsWith("/invite/")) return true;
+
+  return false;
+}
+
 export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -92,7 +111,8 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   // Home page hero is light (white bg) → use black nav; other hero pages use white until second section
   const isLightHeroPage = pathname === "/";
   const textColor = (useHeroStyling && !isLightHeroPage && !isContactPage && !(isTeamPage && isInSecondSection) && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isHomePageInSecondSection) ? "text-white" : "text-black";
-  const logoClasses = `text-2xl font-bold ${textColor} tracking-tight transition-colors duration-500`;
+  const logoTextColor = hasBlackNavbarLogo(pathname) ? "text-black" : textColor;
+  const logoClasses = `text-2xl font-bold ${logoTextColor} tracking-tight transition-colors duration-500`;
   
   // Adjust button classes: light hero (home) uses dark buttons; other hero pages use white until second section
   const isTeamPageInSecondSection = isTeamPage && isInSecondSection;
