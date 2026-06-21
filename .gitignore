@@ -42,3 +42,5 @@ public/3dheroimages/
 public/reference/
 # clerk configuration (can include secrets)
 /.clerk/
+/.claude/
+.env.local

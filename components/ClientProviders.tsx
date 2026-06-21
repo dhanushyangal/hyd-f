@@ -14,9 +14,7 @@ const ScrollbarActivity = dynamic(
   { ssr: false }
 );
 
-const PostHogProvider = dynamic(() => import("./PostHogProvider"), {
-  ssr: false,
-});
+import { PostHogIdentify } from "./PostHogIdentify";
 
 /**
  * Client-side providers deferred off the critical path where possible.
@@ -27,7 +25,7 @@ export function ClientProviders({ children }: { children: ReactNode }) {
       <TopLoadingBar />
       <ScrollbarActivity />
       <UserSync />
-      <PostHogProvider />
+      <PostHogIdentify />
       {children}
     </>
   );

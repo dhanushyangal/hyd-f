@@ -1,0 +1,67 @@
+[
+  {
+    "event_name": "checkout_initiated",
+    "event_description": "User landed on the checkout page and a checkout session creation was triggered for a plan.",
+    "file": "app/checkout/page.tsx"
+  },
+  {
+    "event_name": "checkout_error",
+    "event_description": "An error occurred while creating or redirecting to the payment checkout session.",
+    "file": "app/checkout/page.tsx"
+  },
+  {
+    "event_name": "subscription_activated",
+    "event_description": "User's subscription was confirmed as active on the checkout success page.",
+    "file": "app/checkout/success/page.tsx"
+  },
+  {
+    "event_name": "plan_cta_clicked",
+    "event_description": "User clicked the subscribe or get-started CTA button on a pricing plan card.",
+    "file": "components/sections/PricingSection.tsx"
+  },
+  {
+    "event_name": "workspace_created",
+    "event_description": "User successfully created a new workspace from the Studio dashboard.",
+    "file": "app/app/studio/page.tsx"
+  },
+  {
+    "event_name": "workspace_opened",
+    "event_description": "User opened an existing workspace from the Studio dashboard.",
+    "file": "app/app/studio/page.tsx"
+  },
+  {
+    "event_name": "workspace_deleted",
+    "event_description": "User deleted a workspace from the Studio dashboard.",
+    "file": "app/app/studio/page.tsx"
+  },
+  {
+    "event_name": "text_to_image_started",
+    "event_description": "User submitted a text prompt to generate a 2D preview image in the workspace.",
+    "file": "app/workspace/page.tsx"
+  },
+  {
+    "event_name": "image_to_3d_started",
+    "event_description": "User initiated a 3D model generation from an image in the workspace.",
+    "file": "app/workspace/page.tsx"
+  },
+  {
+    "event_name": "image_edit_started",
+    "event_description": "User submitted a text + image prompt to edit an existing image in the workspace.",
+    "file": "app/workspace/page.tsx"
+  },
+  {
+    "event_name": "3d_generation_completed",
+    "event_description": "A 3D model generation job completed successfully and the GLB is available.",
+    "file": "app/workspace/page.tsx"
+  },
+  {
+    "event_name": "3d_generation_failed",
+    "event_description": "A 3D model generation job failed, including GPU-offline and server errors.",
+    "file": "app/workspace/page.tsx"
+  },
+  {
+    "event_name": "start_generating_clicked",
+    "event_description": "User clicked the 'Start Generating' hero CTA button to enter the app.",
+    "file": "components/StartGeneratingButton.tsx"
+  }
+]
