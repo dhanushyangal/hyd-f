@@ -26,18 +26,17 @@ export default function PostHogProvider() {
     const win = window as Window;
     const doc = document as Document;
 
-    // Check for requestIdleCallback support
-    if (typeof (win as any).requestIdleCallback === "function") {
-      (win as any).requestIdleCallback(loadPostHog, { timeout: 2000 });
+    if (typeof (win as Window & { requestIdleCallback?: typeof requestIdleCallback }).requestIdleCallback === "function") {
+      (win as Window & { requestIdleCallback: typeof requestIdleCallback }).requestIdleCallback(loadPostHog, { timeout: 5000 });
       return;
     }
 
-    // Fallback: load after a delay or when page is interactive
+    // Fallback: load after page is fully idle
     if (doc.readyState === "complete") {
-      setTimeout(loadPostHog, 2000);
+      setTimeout(loadPostHog, 4000);
     } else {
       win.addEventListener("load", () => {
-        setTimeout(loadPostHog, 2000);
+        setTimeout(loadPostHog, 4000);
       });
     }
   }, []);

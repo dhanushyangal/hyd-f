@@ -2,15 +2,16 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { HERO_POSTER_URL, HERO_VIDEO_URL } from "@/lib/cloudinary";
 
 const FOOTER_NAV = [
   {
     heading: "Product",
     links: [
-      { label: "Features", href: "/#features" },
+      { label: "Features", href: "/features" },
       { label: "How It Works", href: "/#howitworks" },
       { label: "API", href: "/api" },
-      { label: "Pricing", href: "/#pricing" },
+      { label: "Pricing", href: "/pricing" },
     ],
   },
   {
@@ -197,7 +198,7 @@ export default function Footer() {
             muted
             loop
             playsInline
-            poster="/herohydrillasrc.jpg"
+            poster={HERO_POSTER_URL}
             onError={() => setVideoError(true)}
             style={{
               position: "absolute",
@@ -208,7 +209,7 @@ export default function Footer() {
               pointerEvents: "none",
             }}
           >
-            <source src="/herohydrilla.mp4" type="video/mp4" />
+            <source src={HERO_VIDEO_URL} type="video/mp4" />
           </video>
         ) : null}
         {videoError && (
@@ -216,7 +217,7 @@ export default function Footer() {
             style={{
               position: "absolute",
               inset: 0,
-              backgroundImage: "url(/herohydrillasrc.jpg)",
+              backgroundImage: `url(${HERO_POSTER_URL})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
               pointerEvents: "none",

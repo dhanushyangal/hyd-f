@@ -1,10 +1,13 @@
 import Link from "next/link";
 import Footer from "../../components/layout/Footer";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "Documentation — Hydrilla",
-  description: "Hydrilla documentation is coming soon.",
-};
+export const metadata = createPageMetadata({
+  title: "Documentation",
+  description:
+    "Hydrilla AI documentation for text-to-3D, image-to-3D, rigging, exports, and studio integration workflows.",
+  path: "/docs",
+});
 
 export default function DocsPage() {
   return (

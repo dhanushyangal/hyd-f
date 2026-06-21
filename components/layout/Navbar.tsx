@@ -208,19 +208,19 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
           {!shouldShrink && (
             <nav className="hidden lg:flex items-center gap-6 md:gap-8">
               <Link
-                href="/#solutions"
+                href="/usecase"
                 className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
               >
                 Solutions
               </Link>
               <Link
-                href="/#features"
+                href="/features"
                 className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
               >
                 Features
               </Link>
               <Link
-                href="/#pricing"
+                href="/pricing"
                 className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
               >
                 Pricing
@@ -325,9 +325,9 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
             <div className="px-4 sm:px-6 py-4 space-y-2">
               {/* Navigation Links - mobile */}
               <div className={`space-y-2 pb-3 border-b ${mobileMenuDivider}`}>
-                <Link href="/#solutions" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Solutions</Link>
-                <Link href="/#features" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Features</Link>
-                <Link href="/#pricing" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
+                <Link href="/usecase" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Solutions</Link>
+                <Link href="/features" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Features</Link>
+                <Link href="/pricing" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
                 <Link href="/faq" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>FAQ</Link>
                 <Link href="/contact" className={`${mobileMenuItemClasses} font-dm-sans w-full text-left`} onClick={() => setMobileMenuOpen(false)}>Contact</Link>
               </div>

@@ -1,10 +1,12 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
+import { createPageMetadata } from "@/lib/seo";
+import { USECASE_HERO } from "@/lib/cloudinary";
 
 const DATA = {
   industry: "AR / VR & XR",
   headline: "Assets Designed for Immersive Environments",
-  heroImages: ["/usecase/arvr3.jpg", "/usecase/arvrxr.jpg", "/usecase/arvrxr2.jpg"],
+  heroImages: [USECASE_HERO.arvr3, USECASE_HERO.arvrxr, USECASE_HERO.arvrxr2],
   accentColor: "#3bbf8e",
   tagline:
     "Create lightweight assets and explore Gaussian splatting–based worlds for VR and XR. From real-time 3D models to interactive splat environments—inspired by approaches like World Labs' Splat World—optimized for immersive pipelines.",
@@ -50,6 +52,12 @@ const DATA = {
     },
   ],
 };
+
+export const metadata = createPageMetadata({
+  title: "AR / VR & XR",
+  description: DATA.tagline,
+  path: "/usecase/arvr",
+});
 
 export default function ARVRPage() {
   return (

@@ -47,6 +47,18 @@ const assets = [
   ["public/industrypower/architecture.png", "hydrilla-landing/industrypower/architecture"],
   ["public/industrypower/arvr1.png", "hydrilla-landing/industrypower/arvr1"],
   ["public/industrypower/lampprop.png", "hydrilla-landing/industrypower/lampprop"],
+  ["public/herohydrillasrc.jpg", "hydrilla-landing/hero/poster"],
+  ["public/usecase/games.jpg", "hydrilla-landing/usecase/games"],
+  ["public/usecase/films.png", "hydrilla-landing/usecase/films"],
+  ["public/usecase/archi.jpg", "hydrilla-landing/usecase/archi"],
+  ["public/usecase/prod.jpg", "hydrilla-landing/usecase/prod"],
+  ["public/usecase/arvr3.jpg", "hydrilla-landing/usecase/arvr3"],
+  ["public/usecase/arvrxr.jpg", "hydrilla-landing/usecase/arvrxr"],
+  ["public/usecase/arvrxr2.jpg", "hydrilla-landing/usecase/arvrxr2"],
+];
+
+const videoAssets = [
+  ["public/herohydrilla.mp4", "hydrilla-landing/hero/backdrop"],
 ];
 
 const optimizedUrl = (publicId) =>
@@ -73,6 +85,28 @@ for (const [file, publicId] of assets) {
     height: result.height,
     bytes: result.bytes,
     optimizedUrl: optimizedUrl(result.public_id),
+  });
+}
+
+for (const [file, publicId] of videoAssets) {
+  const result = await cloudinary.uploader.upload(file, {
+    public_id: publicId,
+    overwrite: true,
+    invalidate: true,
+    resource_type: "video",
+  });
+
+  results.push({
+    file,
+    publicId: result.public_id,
+    width: result.width,
+    height: result.height,
+    bytes: result.bytes,
+    optimizedUrl: cloudinary.url(result.public_id, {
+      secure: true,
+      resource_type: "video",
+      quality: "auto",
+    }),
   });
 }
 

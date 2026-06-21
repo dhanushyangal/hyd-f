@@ -1,18 +1,21 @@
-import { SignedOut } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
 import Hero from "../components/sections/Hero";
 import Footer from "../components/layout/Footer";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { HomeAuthRedirect } from "@/components/HomeAuthRedirect";
+import { createPageMetadata, getHomepageJsonLd } from "@/lib/seo";
 
-export default async function Home() {
-  const { userId } = await auth();
-  if (userId) redirect("/app/studio");
+export const metadata = createPageMetadata({
+  title: "Hydrilla AI | Production-Ready 3D Assets, Generated Fast",
+  path: "/",
+  absoluteTitle: true,
+});
 
+export default function Home() {
   return (
     <>
-      <SignedOut>
-        <Hero />
-      </SignedOut>
+      <JsonLd data={getHomepageJsonLd()} />
+      <HomeAuthRedirect />
+      <Hero />
       <Footer />
     </>
   );

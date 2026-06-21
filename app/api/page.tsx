@@ -1,10 +1,13 @@
 import Link from "next/link";
 import Footer from "../../components/layout/Footer";
+import { createPageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "API — Hydrilla",
-  description: "Setting the API for studios. Coming soon.",
-};
+export const metadata = createPageMetadata({
+  title: "API",
+  description:
+    "Hydrilla AI API for studios and developers — integrate production-ready 3D asset generation into your pipelines.",
+  path: "/api",
+});
 
 export default function ApiPage() {
   return (

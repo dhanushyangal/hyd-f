@@ -1,10 +1,12 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
+import { createPageMetadata } from "@/lib/seo";
+import { USECASE_HERO } from "@/lib/cloudinary";
 
 const DATA = {
   industry: "Film & Animation",
   headline: "Production Assets for Cinematic Pipelines",
-  heroImage: "/usecase/films.png",
+  heroImage: USECASE_HERO.films,
   cardVertical: true,
   accentColor: "#e06c3b",
   tagline:
@@ -47,6 +49,12 @@ const DATA = {
     },
   ],
 };
+
+export const metadata = createPageMetadata({
+  title: "Film & Animation",
+  description: DATA.tagline,
+  path: "/usecase/filmproduction",
+});
 
 export default function FilmProductionPage() {
   return (

@@ -1,7 +1,4 @@
-"use client";
-
-import { SignOutButton, SignedIn, SignedOut } from "@clerk/nextjs";
-import Link from "next/link";
+import { AccessDeniedActions } from "./AccessDeniedActions";
 
 const adminEmail =
   process.env.NEXT_PUBLIC_ADMIN_CONTACT_EMAIL || "admin@hydrilla.co";
@@ -28,22 +25,7 @@ export default function AccessDeniedPage() {
             to request access.
           </p>
 
-          <SignedIn>
-            <SignOutButton>
-              <button className="w-full rounded-lg bg-black text-white py-2.5 px-4 text-sm font-medium hover:bg-gray-900 transition-colors">
-                Sign out
-              </button>
-            </SignOutButton>
-          </SignedIn>
-
-          <SignedOut>
-            <Link
-              href="/"
-              className="inline-block w-full rounded-lg bg-black text-white py-2.5 px-4 text-sm font-medium hover:bg-gray-900 transition-colors"
-            >
-              Back to home
-            </Link>
-          </SignedOut>
+          <AccessDeniedActions />
         </div>
       </div>
     </div>

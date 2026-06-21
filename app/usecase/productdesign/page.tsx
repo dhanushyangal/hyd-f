@@ -1,10 +1,12 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
+import { createPageMetadata } from "@/lib/seo";
+import { USECASE_HERO } from "@/lib/cloudinary";
 
 const DATA = {
   industry: "Product Visualization",
   headline: "Product Assets for Visualization and Marketing",
-  heroImage: "/usecase/prod.jpg",
+  heroImage: USECASE_HERO.prod,
   accentColor: "#f0a830",
   tagline:
     "Create detailed models suitable for product visualization, marketing assets, and e-commerce experiences—from concept to production in seconds.",
@@ -46,6 +48,12 @@ const DATA = {
     },
   ],
 };
+
+export const metadata = createPageMetadata({
+  title: "Product Visualization",
+  description: DATA.tagline,
+  path: "/usecase/productdesign",
+});
 
 export default function ProductDesignPage() {
   return (

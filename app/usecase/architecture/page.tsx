@@ -1,10 +1,12 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
+import { createPageMetadata } from "@/lib/seo";
+import { USECASE_HERO } from "@/lib/cloudinary";
 
 const DATA = {
   industry: "Architecture & Interiors",
   headline: "Architectural Visualization Assets",
-  heroImage: "/usecase/archi.jpg",
+  heroImage: USECASE_HERO.archi,
   accentColor: "#7b5af5",
   tagline:
     "Generate furniture, architectural components, and interior objects suitable for visualization workflows—without the modeling bottleneck.",
@@ -46,6 +48,12 @@ const DATA = {
     },
   ],
 };
+
+export const metadata = createPageMetadata({
+  title: "Architecture & Interiors",
+  description: DATA.tagline,
+  path: "/usecase/architecture",
+});
 
 export default function ArchitecturePage() {
   return (

@@ -1,10 +1,12 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
+import { createPageMetadata } from "@/lib/seo";
+import { USECASE_HERO } from "@/lib/cloudinary";
 
 const DATA = {
   industry: "Game Development",
   headline: "Assets Built for Real-Time Production",
-  heroImage: "/usecase/games.jpg",
+  heroImage: USECASE_HERO.games,
   accentColor: "#3b8ee8",
   tagline:
     "Generate game-ready characters, props, and environments with clean geometry optimized for Unreal Engine, Unity, and other real-time pipelines.",
@@ -46,6 +48,12 @@ const DATA = {
     },
   ],
 };
+
+export const metadata = createPageMetadata({
+  title: "Game Development",
+  description: DATA.tagline,
+  path: "/usecase/gamedev",
+});
 
 export default function GameDevPage() {
   return (
