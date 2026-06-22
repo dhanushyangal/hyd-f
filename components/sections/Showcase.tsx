@@ -55,6 +55,14 @@ const showcaseItems: ShowcaseItem[] = [
     ],
     iconType: 'ms',
   },
+  {
+    id: "meta-3d-gen",
+    name: "Meta 3D Gen",
+    description: "Fast text-to-3D generation with photorealistic materials and clean meshes",
+    image: "/tenc-3d.jpg",
+    logoSrc: "/meta.png",
+    logoAlt: "Meta",
+  },
 ];
 
 export default function Showcase() {
