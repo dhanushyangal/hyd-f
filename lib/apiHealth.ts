@@ -20,6 +20,7 @@ const PRIMARY_URL = (
   process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.ai"
 ).replace(/\/$/, "");
 
+
 const ALTERNATIVE_URL = (
   process.env.NEXT_PUBLIC_API_URL_ALTERNATIVE || "https://api.hydrilla.co"
 ).replace(/\/$/, "");
