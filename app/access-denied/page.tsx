@@ -1,7 +1,7 @@
 import { AccessDeniedActions } from "./AccessDeniedActions";
 
 const adminEmail =
-  process.env.NEXT_PUBLIC_ADMIN_CONTACT_EMAIL || "founders@hydrilla.ai";
+  process.env.NEXT_PUBLIC_ADMIN_CONTACT_EMAIL || "admin@hydrilla.co";
 
 export default function AccessDeniedPage() {
   return (
