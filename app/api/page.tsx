@@ -130,7 +130,7 @@ export default function ApiPage() {
               Back to Home
             </Link>
             <a
-              href="mailto:founders@hydrilla.co"
+              href="mailto:founders@hydrilla.ai"
               style={{
                 display: "inline-flex",
                 alignItems: "center",

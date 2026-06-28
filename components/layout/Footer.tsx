@@ -37,7 +37,7 @@ const FOOTER_NAV = [
       { label: "Contact", href: "/contact" },
       { label: "Careers", href: "/careers" },
     ],
-    email: "founders@hydrilla.co",
+    email: "founders@hydrilla.ai",
   },
 ];
 

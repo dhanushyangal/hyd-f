@@ -63,11 +63,11 @@ export default function CareersPage() {
             </p>
             <div className="pt-4">
               <a 
-                href="mailto:founders@hydrilla.co"
+                href="mailto:founders@hydrilla.ai"
                 className="text-2xl sm:text-3xl font-bold text-black hover:text-gray-700 transition-colors inline-block"
                 style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
               >
-                founders@hydrilla.co
+                founders@hydrilla.ai
               </a>
             </div>
           </div>

@@ -88,7 +88,7 @@ export default function TermsAndConditionsPage() {
 
               <h3 className="text-xl font-semibold text-black mt-6 mb-3 font-dm-sans">4.3 Refunds</h3>
               <p>
-                Refund requests are handled on a case-by-case basis. If you are not satisfied with our Service, please contact us at <a href="mailto:founders@hydrilla.co" className="text-black underline hover:text-gray-700">founders@hydrilla.co</a> to discuss your situation.
+                Refund requests are handled on a case-by-case basis. If you are not satisfied with our Service, please contact us at <a href="mailto:founders@hydrilla.ai" className="text-black underline hover:text-gray-700">founders@hydrilla.ai</a> to discuss your situation.
               </p>
 
               <h3 className="text-xl font-semibold text-black mt-6 mb-3 font-dm-sans">4.4 Price Changes</h3>
@@ -182,7 +182,7 @@ export default function TermsAndConditionsPage() {
                 We may terminate or suspend your account and access to the Service immediately, without prior notice or liability, for any reason, including if you breach these Terms. Upon termination, your right to use the Service will cease immediately.
               </p>
               <p>
-                You may terminate your account at any time by contacting us at <a href="mailto:founders@hydrilla.co" className="text-black underline hover:text-gray-700">founders@hydrilla.co</a>. Upon termination, your account will be deactivated, and you will lose access to the Service and any Generated Content stored in your account.
+                You may terminate your account at any time by contacting us at <a href="mailto:founders@hydrilla.ai" className="text-black underline hover:text-gray-700">founders@hydrilla.ai</a>. Upon termination, your account will be deactivated, and you will lose access to the Service and any Generated Content stored in your account.
               </p>
             </section>
 
@@ -216,7 +216,7 @@ export default function TermsAndConditionsPage() {
                 If you have any questions about these Terms, please contact us:
               </p>
               <div className="bg-gray-50 p-6 rounded-lg mt-4">
-                <p className="mb-2"><strong>Email:</strong> <a href="mailto:founders@hydrilla.co" className="text-black underline hover:text-gray-700">founders@hydrilla.co</a></p>
+                <p className="mb-2"><strong>Email:</strong> <a href="mailto:founders@hydrilla.ai" className="text-black underline hover:text-gray-700">founders@hydrilla.ai</a></p>
                 <p><strong>Website:</strong> <a href="https://hydrilla.ai" className="text-black underline hover:text-gray-700">https://hydrilla.ai</a></p>
               </div>
             </section>

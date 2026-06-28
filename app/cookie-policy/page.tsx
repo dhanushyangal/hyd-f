@@ -74,8 +74,8 @@ export default function CookiePolicyPage() {
               <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">6. Contact</h2>
               <p>
                 If you have questions about our use of cookies, contact us at{" "}
-                <a href="mailto:founders@hydrilla.co" className="text-black underline hover:text-gray-700">
-                  founders@hydrilla.co
+                <a href="mailto:founders@hydrilla.ai" className="text-black underline hover:text-gray-700">
+                  founders@hydrilla.ai
                 </a>
                 .
               </p>

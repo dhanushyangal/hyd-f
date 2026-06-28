@@ -291,11 +291,11 @@ export default function ContactPage() {
               Or email us
             </h2>
             <a
-              href="mailto:founders@hydrilla.co"
+              href="mailto:founders@hydrilla.ai"
               className="text-[#111] font-bold no-underline hover:text-[#3b8ee8] transition-colors text-center"
               style={{ fontSize: "clamp(1.25rem, 2.5vw, 1.75rem)", letterSpacing: "-0.02em" }}
             >
-              founders@hydrilla.co
+              founders@hydrilla.ai
             </a>
           </motion.div>
         </div>

@@ -120,7 +120,7 @@ export default function PrivacyPolicyPage() {
                 <li><strong>Opt-Out:</strong> You can opt out of certain communications and marketing emails.</li>
               </ul>
               <p className="mt-4">
-                To exercise these rights, please contact us at <a href="mailto:founders@hydrilla.co" className="text-black underline hover:text-gray-700">founders@hydrilla.co</a>.
+                To exercise these rights, please contact us at <a href="mailto:founders@hydrilla.ai" className="text-black underline hover:text-gray-700">founders@hydrilla.ai</a>.
               </p>
             </section>
 
@@ -161,7 +161,7 @@ export default function PrivacyPolicyPage() {
                 If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us:
               </p>
               <div className="bg-gray-50 p-6 rounded-lg mt-4">
-                <p className="mb-2"><strong>Email:</strong> <a href="mailto:founders@hydrilla.co" className="text-black underline hover:text-gray-700">founders@hydrilla.co</a></p>
+                <p className="mb-2"><strong>Email:</strong> <a href="mailto:founders@hydrilla.ai" className="text-black underline hover:text-gray-700">founders@hydrilla.ai</a></p>
                 <p><strong>Website:</strong> <a href="https://hydrilla.ai" className="text-black underline hover:text-gray-700">https://hydrilla.ai</a></p>
               </div>
             </section>
