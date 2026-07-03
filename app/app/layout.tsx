@@ -23,7 +23,7 @@ export default function AppLayout({
   return (
     <>
       <SignedOut>
-        <RedirectToHome />
+        <RedirectToSignIn />
       </SignedOut>
       <SignedIn>
         <AccessGate>
@@ -44,10 +44,10 @@ export default function AppLayout({
   );
 }
 
-function RedirectToHome() {
+function RedirectToSignIn() {
   const router = useRouter();
   useEffect(() => {
-    router.replace("/");
+    router.replace("/sign-in");
   }, [router]);
   return (
     <div className="h-screen flex items-center justify-center bg-neutral-50">

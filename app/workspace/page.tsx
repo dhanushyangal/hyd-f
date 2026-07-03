@@ -35,6 +35,11 @@ import {
   LineageItem,
 } from "../../lib/api";
 import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
+import {
+  consumeWorkspaceBootstrap,
+  consumeWorkspacePrefill,
+  peekPendingHeroPrompt,
+} from "../../lib/pendingHeroPrompt";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const CREDITS_IMAGE = 2;
@@ -136,18 +141,51 @@ function WorkspacePage() {
   const searchParams = useSearchParams();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [resolvingWorkspace, setResolvingWorkspace] = useState(true);
+  const prefillAppliedRef = useRef(false);
 
   // If user is not authenticated, redirect to sign-in immediately.
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn) return;
-    router.push("/sign-in");
+    const redirect =
+      peekPendingHeroPrompt() != null
+        ? "/sign-in?redirect_url=" + encodeURIComponent("/app/studio")
+        : "/sign-in";
+    router.push(redirect);
   }, [isLoaded, isSignedIn, router]);
+
+  // Hero prompt is owned by /app/studio (creates workspace). Hand off if we still have pending intent.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (!peekPendingHeroPrompt()) return;
+    router.replace("/app/studio");
+  }, [isLoaded, isSignedIn, router]);
+
+  // Apply landing-page prompt once studio has created the workspace and navigated here.
+  const applyWorkspacePrefill = useCallback(() => {
+    if (prefillAppliedRef.current) return;
+    const prefill = consumeWorkspacePrefill();
+    if (!prefill) return;
+    prefillAppliedRef.current = true;
+    setInputMode("text");
+    setModeStates((prev) => ({
+      ...prev,
+      text: { ...defaultModeStates.text, prompt: prefill },
+    }));
+    setForcedWorkspaceModal(false);
+    setShowNewWorkspaceModal(false);
+    requestAnimationFrame(() => {
+      promptTextareaRef.current?.focus();
+    });
+  }, []);
 
   // Resolve workspace ID from path (/workspace/:id), fallback query/session, and keep URL canonical as /workspace/:id.
   // If user has no workspace, redirect to /app/studio.
+  // Hero handoff: open instantly from bootstrap meta (no second round-trip before UI).
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
+    // Studio is creating the workspace from the hero prompt.
+    if (peekPendingHeroPrompt()) return;
 
     const pathParts = pathname.split("/").filter(Boolean);
     const idFromPath = pathParts[0] === "workspace" && pathParts[1] ? pathParts[1] : null;
@@ -155,6 +193,30 @@ function WorkspacePage() {
     const storedId = getCurrentWorkspaceId();
     const resolvedId = idFromPath ?? idFromUrl ?? storedId;
     const tokenGetter = async () => (await getToken()) ?? "";
+
+    // Instant path: studio just created this workspace and left name + prompt in sessionStorage.
+    const bootstrap = consumeWorkspaceBootstrap(resolvedId);
+    if (bootstrap) {
+      setCurrentWorkspaceId(bootstrap.workspaceId);
+      setWorkspaceId(bootstrap.workspaceId);
+      setWorkspaceName(bootstrap.workspaceName);
+      setLibraryImages([]);
+      setLibrary3DAssets([]);
+      applyWorkspacePrefill();
+      setResolvingWorkspace(false);
+      setLibraryLoading(false);
+      if (pathname !== `/workspace/${bootstrap.workspaceId}`) {
+        router.replace(`/workspace/${bootstrap.workspaceId}`);
+      }
+      // Refresh library in the background (empty for a brand-new workspace).
+      void fetchWorkspaceJobs(bootstrap.workspaceId, tokenGetter)
+        .then((jobs) => {
+          setLibraryImages(jobs.filter(shouldShowInImageLibrary).slice(0, 50));
+          setLibrary3DAssets(jobs.filter(shouldShowIn3DLibrary).slice(0, 50));
+        })
+        .catch(() => {});
+      return;
+    }
 
     const hydrateWorkspace = async (id: string) => {
       setCurrentWorkspaceId(id);
@@ -181,6 +243,7 @@ function WorkspacePage() {
         setWorkspaceName(ws.name ?? "");
         setLibraryImages(jobs.filter(shouldShowInImageLibrary).slice(0, 50));
         setLibrary3DAssets(jobs.filter(shouldShowIn3DLibrary).slice(0, 50));
+        applyWorkspacePrefill();
         setResolvingWorkspace(false);
       } finally {
         setLibraryLoading(false);
@@ -205,7 +268,7 @@ function WorkspacePage() {
       }
       await hydrateWorkspace(firstWorkspaceId);
     })();
-  }, [pathname, searchParams, isLoaded, isSignedIn, getToken, router]);
+  }, [pathname, searchParams, isLoaded, isSignedIn, getToken, router, applyWorkspacePrefill]);
 
   const [workspaceName, setWorkspaceName] = useState("");
   const workspaceNameTimeoutRef = useRef<NodeJS.Timeout | null>(null);

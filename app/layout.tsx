@@ -98,6 +98,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           footerPages: "hidden",
         },
       }}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/app/studio"
       signUpFallbackRedirectUrl="/app/studio"
     >

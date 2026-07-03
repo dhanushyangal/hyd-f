@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import Link from "next/link";
@@ -12,6 +12,10 @@ import {
   type Workspace,
 } from "../../../lib/api";
 import { setCurrentWorkspaceId, cn } from "../../../lib/utils";
+import {
+  bootstrapHeroWorkspace,
+  peekPendingHeroPrompt,
+} from "../../../lib/pendingHeroPrompt";
 import { MessageSquare, FolderOpen, Plus, Search, Trash2, MoreVertical, Copy, Pencil } from "lucide-react";
 
 function getGreeting() {
@@ -23,7 +27,7 @@ function getGreeting() {
 
 export default function StudioPage() {
   const router = useRouter();
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
   const SHOW_QUICK_START_CHAT = false;
   const userName = user?.firstName || user?.fullName || user?.username || "";
@@ -39,7 +43,18 @@ export default function StudioPage() {
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [deleteConfirmWorkspace, setDeleteConfirmWorkspace] = useState<Workspace | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  /** True while applying a landing-page hero prompt (create workspace → open it). */
+  const [heroBootstrapping, setHeroBootstrapping] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const heroBootstrapStarted = useRef(false);
+
+  // Before paint: if hero prompt is pending, skip the studio list loader entirely.
+  useLayoutEffect(() => {
+    if (!peekPendingHeroPrompt()) return;
+    setHeroBootstrapping(true);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!menuOpenId) return;
@@ -50,9 +65,60 @@ export default function StudioPage() {
     return () => document.removeEventListener("click", close);
   }, [menuOpenId]);
 
+  // Hero → login → studio: create named workspace, then open it with prompt prefilled.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (!peekPendingHeroPrompt()) return;
+    if (heroBootstrapStarted.current) return;
+    heroBootstrapStarted.current = true;
+
+    let cancelled = false;
+    setHeroBootstrapping(true);
+    setLoading(false);
+    setActionError(null);
+
+    // Warm the Clerk token while we kick off create (avoids a serial wait).
+    const tokenReady = getToken();
+
+    void (async () => {
+      try {
+        await tokenReady;
+        const result = await bootstrapHeroWorkspace(async (name) => {
+          const tokenGetter = async () => (await getToken()) ?? "";
+          return createWorkspaceApi(name, tokenGetter);
+        });
+        if (cancelled) return;
+        if (!result) {
+          setHeroBootstrapping(false);
+          return;
+        }
+        setCurrentWorkspaceId(result.workspaceId);
+        router.replace(`/workspace/${result.workspaceId}`);
+      } catch (err: unknown) {
+        console.error("Failed to bootstrap hero workspace:", err);
+        if (!cancelled) {
+          setActionError(
+            err instanceof Error
+              ? err.message
+              : "Could not create workspace. Check that the backend is running."
+          );
+          setHeroBootstrapping(false);
+          heroBootstrapStarted.current = false;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, getToken, router]);
+
   const loadWorkspaces = async () => {
     if (!isSignedIn) return;
+    // Hero flow owns workspace creation — don't also create a Demo Workspace.
+    if (peekPendingHeroPrompt() || heroBootstrapping) return;
     setLoading(true);
+    setActionError(null);
     try {
       const tokenGetter = async () => await getToken();
       const ws = await fetchWorkspaces(tokenGetter);
@@ -75,27 +141,37 @@ export default function StudioPage() {
             setWorkspaces([demo]);
             setLoading(false);
             return;
-          } catch {
+          } catch (err: unknown) {
             window.localStorage.removeItem(key);
+            setActionError(
+              err instanceof Error
+                ? err.message
+                : "Could not create workspace. Check that the backend is running."
+            );
           }
         }
       }
 
       setWorkspaces(ws);
-    } catch {
-      /* ignore */
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof Error ? err.message : "Could not load workspaces."
+      );
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    if (isSignedIn) loadWorkspaces();
-  }, [isSignedIn]);
+    if (!isLoaded || !isSignedIn) return;
+    if (peekPendingHeroPrompt() || heroBootstrapping) return;
+    void loadWorkspaces();
+  }, [isLoaded, isSignedIn, heroBootstrapping]);
 
   const handleCreateWorkspace = async () => {
     const name = newName.trim();
     if (!name || creating) return;
     setCreating(true);
+    setActionError(null);
     try {
       const tokenGetter = async () => await getToken();
       const ws = await createWorkspaceApi(name, tokenGetter);
@@ -105,6 +181,11 @@ export default function StudioPage() {
       router.push(`/workspace/${ws.id}`);
     } catch (err: unknown) {
       console.error("Failed to create workspace:", err);
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : "Could not create workspace. Check that the backend is running."
+      );
     } finally {
       setCreating(false);
     }
@@ -166,6 +247,21 @@ export default function StudioPage() {
     ws.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Hero handoff: minimal transition — don't paint the studio list while we create + open.
+  if (heroBootstrapping) {
+    return (
+      <div className="app-content-page font-dm-sans flex min-h-[50vh] flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
+        <p className="text-sm text-neutral-500">Opening your workspace…</p>
+        {actionError && (
+          <div className="mt-2 max-w-md rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {actionError}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="app-content-page font-dm-sans">
       {/* My Workspace section – reference layout */}
@@ -201,8 +297,14 @@ export default function StudioPage() {
           </div>
         </div>
 
+        {actionError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {actionError}
+          </div>
+        )}
+
         {loading ? (
-          <div className="flex justify-center py-20">
+          <div className="flex flex-col items-center justify-center gap-3 py-20">
             <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
           </div>
         ) : filtered.length === 0 ? (

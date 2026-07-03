@@ -1927,13 +1927,27 @@ export async function listInvites(
   }
 }
 
+export type CurrentUserResult =
+  | { ok: true; user: any; stats: any }
+  | { ok: false; reason: "no_token" | "http_error" | "network_error" };
+
 /**
- * Get current user profile from backend
+ * Get current user profile from backend.
+ * Distinguishes transport/auth failures from a successful "not approved" profile
+ * so callers (AccessGate) do not treat flaky networks as logout/denial.
  */
-export async function getCurrentUser(getToken: () => Promise<string | null>): Promise<{ user: any; stats: any } | null> {
-  const token = await getToken();
+export async function getCurrentUser(
+  getToken: () => Promise<string | null>
+): Promise<CurrentUserResult> {
+  let token: string | null;
+  try {
+    token = await getToken();
+  } catch {
+    return { ok: false, reason: "no_token" };
+  }
+
   if (!token) {
-    return null;
+    return { ok: false, reason: "no_token" };
   }
 
   try {
@@ -1944,12 +1958,13 @@ export async function getCurrentUser(getToken: () => Promise<string | null>): Pr
     });
 
     if (!res.ok) {
-      return null;
+      return { ok: false, reason: "http_error" };
     }
 
-    return await res.json();
+    const data = await res.json();
+    return { ok: true, user: data.user, stats: data.stats };
   } catch {
-    return null;
+    return { ok: false, reason: "network_error" };
   }
 }
 
@@ -2007,14 +2022,24 @@ export async function createWorkspaceApi(name?: string, getToken?: () => Promise
     }
   }
 
-  const response = await fetch(`${backendBase}/api/3d/workspaces`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ name: name || "Untitled Workspace" }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${backendBase}/api/3d/workspaces`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: name || "Untitled Workspace" }),
+    });
+  } catch {
+    throw new Error(
+      `Cannot reach backend at ${backendBase}. Is the API running?`
+    );
+  }
 
   if (!response.ok) {
-    throw new Error(`Failed to create workspace: ${response.statusText}`);
+    const body = await response.json().catch(() => ({} as { error?: string; message?: string }));
+    throw new Error(
+      body.message || body.error || `Failed to create workspace (${response.status})`
+    );
   }
 
   const data = await response.json();

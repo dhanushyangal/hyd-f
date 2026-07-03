@@ -8,6 +8,7 @@ import type { MotionValue } from "framer-motion";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useReducedMotion } from "framer-motion";
 import { PromptBox } from "../PromptBox";
 import { SignUpButton, useAuth } from "@clerk/nextjs";
+import { savePendingHeroPrompt } from "@/lib/pendingHeroPrompt";
 
 const Showcase = dynamic(() => import("./Showcase"), {
   ssr: false,
@@ -22,8 +23,6 @@ const FeaturesSection = dynamic(() => import("./FeaturesSection").then((m) => m.
 const WhyHydrilla = dynamic(() => import("./WhyHydrilla").then((m) => m.default), { ssr: true });
 const PricingSection = dynamic(() => import("./PricingSection").then((m) => m.default), { ssr: true });
 const FAQSection = dynamic(() => import("./FAQSection").then((m) => m.default), { ssr: true });
-
-const HERO_PROMPT_KEY = "hero_prompt";
 
 const ROTATING_PROMPTS = [
   "Make a sword with fire",
@@ -197,19 +196,20 @@ export default function Hero() {
   }, []);
 
   const handleSubmit = () => {
-    if (!prompt.trim()) return;
+    const value = prompt.trim();
+    if (!value) return;
     if (!isLoaded) return;
+
+    // Persist intent so it survives sign-in / sign-up.
+    // Studio creates the workspace, then opens it with the prompt ready.
+    savePendingHeroPrompt(value);
+
     if (!isSignedIn) {
-      try {
-        sessionStorage.setItem(HERO_PROMPT_KEY, prompt.trim());
-      } catch (_) {}
-      router.push("/sign-in?redirect_url=" + encodeURIComponent("/workspace"));
+      router.push("/sign-in?redirect_url=" + encodeURIComponent("/app/studio"));
       return;
     }
-    try {
-      sessionStorage.setItem(HERO_PROMPT_KEY, prompt.trim());
-    } catch (_) {}
-    router.push("/generate");
+
+    router.push("/app/studio");
   };
 
   const DEMO_MEETING_URL = "https://cal.com/hydrilla";
