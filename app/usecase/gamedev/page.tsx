@@ -1,63 +1,79 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
-import { createPageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { createPageMetadata, getUseCaseJsonLd } from "@/lib/seo";
 import { USECASE_HERO } from "@/lib/cloudinary";
 
+const DESCRIPTION =
+  "Generate game-ready characters, props, and environments with clean geometry for Unreal Engine, Unity, and real-time pipelines.";
+
 const DATA = {
-  industry: "Game Development",
-  headline: "Assets Built for Real-Time Production",
+  id: "gamedev" as const,
+  headline: "Ship game-ready assets faster",
   heroImage: USECASE_HERO.games,
-  accentColor: "#3b8ee8",
+  capabilitiesHeading: "Built for real-time production",
   tagline:
-    "Generate game-ready characters, props, and environments with clean geometry optimized for Unreal Engine, Unity, and other real-time pipelines.",
-  backHref: "/usecase",
+    "Characters, props, and environments with clean geometry for Unreal, Unity, and other real-time pipelines.",
   features: [
     {
-      title: "Game-engine compatible models",
-      body: "Generate characters, props, and environments with clean geometry suitable for Unreal Engine, Unity, and other real-time pipelines.",
+      title: "Engine-ready models",
+      body: "Generate characters, props, and environments with topology suited for Unreal, Unity, and other real-time engines.",
     },
     {
-      title: "Consistent asset iteration",
-      body: "Create multiple variations of models while maintaining consistent style and scale across your game world.",
+      title: "Consistent iteration",
+      body: "Create variations while keeping style and scale coherent across your world.",
     },
     {
-      title: "Scalable production pipeline",
-      body: "Produce large asset libraries quickly without slowing down your development cycle or compromising visual consistency.",
+      title: "Scalable asset libraries",
+      body: "Fill backgrounds, props, and environment details without slowing the art pipeline.",
     },
     {
-      title: "Direct engine integration",
-      body: "Export assets in formats ready for your engine workflow—FBX, GLB, OBJ, and more—with no extra conversion steps.",
+      title: "Standard exports",
+      body: "Download GLB, FBX, and OBJ for direct import into your engine workflow.",
     },
   ],
   who: [
     {
-      role: "Game Studios",
-      description: "Ship larger worlds faster by generating background assets, props, and environmental details at scale.",
+      role: "Game studios",
+      description: "Scale background and environment assets without expanding the art team.",
     },
     {
-      role: "Indie Developers",
-      description: "Build complete 3D games without a large art team—generate the assets you need when you need them.",
+      role: "Indie developers",
+      description: "Build complete 3D worlds without a full modeling crew.",
     },
     {
-      role: "3D Artists",
-      description: "Accelerate concepting and asset creation with AI-generated starting points you can refine and polish.",
+      role: "3D artists",
+      description: "Start from generated bases, then refine and polish.",
     },
     {
-      role: "Technical Artists",
-      description: "Integrate clean-topology assets directly into existing pipelines with minimal manual cleanup.",
+      role: "Technical artists",
+      description: "Bring clean assets into existing pipelines with less cleanup.",
     },
   ],
 };
 
 export const metadata = createPageMetadata({
-  title: "Game Development",
-  description: DATA.tagline,
+  title: "AI 3D Assets for Game Development",
+  description: DESCRIPTION,
   path: "/usecase/gamedev",
+  keywords: [
+    "AI 3D game assets",
+    "Unreal Engine 3D generation",
+    "Unity asset generation",
+    "game-ready 3D models",
+    "text to 3D for games",
+  ],
+  ogImage: USECASE_HERO.games,
 });
 
 export default function GameDevPage() {
   return (
     <>
+      <JsonLd data={getUseCaseJsonLd({
+        name: "Game Development",
+        description: DESCRIPTION,
+        path: "/usecase/gamedev",
+      })} />
       <UseCasePage data={DATA} />
       <Footer />
     </>

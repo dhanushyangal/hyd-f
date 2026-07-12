@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { SignInButton, SignedIn, SignedOut } from "@clerk/nextjs";
+import { BlurReveal } from "@/components/ui/BlurReveal";
 
 interface ShowcaseItem {
   id: string;
@@ -308,12 +309,13 @@ export default function Showcase() {
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 md:px-8">
         {/* Section heading */}
         <div className="text-center mb-10 sm:mb-12 md:mb-14">
-          <h2
+          <BlurReveal
+            as="h2"
             className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-[#111] leading-tight tracking-tight"
             style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
           >
             The Industry&apos;s Best Generative 3D Models
-          </h2>
+          </BlurReveal>
         </div>
       </div>
       <div className="w-full">
@@ -496,7 +498,7 @@ export default function Showcase() {
                       )}
                       <span 
                         className="text-base sm:text-lg font-semibold text-white"
-                        style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
+                        style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
                       >
                         {item.name}
                       </span>
@@ -512,7 +514,7 @@ export default function Showcase() {
                     <div className="mb-3 sm:mb-4">
                       <span 
                         className="text-xs sm:text-sm font-medium text-white/95 uppercase tracking-widest"
-                        style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
+                        style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
                       >
                         Create
                       </span>

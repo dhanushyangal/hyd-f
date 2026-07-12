@@ -6,6 +6,13 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { Slider } from "../../components/ui/slider";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent } from "../../components/ui/card";
+import { Input } from "../../components/ui/input";
+import { Progress } from "../../components/ui/progress";
+import { ScrollArea } from "../../components/ui/scroll-area";
+import { Switch } from "../../components/ui/switch";
+import { Textarea } from "../../components/ui/textarea";
 import {
   submitImageTo3D,
   generatePreviewImage,
@@ -51,9 +58,9 @@ const displayImageUrl = (url: string | null | undefined): string => getProxiedIm
 const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m) => ({ default: m.ThreeViewer })), {
   ssr: false,
   loading: () => (
-    <div className="flex-1 min-h-0 flex items-center justify-center bg-neutral-100/50">
+    <div className="flex-1 min-h-0 flex items-center justify-center bg-[#fafafa]">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
+        <div className="w-9 h-9 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
         <p className="text-sm text-neutral-500">Loading 3D viewer…</p>
       </div>
     </div>
@@ -125,8 +132,8 @@ interface GeneratingJob {
 export default function WorkspacePageWrapper() {
   return (
     <Suspense fallback={
-      <div className="h-screen flex items-center justify-center bg-neutral-50">
-        <div className="w-8 h-8 border-3 border-neutral-300 border-t-black rounded-full animate-spin" />
+      <div className="h-screen flex items-center justify-center bg-[#fafafa]">
+        <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
       </div>
     }>
       <WorkspacePage />
@@ -1862,38 +1869,39 @@ function WorkspacePage() {
 
   if (resolvingWorkspace) {
     return (
-      <div className="h-screen flex items-center justify-center bg-neutral-50">
+      <div className="h-screen flex items-center justify-center bg-[#fafafa]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
-          <p className="text-sm text-neutral-500">Loading workspace...</p>
+          <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
+          <p className="text-sm text-neutral-500">Loading workspace…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-neutral-50 text-black">
+    <div className="h-screen flex flex-col overflow-hidden bg-[#fafafa] text-neutral-950 font-dm-sans">
       {/* No top navbar — left nav in left sidebar, right nav (name, My Library, profile, collapse) in right sidebar */}
 
       {/* New Workspace name modal */}
       {showNewWorkspaceModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-4"
           onClick={() => {
             if (newWorkspaceCreating) return;
             if (forcedWorkspaceModal) return;
             setShowNewWorkspaceModal(false);
           }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-black mb-2">New Workspace</h2>
-            <p className="text-sm text-neutral-500 mb-4">Give your workspace a name to get started.</p>
-            <input
+          <Card className="w-full max-w-md rounded-[22px] border-neutral-200/60 bg-white/95 backdrop-blur-xl shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)]" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6 sm:p-7">
+            <h2 className="mb-1 text-[17px] font-semibold tracking-tight text-neutral-900">New workspace</h2>
+            <p className="mb-5 text-sm text-neutral-500">Give your workspace a name to get started.</p>
+            <Input
               type="text"
               value={newWorkspaceName}
               onChange={(e) => setNewWorkspaceName(e.target.value)}
               placeholder="e.g. My Project, Character Pack"
-              className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-black placeholder:text-neutral-400 focus:border-black focus:ring-1 focus:ring-black/10 mb-4"
+              className="mb-5 h-11 rounded-xl border-neutral-200 bg-neutral-50/80 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/[0.04]"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -1906,81 +1914,83 @@ function WorkspacePage() {
               autoFocus
               disabled={newWorkspaceCreating}
             />
-            <div className="flex gap-3 justify-end">
+            <div className="flex gap-2.5 justify-end">
               {!forcedWorkspaceModal && (
-                <button
+                <Button
                   type="button"
                   onClick={() => !newWorkspaceCreating && setShowNewWorkspaceModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-black transition-colors"
+                  variant="ghost"
                   disabled={newWorkspaceCreating}
+                  className="h-10 rounded-full"
                 >
                   Cancel
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
                 onClick={handleCreateNewWorkspace}
                 disabled={!newWorkspaceName.trim() || newWorkspaceCreating}
-                className="px-4 py-2 text-sm font-medium text-white bg-black hover:bg-neutral-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="h-10 rounded-full"
               >
                 {newWorkspaceCreating ? "Creating…" : "Create"}
-              </button>
+              </Button>
             </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {/* Lineage item preview popup — click Creation Lineage step to preview; Select shows in main view */}
       {lineagePreviewItem && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-4"
           onClick={() => setLineagePreviewItem(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden"
+            className="bg-white/95 backdrop-blur-xl rounded-[22px] shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] border border-neutral-200/60 max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-3 border-b border-neutral-100 flex items-center justify-between">
-              <span className="text-sm font-semibold text-black">
+            <div className="px-5 py-3.5 border-b border-neutral-100/80 flex items-center justify-between">
+              <span className="text-[13px] font-semibold tracking-tight text-neutral-900 capitalize">
                 {lineagePreviewItem.generateType?.replace(/_/g, " ") || "Image"}
-                {lineagePreviewItem.resultGlbUrl && " (3D)"}
+                {lineagePreviewItem.resultGlbUrl && " · 3D"}
               </span>
               <button
                 type="button"
                 onClick={() => setLineagePreviewItem(null)}
-                className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-black transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors"
                 aria-label="Close"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-auto p-4 flex flex-col items-center">
+            <div className="flex-1 min-h-0 overflow-auto p-5 flex flex-col items-center">
               {lineagePreviewItem.previewImageUrl ? (
                 <img
                   src={displayImageUrl(lineagePreviewItem.previewImageUrl)}
                   alt="Preview"
-                  className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-lg border border-neutral-200 bg-neutral-50"
+                  className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-2xl border border-neutral-200/80 bg-neutral-50"
                 />
               ) : lineagePreviewItem.resultGlbUrl && lineagePreviewItem.sourceImages?.[0] ? (
                 <img
                   src={displayImageUrl(lineagePreviewItem.sourceImages[0])}
                   alt="Source"
-                  className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-lg border border-neutral-200 bg-neutral-50"
+                  className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-2xl border border-neutral-200/80 bg-neutral-50"
                 />
               ) : (
-                <div className="w-48 h-48 rounded-lg border border-neutral-200 bg-neutral-100 flex items-center justify-center">
-                  <svg className="w-12 h-12 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
+                <div className="w-48 h-48 rounded-2xl border border-neutral-200 bg-neutral-50 flex items-center justify-center">
+                  <svg className="w-10 h-10 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
                 </div>
               )}
               {lineagePreviewItem.prompt && (
-                <p className="text-xs text-neutral-500 mt-3 text-center line-clamp-2 w-full" title={lineagePreviewItem.prompt}>{lineagePreviewItem.prompt}</p>
+                <p className="text-[13px] text-neutral-500 mt-4 text-center line-clamp-2 w-full" title={lineagePreviewItem.prompt}>{lineagePreviewItem.prompt}</p>
               )}
             </div>
-            <div className="p-4 border-t border-neutral-100 flex gap-3">
+            <div className="p-4 border-t border-neutral-100/80 flex gap-2.5">
               <button
                 type="button"
                 onClick={() => setLineagePreviewItem(null)}
-                className="flex-1 py-2.5 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-xl hover:bg-neutral-200 transition-colors"
+                className="flex-1 h-10 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-full hover:bg-neutral-200 transition-colors"
               >
                 Close
               </button>
@@ -1990,7 +2000,7 @@ function WorkspacePage() {
                   handleLineageStepClick(lineagePreviewItem);
                   setLineagePreviewItem(null);
                 }}
-                className="flex-1 py-2.5 text-sm font-semibold text-white bg-black rounded-xl hover:bg-neutral-800 transition-colors"
+                className="flex-1 h-10 text-sm font-semibold text-white bg-neutral-900 rounded-full hover:bg-neutral-800 transition-colors"
               >
                 Select
               </button>
@@ -1999,36 +2009,39 @@ function WorkspacePage() {
         </div>
       )}
 
-      {/* Mobile-only: top bar — back + Hydrilla + Assets icon (right) */}
-      <header className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200 bg-white/95 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+      {/* Mobile-only: top bar — back + name + tools */}
+      <header className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200/70 bg-white/90 backdrop-blur-xl shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <Link
             href="/app/studio"
-            className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
+            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-neutral-100 text-neutral-500 transition-colors shrink-0"
             aria-label="Back to Studio"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </Link>
-          <Link href="/" className="text-xl font-bold text-black tracking-tight hover:opacity-80 transition-opacity truncate min-w-0" title={workspaceName.trim() ? workspaceName : "Hydrilla"}>
-            {workspaceName.trim() ? workspaceName : "Hydrilla"}
-          </Link>
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">Workspace</p>
+            <p className="text-[15px] font-semibold tracking-tight text-neutral-900 truncate" title={workspaceName.trim() ? workspaceName : "Hydrilla"}>
+              {workspaceName.trim() ? workspaceName : "Hydrilla"}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <Link
             href="/rigging"
-            className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/12 text-emerald-600 hover:bg-emerald-500/20 transition-colors shrink-0"
+            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
             aria-label="3D Rigging"
             title="3D Rigging"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.5-6.5L17 8m-10 8l-2.5 2.5M20.5 18.5L18 16M5.5 5.5L8 8" /><circle cx="12" cy="12" r="2" /></svg>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.5-6.5L17 8m-10 8l-2.5 2.5M20.5 18.5L18 16M5.5 5.5L8 8" /><circle cx="12" cy="12" r="2" /></svg>
           </Link>
           <Link
             href="/generations"
-            className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/12 text-blue-600 hover:bg-blue-500/20 transition-colors shrink-0"
+            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
             aria-label="Workspace generations"
             title="Generations"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
           </Link>
         </div>
       </header>
@@ -2036,7 +2049,7 @@ function WorkspacePage() {
       {/* Mobile-only: large generating card on Create tab (canvas is hidden — user needs clear feedback); Canvas tab uses main column */}
       {mobileTab === "create" && mobileCanvasGenerating && (
         <div
-          className="md:hidden fixed inset-x-0 z-[35] flex items-center justify-center px-4 pointer-events-auto bg-black/50 backdrop-blur-[2px]"
+          className="md:hidden fixed inset-x-0 z-[35] flex items-center justify-center px-4 pointer-events-auto bg-black/25 backdrop-blur-sm"
           style={{
             top: "calc(3.5rem + env(safe-area-inset-top, 0px))",
             bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
@@ -2045,15 +2058,15 @@ function WorkspacePage() {
           aria-live="polite"
           aria-busy="true"
         >
-          <div className="w-full max-w-sm min-h-[min(52vh,320px)] rounded-3xl bg-black text-white shadow-2xl flex flex-col items-center justify-center gap-5 px-8 py-10 mx-auto border border-white/10">
-            <div className="w-14 h-14 border-[3px] border-white/25 border-t-white rounded-full animate-spin shrink-0" />
-            <div className="text-center space-y-2">
-              <p className="text-base font-semibold leading-snug tracking-tight">{mobileGeneratingMessage}</p>
-              <p className="text-sm text-white/70 tabular-nums">{Math.round(mobileGeneratingProgress)}%</p>
+          <div className="w-full max-w-sm min-h-[min(48vh,300px)] rounded-[28px] bg-white text-neutral-900 shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] flex flex-col items-center justify-center gap-5 px-8 py-10 mx-auto border border-neutral-200/60">
+            <div className="w-12 h-12 border-2 border-neutral-200 border-t-neutral-900 rounded-full animate-spin shrink-0" />
+            <div className="text-center space-y-1.5">
+              <p className="text-[15px] font-semibold leading-snug tracking-tight">{mobileGeneratingMessage}</p>
+              <p className="text-sm text-neutral-500 tabular-nums">{Math.round(mobileGeneratingProgress)}%</p>
             </div>
-            <div className="w-full max-w-[240px] h-2.5 bg-white/15 rounded-full overflow-hidden">
+            <div className="w-full max-w-[220px] h-1.5 bg-neutral-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-white rounded-full transition-all duration-500"
+                className="h-full bg-neutral-900 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(mobileGeneratingProgress, 100)}%` }}
               />
             </div>
@@ -2062,7 +2075,7 @@ function WorkspacePage() {
       )}
       {mobileGeneratedToast && (
         <div className="md:hidden fixed left-0 right-0 top-[65px] z-30 flex justify-center px-3 py-2 pointer-events-none">
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-600 text-white text-xs font-medium shadow-lg">
+          <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900 text-white text-xs font-medium shadow-lg">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             Generated
           </span>
@@ -2071,113 +2084,136 @@ function WorkspacePage() {
 
       {/* 3-panel layout — on mobile: single column, show canvas OR (library + form) based on bottom tab */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative flex-col md:flex-row">
-        {/* Left panel toggle — solid black, no blur (avoids lag) */}
-        {!leftPanelOpen && (
-          <button
-            type="button"
-            onClick={() => setLeftPanelOpen(true)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex flex-col items-center justify-center gap-1 py-3 px-2 min-w-[48px] bg-black border border-black rounded-r-lg text-white hover:bg-neutral-800 active:bg-neutral-900"
-            title="Open library panel"
-            aria-label="Open library panel"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            <span className="text-[10px] font-medium uppercase tracking-wider opacity-90">Library</span>
-          </button>
-        )}
+        {/* Left panel toggle */}
+        <button
+          type="button"
+          onClick={() => setLeftPanelOpen(true)}
+          className={cn(
+            "absolute left-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-r-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] md:flex",
+            leftPanelOpen
+              ? "pointer-events-none -translate-x-2 opacity-0"
+              : "pointer-events-auto translate-x-0 opacity-100"
+          )}
+          title="Open library panel"
+          aria-label="Open library panel"
+          tabIndex={leftPanelOpen ? -1 : 0}
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Library</span>
+        </button>
 
         {/* Left Panel - Library (sliding & resizable); on mobile: hidden — use Assets icon to open /app/assets */}
         <aside
           ref={libraryPanelRef}
-          style={{ width: leftPanelOpen ? leftPanelWidth : 0, minWidth: leftPanelOpen ? leftPanelWidth : 0 }}
+          style={{
+            width: leftPanelOpen ? leftPanelWidth : 0,
+            minWidth: leftPanelOpen ? leftPanelWidth : 0,
+            transition: resizingLeft
+              ? "none"
+              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
           className={cn(
-            "flex-shrink-0 flex flex-col bg-white border-r border-neutral-200 overflow-hidden transition-[width] duration-200 ease-out",
-            "max-md:hidden"
+            "flex shrink-0 flex-col overflow-hidden border-r border-neutral-200/70 bg-white will-change-[width]",
+            "max-md:hidden",
+            !leftPanelOpen && "border-transparent"
           )}
         >
-          <div className="flex h-full min-w-0">
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Left navbar: Logo only (larger) + New Workspace — hidden on mobile (use global header) */}
-          <div className="hidden md:flex px-4 py-3 border-b border-neutral-100 items-center justify-between gap-2">
-            <Link href="/app/studio" className="text-2xl font-bold text-black tracking-tight shrink-0 hover:opacity-80 transition-opacity">
+          {/* Fixed inner width keeps content from reflowing while the panel animates */}
+          <div className="flex h-full shrink-0" style={{ width: leftPanelWidth }}>
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Left navbar: Logo + New Workspace */}
+          <div className="hidden md:flex h-14 px-4 border-b border-neutral-200/60 items-center justify-between gap-2">
+            <Link href="/app/studio" className="text-[17px] font-semibold text-neutral-900 tracking-[-0.03em] shrink-0 hover:opacity-70 transition-opacity">
               Hydrilla
             </Link>
-            <button
+            <Button
               type="button"
               onClick={() => { setNewWorkspaceName(""); setShowNewWorkspaceModal(true); }}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 hover:text-black transition-colors shrink-0 px-2.5 py-1.5 rounded-lg hover:bg-neutral-100"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium"
               title="New Workspace"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              <span>New Workspace</span>
-            </button>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              <span>New</span>
+            </Button>
           </div>
-          <div className="hidden md:flex px-3 py-2.5 border-b border-neutral-100 items-center gap-2">
-            <button type="button" onClick={() => setLeftPanelOpen(false)} className="p-2 rounded-xl text-black hover:bg-neutral-200 transition-colors shrink-0" title="Close library" aria-label="Close library panel">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
+          <div className="hidden md:flex px-3 py-3 border-b border-neutral-200/60 items-center gap-2">
+            <Button type="button" onClick={() => setLeftPanelOpen(false)} variant="ghost" size="sm" className="h-9 w-9 shrink-0 rounded-full p-0" title="Close library" aria-label="Close library panel">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </Button>
             <div className="relative flex-1 min-w-0">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/70 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <input
+              <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder:text-neutral-500 text-sm focus:border-neutral-300 focus:ring-2 focus:ring-neutral-200/80 focus:outline-none"
+                placeholder="Search"
+                className="h-9 rounded-full bg-neutral-50/80 border-neutral-200/80 pl-9 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/[0.04]"
               />
             </div>
           </div>
           {/* Tab bar — Images | 3D */}
-          <div className="px-2.5 pt-2 pb-1">
+          <div className="px-3 pt-3 pb-2">
             <div
               role="tablist"
               aria-label="Library tabs"
-              className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-neutral-100 p-1 text-neutral-500"
+              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-neutral-200/70 bg-neutral-100/80 p-1 text-neutral-500"
             >
-              <button
+              <Button
                 type="button"
                 role="tab"
+                variant={leftLibraryTab === "images" ? "outline" : "ghost"}
+                size="sm"
                 {...(leftLibraryTab === "images" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
                 aria-controls="library-images-panel"
                 id="library-tab-images"
                 tabIndex={leftLibraryTab === "images" ? 0 : -1}
                 onClick={() => setLeftLibraryTab("images")}
                 title="Images"
-                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 ${leftLibraryTab === "images" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:bg-neutral-200/70 hover:text-neutral-700"}`}
+                className={`h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] ${leftLibraryTab === "images" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500"}`}
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
                 <span>Images</span>
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 role="tab"
+                variant={leftLibraryTab === "3d" ? "outline" : "ghost"}
+                size="sm"
                 {...(leftLibraryTab === "3d" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
                 aria-controls="library-3d-panel"
                 id="library-tab-3d"
                 tabIndex={leftLibraryTab === "3d" ? 0 : -1}
                 onClick={() => setLeftLibraryTab("3d")}
                 title="3D Assets"
-                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2 ${leftLibraryTab === "3d" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:bg-neutral-200/70 hover:text-neutral-700"}`}
+                className={`h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] ${leftLibraryTab === "3d" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500"}`}
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
                 <span>3D</span>
-              </button>
+              </Button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-4 min-h-0 scrollbar-minimal" role="tabpanel" id="library-images-panel" aria-labelledby="library-tab-images" hidden={leftLibraryTab !== "images"}>
+          <ScrollArea className="flex-1 min-h-0" role="tabpanel" id="library-images-panel" aria-labelledby="library-tab-images" hidden={leftLibraryTab !== "images"}>
+            <div className="px-3 py-3">
             {leftLibraryTab === "images" && (
-              <div className="space-y-4">
-                <Link href="/library" className="flex items-center justify-between group mb-2">
-                  <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-widest">Images</h3>
-                  <svg className="w-4 h-4 text-black/60 group-hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <div className="space-y-3">
+                <Link href="/library" className="flex items-center justify-between group px-0.5">
+                  <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-[0.14em]">Images</h3>
+                  <svg className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                 </Link>
                 <div className="grid grid-cols-2 gap-2.5">
                   {libraryLoading ? (
-                    <div className="col-span-2 flex items-center justify-center min-h-[100px]"><div className="w-6 h-6 border-2 border-neutral-300 border-t-black rounded-full animate-spin" /></div>
+                    <div className="col-span-2 grid grid-cols-2 gap-2.5">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="aspect-square rounded-2xl bg-neutral-100 animate-pulse" />
+                      ))}
+                    </div>
                   ) : filteredImages.length === 0 ? (
-                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[100px] rounded-xl bg-neutral-50 border border-dashed border-neutral-200 text-neutral-600 text-xs gap-2">
-                      <svg className="w-8 h-8 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[120px] rounded-2xl bg-neutral-50 border border-dashed border-neutral-200/80 text-neutral-500 text-xs gap-2">
+                      <svg className="w-7 h-7 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
                       <span>No images yet</span>
                     </div>
                   ) : (
@@ -2192,16 +2228,16 @@ function WorkspacePage() {
                           e.dataTransfer.effectAllowed = "copy";
                         }}
                         onClick={() => handleImageClick(item)}
-                        className="relative aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center"
+                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center justify-center"
                       >
                         {(item.previewImageUrl || item.imageUrl) ? (
-                          <img src={displayImageUrl(item.previewImageUrl || item.imageUrl)} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
+                          <img src={displayImageUrl(item.previewImageUrl || item.imageUrl)} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none transition-transform duration-500 group-hover/card:scale-[1.03]" />
                         ) : (
-                          <span className="text-neutral-600 text-[10px] text-center px-1 truncate max-w-full font-medium">{item.prompt || "Image"}</span>
+                          <span className="text-neutral-500 text-[10px] text-center px-1 truncate max-w-full font-medium">{item.prompt || "Image"}</span>
                         )}
                         {(item.status === "RUN" || item.status === "WAIT") && (
-                          <div className="absolute inset-0 bg-black/35 flex flex-col items-center justify-center gap-1.5">
-                            <div className="w-4 h-4 border-2 border-white/70 border-t-white rounded-full animate-spin" />
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1.5">
+                            <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
                             <span className="text-[10px] font-medium text-white">
                               {item.status === "WAIT" ? "Queued" : "Generating"}
                             </span>
@@ -2213,36 +2249,42 @@ function WorkspacePage() {
                 </div>
               </div>
             )}
-          </div>
-          <div role="tabpanel" id="library-3d-panel" aria-labelledby="library-tab-3d" hidden={leftLibraryTab !== "3d"} className="flex-1 overflow-y-auto px-3 py-4 min-h-0 scrollbar-minimal">
+            </div>
+          </ScrollArea>
+          <ScrollArea role="tabpanel" id="library-3d-panel" aria-labelledby="library-tab-3d" hidden={leftLibraryTab !== "3d"} className="flex-1 min-h-0">
+            <div className="px-3 py-3">
             {leftLibraryTab === "3d" && (
-              <div className="space-y-4">
-                <Link href="/library" className="flex items-center justify-between group mb-2">
-                  <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-widest">3D Assets</h3>
-                  <svg className="w-4 h-4 text-black/60 group-hover:text-black transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <div className="space-y-3">
+                <Link href="/library" className="flex items-center justify-between group px-0.5">
+                  <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-[0.14em]">3D Assets</h3>
+                  <svg className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                 </Link>
                 <div className="grid grid-cols-2 gap-2.5">
                   {libraryLoading ? (
-                    <div className="col-span-2 flex items-center justify-center min-h-[100px]"><div className="w-6 h-6 border-2 border-neutral-300 border-t-black rounded-full animate-spin" /></div>
+                    <div className="col-span-2 grid grid-cols-2 gap-2.5">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="aspect-square rounded-2xl bg-neutral-100 animate-pulse" />
+                      ))}
+                    </div>
                   ) : filtered3DAssets.length === 0 ? (
-                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[100px] rounded-xl bg-neutral-50 border border-dashed border-neutral-200 text-neutral-600 text-xs gap-2">
-                      <svg className="w-8 h-8 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[120px] rounded-2xl bg-neutral-50 border border-dashed border-neutral-200/80 text-neutral-500 text-xs gap-2">
+                      <svg className="w-7 h-7 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                       <span>No 3D assets yet</span>
                     </div>
                   ) : (
                     filtered3DAssets.map((item) => (
-                      <div key={item.id} onClick={() => handle3DClick(item)} className="relative aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-md transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center">
+                      <div key={item.id} onClick={() => handle3DClick(item)} className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center justify-center">
                         {item.previewImageUrl ? (
-                          <img src={displayImageUrl(item.previewImageUrl)} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover" />
+                          <img src={displayImageUrl(item.previewImageUrl)} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-[1.03]" />
                         ) : (
-                          <div className="flex flex-col items-center text-black/50">
+                          <div className="flex flex-col items-center text-neutral-400">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                             <span className="text-[10px] mt-1 font-medium">3D</span>
                           </div>
                         )}
                         {(item.status === "RUN" || item.status === "WAIT") && (
-                          <div className="absolute inset-0 bg-black/35 flex flex-col items-center justify-center gap-1.5">
-                            <div className="w-4 h-4 border-2 border-white/70 border-t-white rounded-full animate-spin" />
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1.5">
+                            <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
                             <span className="text-[10px] font-medium text-white">
                               {item.status === "WAIT" ? "Queued" : "Generating"}
                             </span>
@@ -2254,7 +2296,8 @@ function WorkspacePage() {
                 </div>
               </div>
             )}
-          </div>
+            </div>
+          </ScrollArea>
             </div>
             {/* Left resize handle — desktop only */}
             {leftPanelOpen && (
@@ -2273,48 +2316,53 @@ function WorkspacePage() {
         </aside>
 
         {/* Center - Preview / 3D / generating; on mobile: visible only when Canvas tab */}
-        <main className={cn("flex-1 flex flex-col min-w-0 min-h-0 bg-neutral-50 overflow-y-auto", mobileTab === "canvas" ? "max-md:flex" : "max-md:hidden")}>
+        <main className={cn("flex-1 flex flex-col min-w-0 min-h-0 bg-[#fafafa] overflow-y-auto", mobileTab === "canvas" ? "max-md:flex" : "max-md:hidden")}>
           {centerView.type === "empty" && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-24 h-24 mb-6 grid grid-cols-2 gap-1 text-black/70">
-                <div className="rounded-sm bg-current opacity-60 [clip-path:polygon(50%_0%,100%_100%,0%_100%)]" />
-                <div className="rounded-sm bg-current opacity-60" />
-                <div className="rounded-full bg-current opacity-60" />
-                <div className="rounded-sm bg-current opacity-60 rotate-45" />
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[20px] border border-neutral-200/80 bg-white text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(0,0,0,0.12)]">
+                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               </div>
-              <h2 className="text-xl font-semibold text-black mb-2">What will you create today?</h2>
-              <p className="text-neutral-500 max-w-sm mb-6">Start with a text prompt, or pick an image from the library to edit or turn into 3D.</p>
-              <div className="flex flex-wrap gap-3 justify-center">
-                <button
-                  type="button"
-                  onClick={() => promptTextareaRef.current?.focus()}
-                  className="px-4 py-2.5 text-sm font-medium text-black bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
-                >
-                  Write a prompt
-                </button>
-              </div>
+              <h2 className="mb-2 text-[26px] font-semibold tracking-[-0.03em] text-neutral-900">What will you create today?</h2>
+              <p className="mb-6 max-w-sm text-sm leading-6 text-neutral-500">Start with a text prompt, or choose an image from your library to edit or turn into 3D.</p>
+              <Button
+                type="button"
+                onClick={() => {
+                  setFullView(false);
+                  setRightPanelOpen(true);
+                  setMobileTab("create");
+                  // Focus after the panel starts opening so the field is mounted/visible.
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => promptTextareaRef.current?.focus());
+                  });
+                }}
+                variant="outline"
+                className="h-10 rounded-full px-5"
+              >
+                Write a prompt
+              </Button>
             </div>
           )}
 
           {centerView.type === "preview" && !(currentGenerating && centerView.previewId === currentGenerating.jobId) && (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 min-h-0 flex items-center justify-center p-4 bg-neutral-100/50">
-                <div className="relative w-full max-w-full h-full max-h-full rounded-xl overflow-hidden border border-neutral-200 shadow-lg bg-white flex items-center justify-center">
+              <div className="flex-1 min-h-0 flex items-center justify-center p-5 bg-[#fafafa]">
+                <div className="relative w-full max-w-full h-full max-h-full rounded-[24px] overflow-hidden border border-neutral-200/70 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.14)] bg-white flex items-center justify-center">
                   <img src={displayImageUrl(centerView.imageUrl)} alt="Preview" className="max-w-full max-h-full w-auto h-auto object-contain" />
                 </div>
               </div>
-              <div className="flex items-center justify-center gap-3 p-3 border-t border-neutral-100 bg-white">
+              <div className="flex items-center justify-center gap-3 p-3.5 border-t border-neutral-200/60 bg-white/90 backdrop-blur-xl">
                 {showGenerate3DButton ? (
-                  <button
+                  <Button
                     type="button"
                     onClick={handleGenerate3D}
-                    className="px-6 py-2.5 rounded-xl font-semibold text-white bg-black hover:bg-neutral-800 transition-colors flex items-center gap-2"
+                    size="lg"
+                    className="h-11 rounded-full px-6"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                     Generate 3D Model
-                  </button>
+                  </Button>
                 ) : (
                   <span className="text-sm text-neutral-500">Image preview</span>
                 )}
@@ -2324,42 +2372,42 @@ function WorkspacePage() {
 
           {(centerView.type === "generating" || (centerView.type === "preview" && currentGenerating && centerView.previewId === currentGenerating.jobId)) && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-16 h-16 mb-4 border-4 border-neutral-200 border-t-black rounded-full animate-spin" />
-              <p className="text-sm font-medium text-black mb-1">{centerView.type === "generating" ? centerView.message : "Generating 3D model..."}</p>
-              {currentGenerating?.queueInfo && (currentGenerating.queueInfo.jobs_ahead > 0 || (currentGenerating.queueInfo.estimated_total_seconds ?? 0) > 0) && (
-                <p className="text-xs text-neutral-500 mb-2">
-                  {currentGenerating.queueInfo.jobs_ahead > 0 && (
-                    <span>Position {currentGenerating.queueInfo.position + 1} in queue</span>
-                  )}
-                  {currentGenerating.queueInfo.estimated_total_seconds != null && currentGenerating.queueInfo.estimated_total_seconds > 0 && (
-                    <span>{currentGenerating.queueInfo.jobs_ahead > 0 ? " · " : ""}Est. ~{Math.round(currentGenerating.queueInfo.estimated_total_seconds / 60)} min total</span>
-                  )}
-                </p>
-              )}
-              <div className="w-64 h-2 bg-neutral-200 rounded-full overflow-hidden">
-                <div className="h-full bg-black rounded-full transition-all duration-500" style={{ width: `${Math.min(centerView.type === "generating" ? centerView.progress : 0, 100)}%` }} />
-              </div>
-              <p className="text-xs text-neutral-500 mt-2">{Math.round(centerView.type === "generating" ? centerView.progress : 0)}%</p>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!currentGenerating?.jobId) return;
-                  try {
-                    await cancelJob(currentGenerating.jobId, () => getToken());
-                    if (progressIntervalRef.current) {
-                      clearInterval(progressIntervalRef.current);
-                      progressIntervalRef.current = null;
+              <div className="w-full max-w-sm rounded-[28px] border border-neutral-200/70 bg-white px-8 py-10 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.12)]">
+                <div className="w-12 h-12 mx-auto mb-5 border-2 border-neutral-200 border-t-neutral-900 rounded-full animate-spin" />
+                <p className="text-[15px] font-semibold tracking-tight text-neutral-900 mb-1">{centerView.type === "generating" ? centerView.message : "Generating 3D model…"}</p>
+                {currentGenerating?.queueInfo && (currentGenerating.queueInfo.jobs_ahead > 0 || (currentGenerating.queueInfo.estimated_total_seconds ?? 0) > 0) && (
+                  <p className="text-[13px] text-neutral-500 mb-4">
+                    {currentGenerating.queueInfo.jobs_ahead > 0 && (
+                      <span>Position {currentGenerating.queueInfo.position + 1} in queue</span>
+                    )}
+                    {currentGenerating.queueInfo.estimated_total_seconds != null && currentGenerating.queueInfo.estimated_total_seconds > 0 && (
+                      <span>{currentGenerating.queueInfo.jobs_ahead > 0 ? " · " : ""}Est. ~{Math.round(currentGenerating.queueInfo.estimated_total_seconds / 60)} min total</span>
+                    )}
+                  </p>
+                )}
+                <Progress className="w-full h-1.5" value={centerView.type === "generating" ? centerView.progress : 0} />
+                <p className="text-[13px] text-neutral-500 mt-2.5 tabular-nums">{Math.round(centerView.type === "generating" ? centerView.progress : 0)}%</p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!currentGenerating?.jobId) return;
+                    try {
+                      await cancelJob(currentGenerating.jobId, () => getToken());
+                      if (progressIntervalRef.current) {
+                        clearInterval(progressIntervalRef.current);
+                        progressIntervalRef.current = null;
+                      }
+                      setCurrentGenerating(null);
+                      setCenterView({ type: "error", message: "Job cancelled" });
+                    } catch (e: any) {
+                      setCenterView({ type: "error", message: toUserFacingGpuError(e?.message || "Failed to cancel") });
                     }
-                    setCurrentGenerating(null);
-                    setCenterView({ type: "error", message: "Job cancelled" });
-                  } catch (e: any) {
-                    setCenterView({ type: "error", message: toUserFacingGpuError(e?.message || "Failed to cancel") });
-                  }
-                }}
-                className="mt-4 px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                Cancel generation
-              </button>
+                  }}
+                  className="mt-5 h-9 px-4 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
+                >
+                  Cancel generation
+                </button>
+              </div>
             </div>
           )}
 
@@ -2383,7 +2431,7 @@ function WorkspacePage() {
                 />
                 </div>
                 {/* Material + Roughness bar on top of 3D scene; z-[100] so it stays above WebGL canvas layer and works as soon as model loads */}
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/95 backdrop-blur-sm border border-neutral-200/80 shadow-lg pointer-events-auto">
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/90 backdrop-blur-xl border border-neutral-200/70 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.18)] pointer-events-auto">
                   {[
                     { id: "standard" as const, label: "PBR", title: "PBR (Physically Based)" },
                     { id: "matcap" as const, label: "Matcap", title: "Matcap" },
@@ -2397,7 +2445,7 @@ function WorkspacePage() {
                       title={title}
                       aria-label={title}
                       onClick={() => setMaterialType(id)}
-                      className={`p-2 rounded-lg transition-all duration-200 ${materialType === id ? "bg-neutral-800 text-white" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"}`}
+                      className={`p-2 rounded-full transition-all duration-200 ${materialType === id ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"}`}
                     >
                       {id === "standard" && (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
@@ -2422,7 +2470,7 @@ function WorkspacePage() {
                       title={wireframeMode ? "Wireframe On" : "Wireframe Off"}
                       aria-label={wireframeMode ? "Wireframe On" : "Wireframe Off"}
                       onClick={() => setWireframeMode((v) => !v)}
-                      className={`p-2 rounded-lg transition-all duration-200 ${wireframeMode ? "bg-neutral-800 text-white" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"}`}
+                      className={`p-2 rounded-full transition-all duration-200 ${wireframeMode ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"}`}
                     >
                       <svg className={`w-5 h-5 ${wireframeMode ? "opacity-100" : "opacity-70"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={wireframeMode ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" />
@@ -2460,8 +2508,8 @@ function WorkspacePage() {
               </div>
               {/* Actions: mobile = Download + info icon; desktop = Download + Full View + optional Create another 3D / Edit */}
               <div className="relative">
-              <div className="flex items-center justify-center gap-3 p-3 border-t border-neutral-100 bg-white flex-wrap">
-                <a href={centerView.glbUrl} download className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors">
+              <div className="flex items-center justify-center gap-2.5 p-3.5 border-t border-neutral-200/60 bg-white/90 backdrop-blur-xl flex-wrap">
+                <a href={centerView.glbUrl} download className="inline-flex items-center h-10 px-4 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors">
                   <span className="md:hidden">Download</span>
                   <span className="hidden md:inline">Download GLB</span>
                 </a>
@@ -2470,7 +2518,7 @@ function WorkspacePage() {
                   <button
                     type="button"
                     onClick={() => setMobileGenInfoOpen((v) => !v)}
-                    className="md:hidden p-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 transition-colors"
+                    className="md:hidden flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors"
                     aria-label="Generation info"
                   >
                     <svg className="w-5 h-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -2478,9 +2526,9 @@ function WorkspacePage() {
                 )}
                 <span className="hidden md:inline-flex items-center gap-3 flex-wrap">
                   {fullView ? (
-                    <button type="button" onClick={() => { setFullView(false); setLeftPanelOpen(true); setRightPanelOpen(true); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Exit full view</button>
+                    <button type="button" onClick={() => { setFullView(false); setLeftPanelOpen(true); setRightPanelOpen(true); }} className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors">Exit full view</button>
                   ) : (
-                    <button type="button" onClick={() => { setFullView(true); setLeftPanelOpen(false); setRightPanelOpen(false); }} className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors">Full View</button>
+                    <button type="button" onClick={() => { setFullView(true); setLeftPanelOpen(false); setRightPanelOpen(false); }} className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors">Full View</button>
                   )}
                   {selectedJobInfo?.sourceImages?.[0] && (
                     <>
@@ -2492,7 +2540,7 @@ function WorkspacePage() {
                           setLastPreviewId(null);
                           setCenterView({ type: "preview", imageUrl: src });
                         }}
-                        className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors"
+                        className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors"
                       >
                         Create another 3D
                       </button>
@@ -2515,7 +2563,7 @@ function WorkspacePage() {
                             },
                           }));
                         }}
-                        className="px-4 py-2 text-sm bg-neutral-100 text-black rounded-lg hover:bg-neutral-200 transition-colors"
+                        className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors"
                       >
                         Edit this image
                       </button>
@@ -2593,7 +2641,7 @@ function WorkspacePage() {
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className={`text-[10px] font-semibold ${isCurrent ? "text-black" : "text-neutral-500"}`}>{stepLabel}</span>
                                       <span className="text-[10px] text-neutral-400">{formatGenerationType(item.generateType)}</span>
-                                      {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">{mergeLabel}</span>}
+                                      {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{mergeLabel}</span>}
                                       {item.resultGlbUrl && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-500">3D</span>}
                                     </div>
                                     {item.prompt && <p className="text-[10px] text-neutral-500 truncate mt-0.5" title={item.prompt}>{item.prompt}</p>}
@@ -2639,37 +2687,39 @@ function WorkspacePage() {
 
           {centerView.type === "error" && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-16 h-16 mb-4 rounded-full bg-red-50 flex items-center justify-center">
-                <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
+              <div className="w-full max-w-sm rounded-[28px] border border-red-100 bg-white px-8 py-10 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.12)]">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
+                  <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <p className="text-sm text-red-600 mb-5">{centerView.message}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    if (lastPreviewImageUrl && lastPreviewId) {
+                      setCenterView({ type: "preview", imageUrl: lastPreviewImageUrl, previewId: lastPreviewId });
+                    } else {
+                      setCenterView({ type: "empty" });
+                    }
+                  }}
+                  className="h-10 px-5 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors"
+                >
+                  Try Again
+                </button>
               </div>
-              <p className="text-sm text-red-600 mb-4">{centerView.message}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  if (lastPreviewImageUrl && lastPreviewId) {
-                    setCenterView({ type: "preview", imageUrl: lastPreviewImageUrl, previewId: lastPreviewId });
-                  } else {
-                    setCenterView({ type: "empty" });
-                  }
-                }}
-                className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-neutral-800 transition-colors"
-              >
-                Try Again
-              </button>
             </div>
           )}
 
           {/* ──────────── Generation Info Panel (header always visible when job selected; content toggles) — hidden on mobile; use info icon + popover there ──────────── */}
           {selectedJobInfo && centerView.type !== "empty" && (
-            <div className="flex-shrink-0 border-t border-neutral-200 bg-white min-h-[44px] max-md:hidden">
+            <div className="flex-shrink-0 border-t border-neutral-200/70 bg-white/95 backdrop-blur-xl min-h-[44px] max-md:hidden">
               {/* Toggle header - always visible so user can expand again */}
               <button
                 type="button"
                 onClick={() => setGenInfoExpanded((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 hover:bg-neutral-50 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400 hover:bg-neutral-50/80 transition-colors"
               >
                 <span className="flex items-center gap-1.5">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -2758,7 +2808,7 @@ function WorkspacePage() {
                                   {stepLabel}
                                 </span>
                                 <span className="text-[10px] text-neutral-400">{formatGenerationType(item.generateType)}</span>
-                                {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">{mergeLabel}</span>}
+                                {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{mergeLabel}</span>}
                                 {item.resultGlbUrl && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-500">3D</span>}
                               </div>
                               {item.prompt && (
@@ -2806,70 +2856,84 @@ function WorkspacePage() {
           )}
         </main>
 
-        {/* Right panel toggle — solid black, no blur (avoids lag) */}
-        {!rightPanelOpen && (
-          <button
-            type="button"
-            onClick={() => setRightPanelOpen(true)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 hidden md:flex flex-col items-center justify-center gap-1 py-3 px-2 min-w-[48px] bg-black border border-black rounded-l-lg text-white hover:bg-neutral-800 active:bg-neutral-900"
-            title="Open create panel"
-            aria-label="Open create panel"
-          >
-            <svg className="w-5 h-5 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            <span className="text-[10px] font-medium uppercase tracking-wider opacity-90">Create</span>
-          </button>
-        )}
-
-        {/* Right Panel — fixed width, collapsible; on mobile: full width when Create tab */}
-        <aside
-          style={{ width: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0, minWidth: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0 }}
+        {/* Right panel toggle — always mounted for smooth show/hide */}
+        <button
+          type="button"
+          onClick={() => setRightPanelOpen(true)}
           className={cn(
-            "flex-shrink-0 flex flex-col bg-white border-l border-neutral-200 overflow-hidden transition-[width] duration-200 ease-out",
+            "absolute right-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-l-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[-4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] md:flex",
+            rightPanelOpen
+              ? "pointer-events-none translate-x-2 opacity-0"
+              : "pointer-events-auto translate-x-0 opacity-100"
+          )}
+          title="Open create panel"
+          aria-label="Open create panel"
+          tabIndex={rightPanelOpen ? -1 : 0}
+        >
+          <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Create</span>
+        </button>
+
+        {/* Right Panel — fixed inner width so open/close stays smooth & fast */}
+        <aside
+          style={{
+            width: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0,
+            minWidth: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0,
+            transition:
+              "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+          className={cn(
+            "flex-shrink-0 flex flex-col bg-white border-l border-neutral-200/70 overflow-hidden will-change-[width]",
             "max-md:border-l-0 max-md:border-t max-md:border-neutral-200",
+            !rightPanelOpen && "max-md:border-transparent",
             mobileTab === "create" ? "max-md:!w-full max-md:!min-w-0 max-md:flex-1 max-md:min-h-0 max-md:overflow-auto" : "max-md:hidden"
           )}
         >
-          <div className="h-full overflow-y-auto min-w-0 flex flex-col [tab-size:4]">
+          <div
+            className="flex h-full shrink-0 max-md:w-full max-md:min-w-0"
+            style={{ width: RIGHT_PANEL_WIDTH }}
+          >
+          <div className="h-full min-w-0 flex-1 overflow-y-auto flex flex-col [tab-size:4]">
           {/* Right navbar: workspace name, credits, My Library, Profile, Collapse — hidden on mobile */}
-          <div className="hidden md:flex flex-shrink-0 px-3 pt-3 pb-2 border-b border-neutral-100 items-center gap-2 min-w-0">
-            <input
+          <div className="hidden md:flex h-14 flex-shrink-0 px-3 border-b border-neutral-200/60 items-center gap-1.5 min-w-0">
+            <Input
               type="text"
               value={workspaceName}
               onChange={(e) => handleWorkspaceNameChange(e.target.value)}
               placeholder="Name workspace"
-              className="flex-1 min-w-0 text-base font-semibold text-black bg-transparent border-none outline-none placeholder:text-neutral-400 focus:ring-0 truncate"
+              className="h-9 flex-1 min-w-0 border-transparent bg-transparent px-2 text-[13px] font-semibold tracking-tight shadow-none focus-visible:border-neutral-200 focus-visible:ring-0"
             />
-            <div className="flex items-center gap-1.5 shrink-0 px-2 py-1.5 rounded-lg bg-neutral-50 border border-neutral-100" title="Credits remaining">
-              <svg className="w-4 h-4 text-neutral-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span className="text-sm font-semibold text-neutral-800 tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
+            <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-full bg-neutral-900/[0.04] border border-neutral-200/60" title="Credits remaining">
+              <svg className="w-3.5 h-3.5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <span className="text-[12px] font-semibold text-neutral-800 tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
             </div>
-            <Link href="/rigging" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors shrink-0" title="3D Rigging" aria-label="3D Rigging">
+            <Link href="/rigging" className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0" title="3D Rigging" aria-label="3D Rigging">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.5-6.5L17 8m-10 8l-2.5 2.5M20.5 18.5L18 16M5.5 5.5L8 8" /><circle cx="12" cy="12" r="2" /></svg>
             </Link>
-            <Link href="/library" className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
+            <Link href="/library" className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
             </Link>
-            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-lg">
-              {clientMounted ? <UserButton afterSignOutUrl="/" /> : <div className="w-8 h-8 rounded-lg bg-neutral-200 animate-pulse" aria-hidden />}
+            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-full">
+              {clientMounted ? <UserButton afterSignOutUrl="/" /> : <div className="w-8 h-8 rounded-full bg-neutral-200 animate-pulse" aria-hidden />}
             </div>
-            <button type="button" onClick={() => setRightPanelOpen(false)} className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors duration-200 shrink-0" title="Collapse panel" aria-label="Collapse panel">
+            <button type="button" onClick={() => setRightPanelOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors duration-200 shrink-0" title="Collapse panel" aria-label="Collapse panel">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
             </button>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto w-[90%] max-w-full mx-auto hide-scrollbar">
-          <div className="px-3 pt-4 pb-8 space-y-5 leading-[1.15]">
+          <ScrollArea className="flex-1 min-h-0 w-full">
+          <div className="px-5 pt-5 pb-8 space-y-5 leading-[1.15]">
             {/* Input mode — Text | Image | Edit | Combine */}
-            <div role="tablist" aria-label="Input mode" className="grid grid-cols-2 sm:grid-cols-4 gap-0.5 rounded-lg bg-neutral-100 p-1 text-neutral-500">
-              <button type="button" role="tab" onClick={() => setInputMode("text")} title="Text prompt only" className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${inputMode === "text" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><span className="text-xs font-semibold leading-none sm:text-sm">T</span><span>Text</span></button>
-              <button type="button" role="tab" onClick={() => setInputMode("image")} title="Upload an image to generate a 3D model" className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${inputMode === "image" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Image</span></button>
-              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_1img")} title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"} className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_1img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></button>
-              <button type="button" role="tab" disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_2img")} title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"} className={`inline-flex min-h-[2.25rem] items-center justify-center gap-1 rounded-md px-1.5 py-2 text-[11px] sm:text-xs font-medium transition-all sm:px-2 ${!primaryApiUp ? "opacity-40 cursor-not-allowed" : inputMode === "text_2img" ? "bg-white text-neutral-900 shadow-sm" : "hover:bg-neutral-200/70 hover:text-neutral-700"}`}><div className="flex -space-x-0.5 shrink-0"><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /></div><span>Combine</span></button>
+            <div role="tablist" aria-label="Input mode" className="grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-2xl border border-neutral-200/70 bg-neutral-100/80 p-1 text-neutral-500">
+              <Button type="button" role="tab" size="sm" variant={inputMode === "text" ? "outline" : "ghost"} onClick={() => setInputMode("text")} title="Text prompt only" className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><span className="text-xs font-semibold leading-none sm:text-sm">T</span><span>Text</span></Button>
+              <Button type="button" role="tab" size="sm" variant={inputMode === "image" ? "outline" : "ghost"} onClick={() => setInputMode("image")} title="Upload an image to generate a 3D model" className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Image</span></Button>
+              <Button type="button" role="tab" size="sm" variant={inputMode === "text_1img" ? "outline" : "ghost"} disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_1img")} title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"} className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></Button>
+              <Button type="button" role="tab" size="sm" variant={inputMode === "text_2img" ? "outline" : "ghost"} disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_2img")} title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"} className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><div className="flex -space-x-0.5 shrink-0"><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /></div><span>Combine</span></Button>
             </div>
 
             {/* Image slots — same spacing as reference */}
             {(inputMode === "image" || inputMode === "text_1img" || inputMode === "text_2img") && (
               <div className="space-y-2">
-                <label className="block text-sm font-bold text-neutral-800">{inputMode === "text_2img" ? "Image 1 & 2" : inputMode === "image" ? "Source image" : "Image"}</label>
+                <label className="block text-[13px] font-semibold tracking-tight text-neutral-800">{inputMode === "text_2img" ? "Image 1 & 2" : inputMode === "image" ? "Source image" : "Image"}</label>
                 <div className="flex gap-2">
                   <div className={inputMode === "text_2img" ? "flex-1 min-w-0" : "flex-1"}>
                     {inputMode === "text_2img" && <span className="text-xs text-neutral-500 block mb-1">Image 1</span>}
@@ -2890,7 +2954,7 @@ function WorkspacePage() {
             {inputMode !== "image" && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <label className="text-sm font-bold text-neutral-800">Prompt</label>
+                <label className="text-[13px] font-semibold tracking-tight text-neutral-800">Prompt</label>
                 <div className="flex items-center gap-1 text-neutral-400">
                   <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Redo"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
                   <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Suggestions"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></button>
@@ -2936,13 +3000,13 @@ function WorkspacePage() {
                 </div>
               </div>
               <div className="relative">
-                <textarea
+                <Textarea
                   ref={promptTextareaRef}
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value.slice(0, 800))}
                   maxLength={800}
                   placeholder={inputMode === "text" ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe." : inputMode === "text_1img" ? "Describe how to edit this image..." : "Describe how to combine these images..."}
-                  className="w-full min-h-[100px] px-3 py-3 rounded-xl bg-neutral-100 border-0 text-neutral-800 placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-200 text-sm resize-y transition-shadow"
+                  className="min-h-[132px] resize-none rounded-2xl border-neutral-200/80 bg-neutral-50/80 pb-8 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/[0.04]"
                   rows={4}
                 />
                 <span className="absolute bottom-2.5 right-3 text-[11px] text-neutral-400 tabular-nums">{prompt.length}/800</span>
@@ -2993,7 +3057,7 @@ function WorkspacePage() {
                 <button
                   type="button"
                   onClick={() => setModelDropdownOpen((o) => !o)}
-                  className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-md bg-white border border-neutral-200 text-left text-xs text-neutral-800 hover:bg-neutral-50 transition-colors duration-150"
+                  className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-full bg-white border border-neutral-200/80 text-left text-xs text-neutral-800 hover:bg-neutral-50 transition-colors duration-150"
                 >
                   <span className="truncate">{modelOptions.find((m) => m.id === selectedModel)?.label ?? selectedModel}</span>
                   <svg className={`w-3.5 h-3.5 shrink-0 text-neutral-500 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -3077,7 +3141,7 @@ function WorkspacePage() {
                 left-library "Generate 3D Model" button uses. Going through
                 `handleGenerateImage()` previously cleared `lastPreviewImageUrl/Id`
                 and produced the "spinner never finishes" bug for fresh uploads. */}
-            <button
+            <Button
               type="button"
               onClick={() => {
                 if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
@@ -3087,7 +3151,8 @@ function WorkspacePage() {
                 }
               }}
               disabled={isGenerating}
-              className={`w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2.5 transition-all duration-200 ${isGenerating ? "bg-neutral-200 text-neutral-400 cursor-not-allowed" : "bg-black text-white hover:bg-neutral-800 shadow-sm hover:shadow-md active:scale-[0.99]"}`}
+              size="lg"
+              className="w-full h-12 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.08),0_8px_20px_-8px_rgba(0,0,0,0.25)]"
             >
               {isGenerating ? (
                 <><div className="w-4 h-4 border-2 border-neutral-500/40 border-t-neutral-800 rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
@@ -3097,13 +3162,13 @@ function WorkspacePage() {
                   <span className="tracking-tight font-semibold">{inputMode === "image" ? "Generate 3D" : "Generate"}</span>
                 </>
               )}
-            </button>
+            </Button>
 
             {/* Environment controls only when 3D model is currently open in center */}
             {centerView.type === "3d" && (
               <div className="space-y-3 pt-1 border-t border-neutral-100">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">Environment</span>
+                  <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-[0.14em]">Environment</span>
                   <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="Viewer environment" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
                 </div>
                 <div className="space-y-2.5">
@@ -3148,67 +3213,58 @@ function WorkspacePage() {
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                     <label className="text-sm font-medium text-neutral-800">Background</label>
-                    <button type="button" onClick={() => setEnvBackground((b) => !b)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envBackground ? "bg-neutral-800" : "bg-neutral-200"}`} title={envBackground ? "Transparent background" : "Solid background"}>
-                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envBackground ? "translate-x-4" : "translate-x-0"}`} />
-                    </button>
+                    <Switch checked={envBackground} onCheckedChange={setEnvBackground} aria-label="Background" title={envBackground ? "Transparent background" : "Solid background"} />
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                     <label className="text-sm font-medium text-neutral-800">Grid</label>
-                    <button type="button" onClick={() => setEnvGrid((g) => !g)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envGrid ? "bg-neutral-800" : "bg-neutral-200"}`} title={envGrid ? "Hide grid" : "Show grid"}>
-                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envGrid ? "translate-x-4" : "translate-x-0"}`} />
-                    </button>
+                    <Switch checked={envGrid} onCheckedChange={setEnvGrid} aria-label="Grid" title={envGrid ? "Hide grid" : "Show grid"} />
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                     <label className="text-sm font-medium text-neutral-800">Shadow</label>
-                    <button type="button" onClick={() => setEnvShadow((s) => !s)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envShadow ? "bg-neutral-800" : "bg-neutral-200"}`} title={envShadow ? "Hide shadows" : "Show shadows"}>
-                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envShadow ? "translate-x-4" : "translate-x-0"}`} />
-                    </button>
+                    <Switch checked={envShadow} onCheckedChange={setEnvShadow} aria-label="Shadow" title={envShadow ? "Hide shadows" : "Show shadows"} />
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
                     <label className="text-sm font-medium text-neutral-800">Auto rotate</label>
-                    <button type="button" onClick={() => setEnvAutoRotate((r) => !r)} className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${envAutoRotate ? "bg-neutral-800" : "bg-neutral-200"}`} title={envAutoRotate ? "Pause rotation" : "Auto rotate"}>
-                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${envAutoRotate ? "translate-x-4" : "translate-x-0"}`} />
-                    </button>
+                    <Switch checked={envAutoRotate} onCheckedChange={setEnvAutoRotate} aria-label="Auto rotate" title={envAutoRotate ? "Pause rotation" : "Auto rotate"} />
                   </div>
                 </div>
               </div>
             )}
 
           </div>
+          </ScrollArea>
           </div>
           </div>
         </aside>
       </div>
 
       {/* Mobile-only: bottom bar — Canvas | Create (blue highlight, big text & icons, smooth) */}
-      <div className="md:hidden flex items-center justify-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/90 backdrop-blur-xl border-t border-neutral-200/80 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.08)]">
-        <div className="inline-flex h-14 w-full max-w-[340px] items-center rounded-2xl bg-neutral-100/95 p-2 shadow-inner border border-neutral-200/70">
-          <button
+      <div className="md:hidden flex items-center justify-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/90 backdrop-blur-xl border-t border-neutral-200/70">
+        <div className="inline-flex h-[52px] w-full max-w-[340px] items-center rounded-full bg-neutral-100/90 p-1.5 border border-neutral-200/60">
+          <Button
             type="button"
+            variant={mobileTab === "canvas" ? "default" : "ghost"}
             onClick={() => setMobileTab("canvas")}
             className={cn(
-              "flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl h-full text-base font-bold transition-all duration-300 ease-out",
-              mobileTab === "canvas"
-                ? "bg-blue-500 text-white shadow-md border-2 border-blue-500"
-                : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50 border-2 border-transparent"
+              "h-full flex-1 gap-2 rounded-full text-sm font-semibold",
+              mobileTab === "canvas" ? "shadow-sm" : "text-neutral-500"
             )}
           >
-            <svg className="w-6 h-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
             Canvas
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={mobileTab === "create" ? "default" : "ghost"}
             onClick={() => setMobileTab("create")}
             className={cn(
-              "flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl h-full text-base font-bold transition-all duration-300 ease-out",
-              mobileTab === "create"
-                ? "bg-blue-500 text-white shadow-md border-2 border-blue-500"
-                : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50 border-2 border-transparent"
+              "h-full flex-1 gap-2 rounded-full text-sm font-semibold",
+              mobileTab === "create" ? "shadow-sm" : "text-neutral-500"
             )}
           >
-            <svg className="w-6 h-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16m8-8H4" /></svg>
+            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16m8-8H4" /></svg>
             Create
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -3222,22 +3278,24 @@ function ImageDropzone({ slot, image, onDrop, onPaste, onFileSelect, onClear, is
   const inputId = `workspace-image-upload-${slot}`;
   return (
     <div
-      className={`flex-1 min-h-[120px] rounded-xl border-2 border-dashed flex flex-col items-center justify-center p-3 transition-colors ${isDragging ? "border-black bg-neutral-100" : "border-neutral-300 bg-neutral-50 hover:border-neutral-400"}`}
+      className={`flex-1 min-h-[132px] rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 transition-all ${isDragging ? "border-neutral-900 bg-neutral-100 scale-[1.01]" : "border-neutral-300 bg-neutral-50/80 hover:border-neutral-400 hover:bg-white"}`}
       onDrop={onDrop} onDragOver={(e) => { e.preventDefault(); onDragOver(); }} onDragLeave={onDragLeave} onPaste={onPaste}
     >
       <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" id={inputId} onChange={onFileSelect} />
       {image ? (
-        <div className="relative w-full h-full min-h-[100px] rounded-lg overflow-hidden group">
+        <div className="relative w-full h-full min-h-[108px] rounded-xl overflow-hidden group border border-neutral-200 bg-white">
           <img src={image} alt="Upload" className="w-full h-full object-cover" />
-          <button type="button" onClick={onClear} className="absolute top-1 right-1 p-1 rounded-full bg-black/60 hover:bg-black text-white transition-colors" aria-label="Clear image">
+          <Button type="button" onClick={onClear} size="sm" className="absolute top-1.5 right-1.5 h-7 w-7 rounded-full bg-neutral-950/80 p-0 hover:bg-neutral-950" aria-label="Clear image">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
+          </Button>
         </div>
       ) : (
-        <label htmlFor={inputId} className="cursor-pointer text-center">
-          <svg className="w-8 h-8 mx-auto text-neutral-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
-          <p className="text-xs font-medium text-neutral-500">Click / Drop / Paste</p>
-          <p className="text-[10px] text-neutral-400 mt-0.5">Or drag from library</p>
+        <label htmlFor={inputId} className="cursor-pointer text-center rounded-xl px-4 py-3 focus-within:ring-2 focus-within:ring-neutral-900/10">
+          <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 shadow-sm">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
+          </span>
+          <p className="text-xs font-semibold text-neutral-700">Upload, drop, or paste</p>
+          <p className="text-[10px] text-neutral-400 mt-1">You can also drag from the library</p>
         </label>
       )}
     </div>

@@ -108,10 +108,10 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     ? "bg-white/2 backdrop-blur-[80px] border border-gray-200/20 shadow-2xl"
     : "bg-white/60 backdrop-blur-xl border border-gray-200/50 shadow-lg";
   
-  // Home page hero is light (white bg) → use black nav; other hero pages use white until second section
-  const isLightHeroPage = pathname === "/";
+  // Home page hero is light (white bg) → use black nav; use-case pages are always light
+  const isLightHeroPage = pathname === "/" || pathname.startsWith("/usecase");
   const textColor = (useHeroStyling && !isLightHeroPage && !isContactPage && !(isTeamPage && isInSecondSection) && !isFAQPageInSecondSection && !isCaseStudyPageInSecondSection && !isThreeDAIPageInSecondSection && !isHomePageInSecondSection) ? "text-white" : "text-black";
-  const logoTextColor = hasBlackNavbarLogo(pathname) ? "text-black" : textColor;
+  const logoTextColor = hasBlackNavbarLogo(pathname) || pathname.startsWith("/usecase") ? "text-black" : textColor;
   const logoClasses = `text-2xl font-bold ${logoTextColor} tracking-tight transition-colors duration-500`;
   
   // Adjust button classes: light hero (home) uses dark buttons; other hero pages use white until second section

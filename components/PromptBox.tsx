@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Image as ImageIcon, Plus, ChevronDown, X, Camera } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Image as ImageIcon, ChevronDown, X, Camera, ArrowUp } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { cn } from "@/lib/utils";
+
+const FONT = "var(--font-dm-sans), 'DM Sans', sans-serif";
+const FONT_DISPLAY =
+  "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif";
 
 interface PromptBoxProps {
   value: string;
@@ -216,13 +221,167 @@ export function PromptBox({
 
   const canSubmit = value.trim().length > 0 || images.length > 0;
 
+  if (isHero) {
+    return (
+      <motion.div
+        className="relative mx-auto w-full max-w-[min(92vw,760px)]"
+        initial={false}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+      >
+        <AnimatePresence>
+          {images.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute -top-[108px] left-3 z-50 flex items-center pointer-events-none sm:left-4"
+            >
+              <div className="flex -space-x-8 pointer-events-auto">
+                {images.map((img, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ rotate: -6, x: 0 }}
+                    whileHover={{ rotate: 0, y: -4, zIndex: 100, scale: 1.04 }}
+                    style={{ zIndex: 40 - i }}
+                    className="relative group/img"
+                  >
+                    <div
+                      className="h-[96px] w-[72px] cursor-pointer overflow-hidden rounded-[18px] border border-white/50 bg-white shadow-[0_12px_28px_-12px_rgba(0,0,0,0.35)]"
+                      onClick={() => removeImage(i)}
+                    >
+                      <img src={img} alt="Reference" className="h-full w-full object-cover" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute -right-1.5 -top-1.5 z-50 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-950 text-white opacity-0 shadow-lg transition-all group-hover/img:opacity-100 hover:scale-110"
+                      aria-label="Remove image"
+                    >
+                      <X size={11} strokeWidth={3} />
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div
+          className={cn(
+            "relative w-full overflow-hidden rounded-[28px] sm:rounded-[32px]",
+            "border border-white/45 bg-white/55 backdrop-blur-2xl",
+            "shadow-[0_16px_48px_-18px_rgba(0,0,0,0.22),inset_0_1px_0_0_rgba(255,255,255,0.65)]",
+            "transition-[box-shadow,border-color,background-color] duration-300",
+            "focus-within:border-white/70 focus-within:bg-white/65",
+            "focus-within:shadow-[0_20px_56px_-18px_rgba(0,0,0,0.28),inset_0_1px_0_0_rgba(255,255,255,0.75)]"
+          )}
+          style={{ fontFamily: FONT }}
+        >
+          <div className="flex flex-col gap-3 px-4 pb-3.5 pt-4 sm:gap-3.5 sm:px-5 sm:pb-4 sm:pt-5">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={disabled}
+              placeholder={placeholder}
+              rows={1}
+              className={cn(
+                "prompt-box-textarea w-full resize-none border-0 bg-transparent p-0",
+                "min-h-[28px] sm:min-h-[34px] max-h-[160px]",
+                "text-[16px] leading-[1.35] tracking-[-0.02em] text-neutral-950",
+                "placeholder:text-neutral-500/90 sm:text-[18px] sm:leading-[1.35]",
+                "outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none",
+                "disabled:cursor-not-allowed disabled:opacity-50"
+              )}
+              style={{
+                fontFamily: FONT,
+                whiteSpace: "pre-wrap",
+                overflowWrap: "break-word",
+              }}
+              autoFocus={false}
+              aria-label="Describe what you want to generate"
+            />
+
+            <div className="flex items-center justify-end gap-3">
+              {onImageUpload ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (disabled) return;
+                    if (value.trim() && !images.length) {
+                      onChange("");
+                      return;
+                    }
+                    if (!images.length && !value.trim()) {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  disabled={disabled}
+                  className={cn(
+                    "mr-auto inline-flex h-9 w-9 items-center justify-center rounded-full",
+                    "border border-neutral-950/10 bg-white/55 text-neutral-700",
+                    "transition-colors hover:bg-white hover:text-neutral-950",
+                    "disabled:cursor-not-allowed disabled:opacity-40"
+                  )}
+                  title={
+                    images.length > 0
+                      ? "Image already uploaded"
+                      : value.trim()
+                        ? "Clear text to upload an image"
+                        : "Upload reference image"
+                  }
+                  aria-label="Upload reference image"
+                >
+                  <ImageIcon size={17} strokeWidth={1.75} />
+                </button>
+              ) : null}
+
+              <motion.button
+                type="button"
+                whileHover={canSubmit ? { scale: 1.03 } : {}}
+                whileTap={canSubmit ? { scale: 0.97 } : {}}
+                transition={{ duration: 0.18 }}
+                onClick={onSubmit}
+                disabled={disabled || !canSubmit}
+                className={cn(
+                  "inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 sm:h-11 sm:px-5",
+                  "text-[13px] font-semibold tracking-[-0.01em] sm:text-[14px]",
+                  "transition-colors disabled:cursor-not-allowed",
+                  canSubmit
+                    ? "bg-neutral-950 text-white shadow-[0_8px_24px_-10px_rgba(0,0,0,0.55)] hover:bg-neutral-800"
+                    : "bg-neutral-950/15 text-neutral-400"
+                )}
+                style={{ fontFamily: FONT_DISPLAY }}
+                title="Create"
+                aria-label="Create"
+              >
+                Create
+                <ArrowUp size={15} strokeWidth={2.4} className="opacity-90" />
+              </motion.button>
+            </div>
+          </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+          aria-label="Upload image file"
+        />
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div 
-      className={`relative w-full mx-auto group ${isHero ? "max-w-[min(90vw,720px)]" : "max-w-[700px]"}`}
+      className="relative mx-auto w-full max-w-[700px] group"
       initial={false}
       animate={isAtBottom ? { y: 0, opacity: 1 } : { y: 0, opacity: 1 }}
       transition={{ duration: 0.5, ease: "easeInOut" }}
-      style={{ width: '100%', maxWidth: isHero ? 'min(90vw, 720px)' : '700px' }}
     >
       {/* Image Preview Stack - Shows when images exist (even at bottom) */}
       <AnimatePresence>
@@ -262,14 +421,9 @@ export function PromptBox({
         )}
       </AnimatePresence>
 
-      {/* Prompt Box - Hero: very transparent glass; Default: frosted glass */}
+      {/* Prompt Box — default studio glass */}
       <div className="relative w-full">
-        <div className={`backdrop-blur-xl rounded-2xl pt-5 pb-3 px-6 flex flex-col gap-1 w-full relative overflow-visible sm:pt-6 sm:pb-4 sm:px-8 min-h-[72px] ${
-          isHero
-            ? "border border-white/35 bg-white/15 backdrop-blur-2xl shadow-[0_12px_48px_-16px_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.35)]"
-            : "bg-white/25 border border-white/30 shadow-lg"
-        }`}>
-          {/* eslint-disable-next-line @next/next/no-inline-styles */}
+        <div className="relative flex min-h-[72px] w-full flex-col gap-1 overflow-visible rounded-2xl border border-white/30 bg-white/25 px-6 pb-3 pt-5 shadow-lg backdrop-blur-xl sm:px-8 sm:pb-4 sm:pt-6">
           <textarea 
             ref={textareaRef}
             value={value}
@@ -277,9 +431,7 @@ export function PromptBox({
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={placeholder}
-            className={`prompt-box-textarea w-full bg-transparent border-0 outline-none text-[14px] sm:text-[18px] font-medium resize-none min-h-[28px] sm:min-h-[32px] leading-tight tracking-tight p-0 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-0 focus:border-0 focus:outline-none focus:shadow-none font-dm-sans ${
-              isHero ? "text-neutral-900 placeholder:text-black" : "text-neutral-900 placeholder:text-neutral-500"
-            }`}
+            className="prompt-box-textarea w-full resize-none border-0 bg-transparent p-0 text-[14px] font-medium leading-tight tracking-tight text-neutral-900 outline-none placeholder:text-neutral-500 focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none disabled:cursor-not-allowed disabled:opacity-50 font-dm-sans min-h-[28px] sm:min-h-[32px] sm:text-[18px]"
             style={{
               whiteSpace: "pre-wrap",
               overflowWrap: "break-word",
@@ -287,17 +439,14 @@ export function PromptBox({
             autoFocus={false}
           />
           
-          <div className="flex items-center justify-between mt-1 gap-3 relative z-10">
+          <div className="relative z-10 mt-1 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              {/* Image Upload Button - visible in default variant */}
-              {!isHero && (
               <div className="relative group/image-btn">
                 <button 
                   onClick={() => {
                     if (!disabled && !images.length && !value.trim() && fileInputRef.current) {
                       fileInputRef.current.click();
                     } else if (value.trim() && !images.length) {
-                      // Clear text to allow image upload
                       onChange("");
                     }
                   }}
@@ -314,7 +463,6 @@ export function PromptBox({
                 >
                   <ImageIcon size={18} strokeWidth={1.5} className="text-gray-700" />
                 </button>
-                {/* Tooltip when text is present */}
                 {value.trim() && !images.length && (
                   <div className="absolute bottom-full left-0 mb-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-900 text-white text-[10px] sm:text-xs rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover/image-btn:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
                     <div className="flex items-center gap-1 sm:gap-1.5">
@@ -323,37 +471,29 @@ export function PromptBox({
                       </svg>
                       <span>Click to clear text and upload image</span>
                     </div>
-                    {/* Tooltip arrow */}
                     <div className="absolute top-full left-3 sm:left-4 -mt-1">
                       <div className="w-2 h-2 bg-gray-900 rotate-45"></div>
                     </div>
                   </div>
                 )}
               </div>
-              )}
               
-              {/* Camera Button - hidden in hero variant */}
-              {!isHero && (
               <div className="relative group/camera-btn">
                 <button 
                   onClick={() => {
                     if (disabled) return;
                     
                     if (value.trim() && !images.length) {
-                      // Clear text to allow camera capture
                       onChange("");
                       return;
                     }
                     
                     if (!images.length && !value.trim()) {
-                      // Check if device supports native camera capture (mobile)
                       if (typeof window !== "undefined") {
                         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                         if (isMobile && cameraInputRef.current) {
-                          // Use native camera on mobile
                           cameraInputRef.current.click();
                         } else {
-                          // Use camera modal on desktop
                           setShowCameraModal(true);
                         }
                       }
@@ -372,7 +512,6 @@ export function PromptBox({
                 >
                   <Camera size={18} strokeWidth={1.5} className="text-gray-700" />
                 </button>
-                {/* Tooltip when text is present */}
                 {value.trim() && !images.length && (
                   <div className="absolute bottom-full left-0 mb-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-900 text-white text-[10px] sm:text-xs rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover/camera-btn:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
                     <div className="flex items-center gap-1 sm:gap-1.5">
@@ -381,19 +520,15 @@ export function PromptBox({
                       </svg>
                       <span>Click to clear text and capture image</span>
                     </div>
-                    {/* Tooltip arrow */}
                     <div className="absolute top-full left-3 sm:left-4 -mt-1">
                       <div className="w-2 h-2 bg-gray-900 rotate-45"></div>
                     </div>
                   </div>
                 )}
               </div>
-              )}
             </div>
 
             <div className="flex items-center gap-3 flex-shrink-0">
-              {/* Model Selector Dropdown - hidden in hero variant */}
-              {!isHero && (
               <div className="relative z-50" ref={dropdownRef}>
                 <button
                   onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
@@ -430,7 +565,7 @@ export function PromptBox({
                         initial={{ opacity: 0, y: isAtBottom ? 8 : -8, scale: 0.96 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: isAtBottom ? 8 : -8, scale: 0.96 }}
-                        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] as const }}
                         className={`absolute ${isAtBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} left-0 bg-white rounded-2xl border border-gray-200 shadow-xl py-1.5 min-w-[200px] z-[60] overflow-hidden`}
                         style={{
                           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
@@ -510,9 +645,7 @@ export function PromptBox({
                   </motion.div>
                 )}
               </div>
-              )}
               
-              {/* Create Button - Hero: solid so it doesn't mix with glass; Default: silver style */}
               <motion.button 
                 whileHover={canSubmit ? { scale: 1.02 } : {}}
                 whileTap={canSubmit ? { scale: 0.98 } : {}}
@@ -520,13 +653,9 @@ export function PromptBox({
                 onClick={onSubmit}
                 disabled={disabled || !canSubmit}
                 className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold disabled:cursor-not-allowed font-dm-sans transition-colors ${
-                  isHero
-                    ? canSubmit
-                      ? "border border-white/40 bg-white/35 text-black backdrop-blur-md shadow-md hover:bg-white/50"
-                      : "border border-white/25 bg-white/15 text-black/45 backdrop-blur-md disabled:opacity-100"
-                    : canSubmit 
-                      ? 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 text-slate-800 shadow-md border border-slate-300/60' 
-                      : 'bg-slate-100/50 text-slate-400 border border-slate-200/40'
+                  canSubmit 
+                    ? 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 text-slate-800 shadow-md border border-slate-300/60' 
+                    : 'bg-slate-100/50 text-slate-400 border border-slate-200/40'
                 }`}
                 title="Create"
                 aria-label="Create"

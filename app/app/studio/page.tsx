@@ -263,142 +263,180 @@ export default function StudioPage() {
   }
 
   return (
-    <div className="app-content-page font-dm-sans">
-      {/* My Workspace section – reference layout */}
-      <section className="flex flex-col gap-4 sm:gap-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
-          <div className="min-w-0">
-            <h2 className="text-xs sm:text-sm font-medium text-neutral-500 uppercase tracking-wider">
+    <div className="app-content-page font-dm-sans bg-[#fafafa]">
+      <section className="flex flex-col gap-8 sm:gap-10">
+        {/* Header — title and toolbar stay on separate rows until lg, so they never collide */}
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-6">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] sm:text-xs font-medium text-neutral-400 tracking-[0.14em] uppercase">
               My Workspace
-            </h2>
-            <h1 className="text-xl sm:text-3xl font-bold text-neutral-900 tracking-tight mt-0.5 truncate">
+            </p>
+            <h1 className="mt-1.5 text-[28px] sm:text-[34px] font-semibold text-neutral-900 tracking-[-0.03em] leading-[1.1] truncate">
               {getGreeting()}{userName ? `, ${userName}` : ""}
             </h1>
+            <p className="mt-2 text-sm text-neutral-500 max-w-md">
+              {loading
+                ? "Loading your projects…"
+                : `${filtered.length} workspace${filtered.length !== 1 ? "s" : ""}`}
+            </p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 min-w-0">
-            <div className="relative flex items-center min-w-0">
-              <Search className="absolute left-3 w-4 h-4 text-neutral-400 pointer-events-none shrink-0" />
+          <div className="flex items-center gap-2.5 w-full lg:w-auto lg:shrink-0">
+            <div className="relative min-w-0 flex-1 lg:flex-none lg:w-52">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full min-w-0 sm:w-44 py-2.5 pl-10 pr-4 text-sm bg-neutral-50 border border-neutral-200 rounded-xl text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-300 focus:ring-1 focus:ring-neutral-300/30 outline-none transition-all"
+                className="w-full h-10 pl-10 pr-4 text-sm bg-white/80 border border-neutral-200/80 rounded-full text-neutral-900 placeholder:text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus:bg-white focus:border-neutral-300 focus:ring-4 focus:ring-neutral-900/[0.04] outline-none transition-all"
               />
             </div>
             <button
               type="button"
               onClick={() => { setNewName(""); setShowNewModal(true); }}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-xl transition-colors shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 h-10 px-4 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.08),0_4px_12px_-4px_rgba(0,0,0,0.2)] transition-all active:scale-[0.98] shrink-0"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4" strokeWidth={2.25} />
               New
             </button>
           </div>
         </div>
 
         {actionError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="rounded-2xl border border-red-200/80 bg-red-50/90 px-4 py-3.5 text-sm text-red-800">
             {actionError}
           </div>
         )}
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-20">
-            <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="aspect-[4/3] rounded-[20px] bg-neutral-200/70" />
+                <div className="mt-3.5 h-4 w-2/3 rounded-full bg-neutral-200/70" />
+                <div className="mt-2 h-3 w-1/3 rounded-full bg-neutral-200/50" />
+              </div>
+            ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/60 py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-4">
-              <FolderOpen className="w-8 h-8 text-neutral-400" />
+          <div className="rounded-[24px] border border-neutral-200/70 bg-white py-24 text-center shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+            <div className="w-14 h-14 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-5">
+              <FolderOpen className="w-7 h-7 text-neutral-400" strokeWidth={1.5} />
             </div>
-            <p className="text-base font-medium text-neutral-600 mb-1">
-              {searchQuery ? "No workspaces match your search." : "No workspaces yet."}
+            <p className="text-[17px] font-semibold text-neutral-900 tracking-tight mb-1.5">
+              {searchQuery ? "No matches" : "No workspaces yet"}
             </p>
-            <p className="text-sm text-neutral-500">
-              Create one to get started.
+            <p className="text-sm text-neutral-500 mb-6">
+              {searchQuery
+                ? "Try a different search term."
+                : "Create a workspace to start generating."}
             </p>
+            {!searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setNewName(""); setShowNewModal(true); }}
+                className="inline-flex items-center gap-1.5 h-10 px-5 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-full transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                New workspace
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
             {filtered.map((ws) => (
               <div
                 key={ws.id}
-                className="group relative flex flex-col min-w-0 rounded-2xl border border-neutral-200 bg-white shadow-md hover:shadow-xl hover:border-neutral-300 transition-all duration-200 overflow-visible"
-                style={{ minHeight: 280 }}
+                className="group relative min-w-0"
+                ref={menuOpenId === ws.id ? menuRef : null}
               >
-                {/* Card body: large preview + title (clickable) */}
                 <button
                   type="button"
                   onClick={() => handleOpenWorkspace(ws.id)}
-                  className="flex flex-col flex-1 p-4 sm:p-7 text-left min-h-0"
+                  className="w-full text-left outline-none"
                 >
-                  <div className="w-full aspect-square max-h-[160px] sm:max-h-[220px] rounded-xl overflow-hidden bg-neutral-100 flex items-center justify-center mb-3 sm:mb-5">
+                  <div className="relative aspect-[4/3] rounded-[20px] overflow-hidden bg-gradient-to-b from-neutral-100 to-neutral-50 border border-neutral-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out group-hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.18)] group-hover:-translate-y-0.5">
                     {ws.firstJobPreviewImageUrl ? (
                       <img
                         src={ws.firstJobPreviewImageUrl}
                         alt=""
-                        width={220}
-                        height={220}
+                        width={320}
+                        height={240}
                         loading="lazy"
                         decoding="async"
-                        className="w-full h-full object-cover"
-                        sizes="(max-width: 640px) 50vw, 220px"
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
                       />
                     ) : (
-                      <FolderOpen className="w-16 h-16 sm:w-20 sm:h-20 text-neutral-400" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                        <div className="w-12 h-12 rounded-2xl bg-white/80 border border-neutral-200/80 flex items-center justify-center shadow-sm">
+                          <FolderOpen className="w-6 h-6 text-neutral-400" strokeWidth={1.5} />
+                        </div>
+                        <span className="text-[11px] font-medium text-neutral-400 tracking-wide">
+                          Empty
+                        </span>
+                      </div>
                     )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/[0.06] via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                   </div>
-                  <p className="font-semibold text-neutral-900 text-lg truncate">
-                    {ws.name}
-                  </p>
-                  <p className="text-sm text-neutral-500 mt-1 truncate">
-                    {ws.jobCount ? `${ws.jobCount} item${ws.jobCount !== 1 ? "s" : ""}` : "Empty"}
-                  </p>
+
+                  <div className="mt-3.5 px-0.5">
+                    <p className="font-semibold text-[15px] text-neutral-900 tracking-tight truncate">
+                      {ws.name}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-neutral-500 tabular-nums">
+                      {ws.jobCount
+                        ? `${ws.jobCount} item${ws.jobCount !== 1 ? "s" : ""}`
+                        : "No items yet"}
+                    </p>
+                  </div>
                 </button>
 
-                {/* Bottom bar: 3-dot menu inside card */}
-                <div
-                  className="flex items-center justify-end gap-2 px-4 sm:px-6 pb-4 sm:pb-5 pt-0 shrink-0"
-                  ref={menuOpenId === ws.id ? menuRef : null}
-                >
+                <div className="absolute top-2.5 right-2.5 z-20">
                   <button
                     type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(menuOpenId === ws.id ? null : ws.id); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setMenuOpenId(menuOpenId === ws.id ? null : ws.id);
+                    }}
                     className={cn(
-                      "p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-all",
-                      menuOpenId === ws.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      "flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-md border border-white/60 text-neutral-600 shadow-sm hover:bg-white hover:text-neutral-900 transition-all",
+                      menuOpenId === ws.id
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                     )}
                     title="Options"
-                    aria-label="Options"
+                    aria-label="Workspace options"
                   >
-                    <MoreVertical className="w-5 h-5" />
+                    <MoreVertical className="w-4 h-4" />
                   </button>
                   {menuOpenId === ws.id && (
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 py-1.5 w-44 rounded-xl bg-white border border-neutral-200 shadow-lg z-20">
+                    <div className="absolute right-0 top-full mt-1.5 py-1.5 w-44 rounded-2xl bg-white/95 backdrop-blur-xl border border-neutral-200/80 shadow-[0_8px_30px_-6px_rgba(0,0,0,0.18)] overflow-hidden">
                       <button
                         type="button"
                         onClick={() => handleStartRename(ws)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50 text-left rounded-lg mx-1"
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-neutral-800 hover:bg-neutral-50 text-left transition-colors"
                       >
-                        <Pencil className="w-4 h-4 shrink-0 text-neutral-500" />
+                        <Pencil className="w-3.5 h-3.5 shrink-0 text-neutral-400" />
                         Rename
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDuplicateWorkspace(ws)}
                         disabled={duplicatingId === ws.id}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50 text-left disabled:opacity-50 rounded-lg mx-1"
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-neutral-800 hover:bg-neutral-50 text-left disabled:opacity-50 transition-colors"
                       >
-                        <Copy className="w-4 h-4 shrink-0 text-neutral-500" />
+                        <Copy className="w-3.5 h-3.5 shrink-0 text-neutral-400" />
                         {duplicatingId === ws.id ? "Duplicating…" : "Duplicate"}
                       </button>
+                      <div className="my-1 h-px bg-neutral-100" />
                       <button
                         type="button"
                         onClick={() => { setDeleteConfirmWorkspace(ws); setMenuOpenId(null); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left rounded-lg mx-1"
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-red-600 hover:bg-red-50 text-left transition-colors"
                       >
-                        <Trash2 className="w-4 h-4 shrink-0" />
+                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
                         Delete
                       </button>
                     </div>
@@ -434,17 +472,17 @@ export default function StudioPage() {
       {/* New workspace modal */}
       {showNewModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-4"
           onClick={() => !creating && setShowNewModal(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6"
+            className="bg-white/95 backdrop-blur-xl rounded-[22px] shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] border border-neutral-200/60 w-full max-w-md p-6 sm:p-7"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-neutral-900 mb-1 font-dm-sans">
+            <h3 className="text-[17px] font-semibold text-neutral-900 tracking-tight mb-1">
               New Workspace
             </h3>
-            <p className="text-sm text-neutral-500 mb-4">
+            <p className="text-sm text-neutral-500 mb-5">
               Give your workspace a name.
             </p>
             <input
@@ -452,7 +490,7 @@ export default function StudioPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="e.g. My Project, Character Pack"
-              className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400/20 outline-none mb-4 font-dm-sans"
+              className="w-full h-11 px-4 rounded-xl border border-neutral-200 bg-neutral-50/80 text-neutral-900 placeholder:text-neutral-400 focus:bg-white focus:border-neutral-300 focus:ring-4 focus:ring-neutral-900/[0.04] outline-none mb-5 transition-all"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && newName.trim()) handleCreateWorkspace();
                 if (e.key === "Escape") setShowNewModal(false);
@@ -460,11 +498,11 @@ export default function StudioPage() {
               autoFocus
               disabled={creating}
             />
-            <div className="flex gap-3 justify-end">
+            <div className="flex gap-2.5 justify-end">
               <button
                 type="button"
                 onClick={() => !creating && setShowNewModal(false)}
-                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
+                className="h-10 px-4 text-sm font-medium text-neutral-600 hover:text-neutral-900 rounded-full hover:bg-neutral-100 transition-colors"
                 disabled={creating}
               >
                 Cancel
@@ -473,7 +511,7 @@ export default function StudioPage() {
                 type="button"
                 onClick={handleCreateWorkspace}
                 disabled={!newName.trim() || creating}
-                className="px-4 py-2 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="h-10 px-5 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {creating ? "Creating…" : "Create"}
               </button>
@@ -485,22 +523,22 @@ export default function StudioPage() {
       {/* Delete workspace confirmation */}
       {deleteConfirmWorkspace && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-4"
           onClick={() => !deletingId && setDeleteConfirmWorkspace(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6"
+            className="bg-white/95 backdrop-blur-xl rounded-[22px] shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] border border-neutral-200/60 w-full max-w-sm p-6 sm:p-7"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-neutral-900 mb-1 font-dm-sans">Delete workspace?</h3>
-            <p className="text-sm text-neutral-500 mb-4">
+            <h3 className="text-[17px] font-semibold text-neutral-900 tracking-tight mb-1">Delete workspace?</h3>
+            <p className="text-sm text-neutral-500 mb-5">
               &ldquo;{deleteConfirmWorkspace.name}&rdquo; will be removed. Jobs inside it are not deleted.
             </p>
-            <div className="flex gap-3 justify-end">
+            <div className="flex gap-2.5 justify-end">
               <button
                 type="button"
                 onClick={() => !deletingId && setDeleteConfirmWorkspace(null)}
-                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
+                className="h-10 px-4 text-sm font-medium text-neutral-600 hover:text-neutral-900 rounded-full hover:bg-neutral-100 transition-colors"
                 disabled={!!deletingId}
               >
                 Cancel
@@ -509,7 +547,7 @@ export default function StudioPage() {
                 type="button"
                 onClick={() => handleDeleteWorkspace(deleteConfirmWorkspace.id)}
                 disabled={!!deletingId}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="h-10 px-5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {deletingId === deleteConfirmWorkspace.id ? "Deleting…" : "Delete"}
               </button>
@@ -521,33 +559,33 @@ export default function StudioPage() {
       {/* Rename workspace modal */}
       {renameWorkspace && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-4"
           onClick={() => setRenameWorkspace(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6"
+            className="bg-white/95 backdrop-blur-xl rounded-[22px] shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] border border-neutral-200/60 w-full max-w-md p-6 sm:p-7"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-neutral-900 mb-1 font-dm-sans">Rename workspace</h3>
-            <p className="text-sm text-neutral-500 mb-4">Enter a new name.</p>
+            <h3 className="text-[17px] font-semibold text-neutral-900 tracking-tight mb-1">Rename workspace</h3>
+            <p className="text-sm text-neutral-500 mb-5">Enter a new name.</p>
             <input
               type="text"
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               placeholder="Workspace name"
               aria-label="Workspace name"
-              className="w-full px-4 py-3 rounded-xl border border-neutral-200 text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400/20 outline-none mb-4 font-dm-sans"
+              className="w-full h-11 px-4 rounded-xl border border-neutral-200 bg-neutral-50/80 text-neutral-900 placeholder:text-neutral-400 focus:bg-white focus:border-neutral-300 focus:ring-4 focus:ring-neutral-900/[0.04] outline-none mb-5 transition-all"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSaveRename();
                 if (e.key === "Escape") setRenameWorkspace(null);
               }}
               autoFocus
             />
-            <div className="flex gap-3 justify-end">
+            <div className="flex gap-2.5 justify-end">
               <button
                 type="button"
                 onClick={() => setRenameWorkspace(null)}
-                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
+                className="h-10 px-4 text-sm font-medium text-neutral-600 hover:text-neutral-900 rounded-full hover:bg-neutral-100 transition-colors"
               >
                 Cancel
               </button>
@@ -555,7 +593,7 @@ export default function StudioPage() {
                 type="button"
                 onClick={handleSaveRename}
                 disabled={!renameValue.trim()}
-                className="px-4 py-2 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="h-10 px-5 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Save
               </button>

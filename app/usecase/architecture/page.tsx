@@ -1,63 +1,79 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
-import { createPageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { createPageMetadata, getUseCaseJsonLd } from "@/lib/seo";
 import { USECASE_HERO } from "@/lib/cloudinary";
 
+const DESCRIPTION =
+  "Generate furniture, interiors, and architectural elements for visualization, client presentations, and design reviews.";
+
 const DATA = {
-  industry: "Architecture & Interiors",
-  headline: "Architectural Visualization Assets",
+  id: "architecture" as const,
+  headline: "Visualization assets without the modeling wait",
   heroImage: USECASE_HERO.archi,
-  accentColor: "#7b5af5",
+  capabilitiesHeading: "Built for design visualization",
   tagline:
-    "Generate furniture, architectural components, and interior objects suitable for visualization workflows—without the modeling bottleneck.",
-  backHref: "/usecase",
+    "Furniture, interiors, and architectural components for presentations and design reviews.",
   features: [
     {
-      title: "Interior and structural elements",
-      body: "Generate furniture, architectural components, and interior objects suitable for visualization workflows.",
+      title: "Interiors & furnishings",
+      body: "Generate furniture and interior objects for visualization scenes.",
     },
     {
       title: "Rapid design iteration",
-      body: "Explore layout and design variations quickly before committing to final modeling and rendering.",
+      body: "Explore layout and material directions before final modeling and rendering.",
     },
     {
-      title: "Client-ready visualization",
-      body: "Create compelling 3D assets for client presentations and project pitches with speed and precision.",
+      title: "Client-ready visuals",
+      body: "Produce 3D assets for pitches and reviews without a long modeling cycle.",
     },
     {
-      title: "Compatible exports",
-      body: "Export models in formats compatible with your visualization and rendering tools—3ds Max, Revit, SketchUp, and more.",
+      title: "Standard 3D exports",
+      body: "Download GLB, FBX, and OBJ for import into your visualization tools.",
     },
   ],
   who: [
     {
-      role: "Architecture Firms",
-      description: "Speed up design development by generating 3D representations of spaces and components.",
+      role: "Architecture firms",
+      description: "Speed design development with 3D representations of spaces and components.",
     },
     {
-      role: "Interior Designers",
-      description: "Populate rooms with furniture and objects instantly to visualize and present design concepts.",
+      role: "Interior designers",
+      description: "Populate rooms with furniture and objects for concept presentations.",
     },
     {
-      role: "Visualization Studios",
-      description: "Produce large quantities of set dressing and props without exhausting your modeling pipeline.",
+      role: "Visualization studios",
+      description: "Scale set dressing and props without exhausting the modeling pipeline.",
     },
     {
-      role: "Real Estate Developers",
-      description: "Generate staged interior visuals quickly for marketing materials and buyer presentations.",
+      role: "Real estate teams",
+      description: "Stage interior visuals quickly for marketing and buyer materials.",
     },
   ],
 };
 
 export const metadata = createPageMetadata({
-  title: "Architecture & Interiors",
-  description: DATA.tagline,
+  title: "AI 3D Assets for Architecture & Interiors",
+  description: DESCRIPTION,
   path: "/usecase/architecture",
+  keywords: [
+    "AI architectural visualization",
+    "3D furniture generation",
+    "interior design 3D assets",
+    "archviz AI",
+    "text to 3D architecture",
+  ],
+  ogImage: USECASE_HERO.archi,
 });
 
 export default function ArchitecturePage() {
   return (
     <>
+      <JsonLd data={getUseCaseJsonLd({
+        name: "Architecture & Interiors",
+        description: DESCRIPTION,
+        path: "/usecase/architecture",
+      })} />
       <UseCasePage data={DATA} />
       <Footer />
     </>

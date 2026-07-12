@@ -31,7 +31,7 @@ export default function CaseStudyPage() {
           {/* Subtitle */}
           <p 
             className="text-xs sm:text-sm md:text-base text-black/70 mb-6 sm:mb-8 tracking-[0.15em] uppercase font-medium animate-fade-in"
-            style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
+            style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
           >
             ( Adding Case Studies )
           </p>
@@ -57,7 +57,7 @@ export default function CaseStudyPage() {
           <div className="text-center animate-fade-in-up animate-delay-200">
             <p 
               className="text-xl sm:text-2xl md:text-3xl text-gray-600 leading-relaxed font-medium tracking-tight"
-              style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
+              style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
             >
               Case studies coming soon...
             </p>

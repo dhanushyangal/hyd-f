@@ -1,11 +1,12 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import LibraryNavbar from "./LibraryNavbar";
 import Navbar from "./Navbar";
 
 export function ConditionalNavbar() {
   const pathname = usePathname();
-  
+
   // Don't show navbar on app shell, auth gates, or minimal utility pages
   if (
     pathname?.startsWith("/app") ||
@@ -17,10 +18,22 @@ export function ConditionalNavbar() {
   ) {
     return null;
   }
-  
-  // Use default variant for library, viewer, privacy-policy, and terms pages (black text), hero for others
-  const variant = pathname === "/library" || pathname === "/viewer" || pathname === "/privacy-policy" || pathname === "/terms-and-conditions" ? "default" : "hero";
-  
+
+  // Library uses a minimal bar — brand + home only
+  if (pathname === "/library") {
+    return <LibraryNavbar />;
+  }
+
+  // Use default variant (black text) for light pages; hero for dark/immersive heroes
+  const variant =
+    pathname === "/viewer" ||
+    pathname === "/privacy-policy" ||
+    pathname === "/terms-and-conditions" ||
+    pathname === "/cookie-policy" ||
+    pathname?.startsWith("/usecase")
+      ? "default"
+      : "hero";
+
   return <Navbar variant={variant} pathname={pathname} />;
 }
 

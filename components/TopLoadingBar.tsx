@@ -4,11 +4,12 @@ import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 
-const BAR_HEIGHT = 6;
-const BAR_COLOR = "#1e3a5f";
+/** Thin top progress bar — 2px, near-black. Snappy for in-app navigations. */
+const BAR_HEIGHT = 2;
+const BAR_COLOR = "#111111";
 
 /**
- * Dark blue loading bar at the top of the viewport. Rendered via portal into
+ * Loading bar at the top of the viewport. Rendered via portal into
  * document.body so it always sits on top. Shows on link click and pathname change.
  */
 export function TopLoadingBar() {
@@ -18,11 +19,23 @@ export function TopLoadingBar() {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPathRef = useRef<string | null>(null);
 
+  const clearHide = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  const showBriefly = (ms: number) => {
+    setVisible(true);
+    clearHide();
+    hideTimerRef.current = setTimeout(() => setVisible(false), ms);
+  };
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Show bar when user clicks an internal link
   useEffect(() => {
     if (!mounted) return;
     const handleClick = (e: MouseEvent) => {
@@ -32,9 +45,10 @@ export function TopLoadingBar() {
         const url = new URL(anchor.href);
         if (url.origin !== window.location.origin || url.pathname === pathname) return;
         if (!url.pathname.startsWith("/")) return;
-        setVisible(true);
-        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = setTimeout(() => setVisible(false), 1500);
+        // In-app hops should feel instant — shorter bar.
+        const inApp =
+          pathname.startsWith("/app") && url.pathname.startsWith("/app");
+        showBriefly(inApp ? 420 : 900);
       } catch {
         // ignore
       }
@@ -43,18 +57,15 @@ export function TopLoadingBar() {
     return () => document.removeEventListener("click", handleClick, true);
   }, [mounted, pathname]);
 
-  // Show bar when pathname changes
   useEffect(() => {
     if (!mounted) return;
     if (prevPathRef.current !== null && pathname !== prevPathRef.current) {
-      setVisible(true);
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = setTimeout(() => setVisible(false), 1200);
+      const inApp =
+        prevPathRef.current.startsWith("/app") && pathname.startsWith("/app");
+      showBriefly(inApp ? 280 : 650);
     }
     prevPathRef.current = pathname;
-    return () => {
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    };
+    return () => clearHide();
   }, [mounted, pathname]);
 
   if (!mounted || typeof document === "undefined" || !visible) return null;
@@ -81,6 +92,7 @@ export function TopLoadingBar() {
           height: "100%",
           width: 0,
           background: BAR_COLOR,
+          boxShadow: "0 0 6px rgba(17, 17, 17, 0.25)",
         }}
       />
     </div>

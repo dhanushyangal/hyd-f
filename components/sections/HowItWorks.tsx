@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
+import { BlurReveal } from "@/components/ui/BlurReveal";
 
 const DASHED = "repeating-linear-gradient(90deg, #d0d0d0 0 10px, transparent 10px 20px)";
 const CLOUDINARY_LANDING_BASE =
@@ -45,6 +46,7 @@ export default function HowItWorks() {
 
   return (
     <section
+      id="howitworks"
       style={{
         width: "100%",
         backgroundColor: "#ffffff",
@@ -54,12 +56,11 @@ export default function HowItWorks() {
       }}
     >
       <div style={{ maxWidth: "72rem", margin: "0 auto" }}>
-        {/* Section label + heading */}
         <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
           <p
             style={{
               margin: "0 0 0.625rem",
-              fontFamily: "'DM Sans', Arial, sans-serif",
+              fontFamily: "'DM Sans', sans-serif",
               fontSize: "0.6875rem",
               fontWeight: 600,
               letterSpacing: "0.1em",
@@ -69,10 +70,11 @@ export default function HowItWorks() {
           >
             Process
           </p>
-          <h2
+          <BlurReveal
+            as="h2"
             style={{
               margin: 0,
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
               fontSize: "clamp(1.875rem, 4vw, 3rem)",
               fontWeight: 700,
               color: "#111",
@@ -81,36 +83,36 @@ export default function HowItWorks() {
             }}
           >
             How it works
-          </h2>
+          </BlurReveal>
         </div>
 
-        {/* Two-column grid: Image LEFT, Steps RIGHT */}
-        <div
-          className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-stretch"
-          style={{ alignItems: "stretch" }}
-        >
-          {/* ── Left: Image panel (desktop only; mobile shows only step cards) ── */}
-          <div className="hidden md:flex order-2 md:order-1 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-start">
+          {/* Left: image stays aligned with the step list */}
+          <div className="hidden md:flex order-2 md:order-1 items-start">
             <div
               onMouseEnter={() => setImageHovered(true)}
               onMouseLeave={() => setImageHovered(false)}
-              className="w-full relative rounded-xl overflow-hidden bg-[#f5f4f2] min-h-[280px] md:min-h-[360px] aspect-[4/5] max-h-[420px] md:max-h-[520px]"
-              style={{ cursor: activeStep.hoverImage ? "pointer" : "default" }}
+              className="w-full relative sticky top-24 rounded-2xl overflow-hidden bg-[#f5f4f2] aspect-[4/5] max-h-[520px]"
+              style={{
+                cursor: activeStep.hoverImage ? "pointer" : "default",
+                boxShadow: "0 1px 2px rgba(17,17,17,0.04), 0 12px 32px -16px rgba(17,17,17,0.12)",
+                border: "1px solid rgba(17,17,17,0.06)",
+              }}
             >
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={displaySrc}
+                  key={`${activeId}-${displaySrc}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
                   className="absolute inset-0"
                 >
                   <Image
                     src={displaySrc}
                     alt=""
                     fill
-                    className="object-contain object-center"
+                    className="object-contain object-center p-4"
                     sizes="(max-width: 768px) 100vw, 50vw"
                     loading="lazy"
                     decoding="async"
@@ -122,8 +124,8 @@ export default function HowItWorks() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: imageHovered ? 0 : 1 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute bottom-3 right-3 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] font-medium tracking-wide pointer-events-none"
-                  style={{ fontFamily: "'DM Sans', Arial, sans-serif" }}
+                  className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-sm text-white text-[11px] font-medium tracking-wide pointer-events-none"
+                  style={{ fontFamily: "'DM Sans', sans-serif" }}
                 >
                   Hover to reveal
                 </motion.div>
@@ -131,24 +133,22 @@ export default function HowItWorks() {
             </div>
           </div>
 
-          {/* ── Right: Steps (desktop: list; mobile: cards) ── */}
+          {/* Right: steps */}
           <div className="order-1 md:order-2 flex flex-col gap-4 md:gap-0">
-            {/* Desktop: dashed list with larger text */}
             <div aria-hidden className="h-px w-full md:block hidden" style={{ background: DASHED }} />
             {STEPS.map((step, i) => {
               const isActive = step.id === activeId;
               return (
                 <div key={step.id}>
-                  {/* Mobile: card per step */}
+                  {/* Mobile card */}
                   <div
                     onTouchStart={() => setActiveId(step.id)}
                     className="md:hidden flex flex-col gap-0 rounded-[1.5rem] bg-white cursor-default border border-neutral-100 shadow-sm overflow-hidden transition-[transform,box-shadow] duration-300 active:scale-[0.99]"
                     style={{
-                      fontFamily: "var(--font-inter), 'DM Sans', Arial, sans-serif",
+                      fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
                       WebkitTapHighlightColor: "transparent",
                     }}
                   >
-                    {/* Image area */}
                     <div className="relative w-full bg-[#f5f4f2]" style={{ aspectRatio: "16/9" }}>
                       <Image
                         src={step.image}
@@ -160,17 +160,19 @@ export default function HowItWorks() {
                         decoding="async"
                       />
                     </div>
-                    {/* Text content */}
                     <div className="flex flex-col gap-3 p-5">
                       <span
                         className="block text-xs font-bold tracking-widest uppercase text-neutral-500"
-                        style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', Arial, sans-serif" }}
+                        style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
                       >
                         Step {step.number}
                       </span>
                       <h3
                         className="text-xl font-bold leading-snug text-neutral-900 m-0"
-                        style={{ fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif", letterSpacing: "-0.025em" }}
+                        style={{
+                          fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
+                          letterSpacing: "-0.025em",
+                        }}
                       >
                         {step.title}
                       </h3>
@@ -179,36 +181,48 @@ export default function HowItWorks() {
                       </p>
                     </div>
                   </div>
-                  {/* Desktop: grid row with larger text */}
+
+                  {/* Desktop row */}
                   <div
                     onMouseEnter={() => setActiveId(step.id)}
-                    className="hidden md:grid grid-cols-[9rem_1fr] gap-4 md:gap-8 py-6 md:py-8 cursor-default"
+                    className="hidden md:grid grid-cols-[8.5rem_1fr] gap-6 lg:gap-8 py-7 cursor-default transition-colors duration-200"
+                    style={{
+                      minHeight: "11.5rem",
+                      alignItems: "start",
+                    }}
                   >
-                    <div>
+                    <div className="pt-0.5">
                       <span
-                        className="block text-xs md:text-sm font-medium uppercase tracking-widest transition-colors"
+                        className="block text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-200"
                         style={{
-                          fontFamily: "'DM Sans', Arial, sans-serif",
-                          color: isActive ? "#111" : "#777",
+                          fontFamily: "'DM Sans', sans-serif",
+                          color: isActive ? "#111" : "#999",
                         }}
                       >
                         Step {step.number}
                       </span>
                       <span
-                        className="block mt-1 text-base md:text-lg font-semibold leading-snug transition-colors"
+                        className="block mt-2 text-[1.0625rem] font-semibold leading-snug transition-colors duration-200"
                         style={{
-                          fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif",
-                          color: isActive ? "#111" : "#888",
+                          fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
+                          letterSpacing: "-0.02em",
+                          color: isActive ? "#111" : "#8a8a8a",
                         }}
                       >
                         {step.title}
                       </span>
                     </div>
                     <motion.p
-                      animate={{ opacity: isActive ? 1 : 0.38 }}
-                      transition={{ duration: 0.22 }}
-                      className="m-0 text-base md:text-lg text-neutral-500 leading-relaxed"
-                      style={{ fontFamily: "'DM Sans', Arial, sans-serif", letterSpacing: "-0.01em" }}
+                      animate={{
+                        opacity: isActive ? 1 : 0.4,
+                        color: isActive ? "#525252" : "#8a8a8a",
+                      }}
+                      transition={{ duration: 0.2 }}
+                      className="m-0 text-[1.0625rem] leading-[1.65]"
+                      style={{
+                        fontFamily: "'DM Sans', sans-serif",
+                        letterSpacing: "-0.01em",
+                      }}
                     >
                       {step.body}
                     </motion.p>

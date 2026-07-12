@@ -16,6 +16,7 @@ export default function Home() {
       <JsonLd data={getHomepageJsonLd()} />
       <HomeAuthRedirect />
       <Hero />
+      {/* Site footer — always at the end of the marketing homepage */}
       <Footer />
     </>
   );

@@ -4,25 +4,25 @@ import React, { useState, useEffect, useRef, Suspense } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import type { MotionValue } from "framer-motion";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useReducedMotion } from "framer-motion";
+import type { MotionValue } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useReducedMotion } from "motion/react";
 import { PromptBox } from "../PromptBox";
 import { SignUpButton, useAuth } from "@clerk/nextjs";
 import { savePendingHeroPrompt } from "@/lib/pendingHeroPrompt";
 
-const Showcase = dynamic(() => import("./Showcase"), {
+const Showcase = dynamic(() => import("@/components/sections/Showcase"), {
   ssr: false,
   loading: () => <div className="min-h-[480px] w-full" aria-hidden />,
 });
 
 // Below-the-fold: code-split to reduce initial bundle and improve INP/TTI
-const IndustrySection = dynamic(() => import("./IndustrySection").then((m) => m.default), { ssr: true });
-const HowItWorks = dynamic(() => import("./HowItWorks").then((m) => m.default), { ssr: true });
-const AppShowcase = dynamic(() => import("./AppShowcase").then((m) => m.default), { ssr: true });
-const FeaturesSection = dynamic(() => import("./FeaturesSection").then((m) => m.default), { ssr: true });
-const WhyHydrilla = dynamic(() => import("./WhyHydrilla").then((m) => m.default), { ssr: true });
-const PricingSection = dynamic(() => import("./PricingSection").then((m) => m.default), { ssr: true });
-const FAQSection = dynamic(() => import("./FAQSection").then((m) => m.default), { ssr: true });
+const IndustrySection = dynamic(() => import("@/components/sections/IndustrySection"), { ssr: true });
+const HowItWorks = dynamic(() => import("@/components/sections/HowItWorks"), { ssr: true });
+const AppShowcase = dynamic(() => import("@/components/sections/AppShowcase"), { ssr: true });
+const FeaturesSection = dynamic(() => import("@/components/sections/FeaturesSection"), { ssr: true });
+const WhyHydrilla = dynamic(() => import("@/components/sections/WhyHydrilla"), { ssr: true });
+const PricingSection = dynamic(() => import("@/components/sections/PricingSection"), { ssr: true });
+const FAQSection = dynamic(() => import("@/components/sections/FAQSection"), { ssr: true });
 
 const ROTATING_PROMPTS = [
   "Make a sword with fire",
@@ -41,6 +41,7 @@ import {
   HERO_POSTER_URL,
   HERO_VIDEO_URL,
 } from "@/lib/cloudinary";
+import { BlurReveal } from "@/components/ui/BlurReveal";
 
 /**
  * Hero backdrop: poster paints immediately (LCP); video loads after idle.
@@ -332,13 +333,14 @@ export default function Hero() {
                     transition={{ duration: 0.2 }}
                     className="w-full max-w-[min(90vw,720px)]"
                   >
-                    <div className="rounded-2xl pt-5 pb-3 px-6 sm:pt-6 sm:pb-4 sm:px-8 min-h-[72px] border border-white/35 bg-white/15 backdrop-blur-2xl shadow-[0_12px_48px_-16px_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.35)] flex flex-col sm:flex-row gap-3 items-center">
+                    <div className="flex min-h-[72px] flex-col items-stretch gap-3 rounded-[28px] border border-white/45 bg-white/55 px-4 py-3.5 shadow-[0_16px_48px_-18px_rgba(0,0,0,0.22),inset_0_1px_0_0_rgba(255,255,255,0.65)] backdrop-blur-2xl sm:flex-row sm:items-center sm:rounded-[32px] sm:px-5 sm:py-4">
                       <input
                         type="email"
                         value={demoEmail}
                         onChange={(e) => setDemoEmail(e.target.value)}
                         placeholder="Enter your business email"
-                        className="flex-1 min-w-0 w-full h-12 rounded-xl border border-white/30 bg-white/20 backdrop-blur-md px-4 py-3 text-[15px] sm:text-[17px] font-normal text-neutral-900 placeholder:text-neutral-600 outline-none focus:border-white/50 focus:bg-white/30 transition-[border-color,background-color] duration-200 font-dm-sans"
+                        className="h-11 min-w-0 w-full flex-1 rounded-full border border-neutral-950/10 bg-white/60 px-4 text-[15px] font-medium tracking-[-0.01em] text-neutral-950 outline-none transition-[border-color,background-color] placeholder:text-neutral-500 focus:border-neutral-950/20 focus:bg-white sm:h-12 sm:text-[16px]"
+                        style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
                         aria-label="Business email"
                       />
                       <motion.button
@@ -347,7 +349,8 @@ export default function Hero() {
                         disabled={!canSubmitDemo}
                         whileHover={canSubmitDemo ? { scale: 1.02 } : {}}
                         whileTap={canSubmitDemo ? { scale: 0.98 } : {}}
-                        className="shrink-0 h-12 px-6 rounded-xl text-sm font-semibold font-dm-sans transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-neutral-900 text-white hover:bg-neutral-800 active:bg-neutral-950 border border-neutral-900"
+                        className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-neutral-950 px-6 text-[14px] font-semibold tracking-[-0.01em] text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-950/15 disabled:text-neutral-400 sm:h-12"
+                        style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
                       >
                         Request Demo
                       </motion.button>
@@ -400,20 +403,17 @@ export default function Hero() {
 
       {/* CTA section — light theme, below FAQ */}
       <section
-        className="relative w-full bg-[#faf9f7] py-16 sm:py-20 md:py-24"
+        className="relative w-full bg-white py-16 sm:py-20 md:py-24 border-t border-neutral-100"
         style={{ boxSizing: "border-box", WebkitFontSmoothing: "antialiased" }}
       >
         <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 text-center">
-          <motion.h2
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.5 }}
+          <BlurReveal
+            as="h2"
             className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#111] tracking-tight leading-tight mb-6"
-            style={{ fontFamily: "var(--font-space-grotesk), Space Grotesk, sans-serif" }}
+            style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
           >
             Ready to raise your 3D game?
-          </motion.h2>
+          </BlurReveal>
           <motion.p
             initial={{ opacity: 0, y: 12 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -456,46 +456,21 @@ export default function Hero() {
   );
 }
 
-/** Mission: directly below hero. Text fills from grey to black on scroll. */
+/** Mission: directly below hero — slow word-by-word blur reveal. */
 function MissionSection() {
-  const ref = useRef<HTMLElement>(null);
-  const [fill, setFill] = useState(0);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const onScroll = () => {
-      const rect = el.getBoundingClientRect();
-      const winH = window.innerHeight;
-      const fullH = rect.height;
-      const visible = Math.min(rect.bottom, winH) - Math.max(rect.top, 0);
-      const progress = fullH > 0 ? Math.min(1, Math.max(0, visible / fullH)) : 0;
-      setFill(progress);
-    };
-
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  const grey = 115;
-  const black = 17;
-  const r = Math.round(black + (grey - black) * (1 - fill));
-  const color = `rgb(${r},${r},${r})`;
-
   return (
-    <section
-      ref={ref}
-      className="relative w-full bg-gradient-to-b from-white to-neutral-100 py-20 sm:py-24 md:py-32 px-4 sm:px-6 md:px-8"
-    >
+    <section className="relative w-full bg-gradient-to-b from-white to-neutral-100 py-20 sm:py-24 md:py-32 px-4 sm:px-6 md:px-8">
       <div className="max-w-6xl mx-auto">
-        <p
-          className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight tracking-tight transition-colors duration-150"
-          style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif", color }}
+        <BlurReveal
+          as="p"
+          stagger={0.09}
+          duration={0.8}
+          blurPx={14}
+          className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight tracking-tight text-[#111]"
+          style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
         >
           Our mission is to build intelligent workflows that accelerate animation and 3D production.
-        </p>
+        </BlurReveal>
       </div>
     </section>
   );

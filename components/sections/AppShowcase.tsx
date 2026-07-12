@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import SeeWorkspaceButton from "../SeeWorkspaceButton";
+import { BlurReveal } from "@/components/ui/BlurReveal";
 
 const CLOUDINARY_WORKFLOW_BASE =
   "https://res.cloudinary.com/dqizbxc9e/image/upload";
@@ -17,17 +18,17 @@ const WORKFLOW_MOBILE = workflowImage("workflow-mobile", "f_auto,q_auto,c_fill,w
 const FLOATING_TAGS = [
   {
     title: "Prompt to 3D",
-    description: "Describe what you need and generate production-ready 3D assets in one flow.",
+    description: "Generate assets from a short description.",
     position: "top-left",
   },
   {
     title: "Image to 3D",
-    description: "Upload a reference and get clean topology for Unreal, Unity, and more.",
+    description: "Turn a reference into clean topology.",
     position: "top-right",
   },
   {
     title: "Asset lineage",
-    description: "Track every step from concept to final model in one workspace.",
+    description: "Every step, one workspace.",
     position: "bottom-left",
   },
 ];
@@ -42,20 +43,19 @@ export default function AppShowcase() {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
-    <section className="relative w-full bg-neutral-50 py-16 sm:py-20 md:py-24 overflow-hidden">
+    <section className="relative w-full bg-white py-16 sm:py-20 md:py-24 overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8">
         <div className="text-center mb-12 sm:mb-14 md:mb-16">
-          <h2
+          <BlurReveal
+            as="h2"
             className="text-3xl sm:text-4xl md:text-5xl lg:text-[2.75rem] font-bold text-[#111] tracking-tight leading-[1.12]"
             style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
           >
             Workflow for you
-          </h2>
+          </BlurReveal>
         </div>
 
-        {/* Main visual: back.gif with floating tags + center screenshot */}
-        <div className="relative w-full min-h-[620px] sm:min-h-[620px] md:min-h-[600px] rounded-2xl overflow-hidden bg-neutral-100">
-          {/* Background: back.gif — keep unoptimized for animation, lazy load since below fold */}
+        <div className="relative w-full min-h-[620px] sm:min-h-[620px] md:min-h-[600px] rounded-2xl overflow-hidden bg-neutral-100 border border-neutral-200/60">
           <div className="absolute inset-0 h-full w-full bg-neutral-100">
             <Image
               src={WORKFLOW_BACKDROP}
@@ -69,38 +69,28 @@ export default function AppShowcase() {
             />
           </div>
 
-          {/* Floating review-style cards (on top of back.gif) */}
+          {/* Simple floating labels — title + one short line */}
           {FLOATING_TAGS.map((tag) => (
             <div
               key={tag.title}
-              className={`absolute z-30 w-[min(42vw,170px)] sm:w-auto sm:max-w-[200px] md:max-w-[220px] rounded-lg bg-white/90 backdrop-blur-md border border-white/70 p-2.5 sm:p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.1)] ring-1 ring-black/[0.03] ${positionClasses[tag.position]}`}
+              className={`absolute z-30 max-w-[150px] sm:max-w-[168px] rounded-xl bg-white/92 backdrop-blur-sm border border-black/[0.06] px-3 py-2.5 sm:px-3.5 sm:py-3 shadow-[0_4px_16px_rgba(0,0,0,0.06)] ${positionClasses[tag.position]}`}
             >
-              <div className="flex items-start gap-2 max-[390px]:gap-1.5">
-                <div
-                  className="flex-shrink-0 w-2.5 h-2.5 sm:w-7 sm:h-7 mt-1 rounded-full flex items-center justify-center ring-2 ring-white/80"
-                  style={{ backgroundColor: "rgba(99, 179, 237, 0.85)" }}
-                />
-                <div className="min-w-0">
-                  <h3
-                    className="font-bold text-[#111] text-[11px] sm:text-sm mb-0.5 leading-tight"
-                    style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
-                  >
-                    {tag.title}
-                  </h3>
-                  <p
-                    className="text-neutral-500 text-[10px] sm:text-xs leading-snug sm:leading-relaxed"
-                    style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
-                  >
-                    {tag.description}
-                  </p>
-                </div>
-              </div>
+              <h3
+                className="font-semibold text-[#111] text-[12px] sm:text-[13px] leading-tight tracking-[-0.01em]"
+                style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
+              >
+                {tag.title}
+              </h3>
+              <p
+                className="mt-1 text-neutral-500 text-[11px] sm:text-[12px] leading-snug"
+                style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+              >
+                {tag.description}
+              </p>
             </div>
           ))}
 
-          {/* Center: mobile = square mbworkflow image; desktop = workspace screenshot in card */}
           <div className="absolute inset-0 flex items-center justify-center px-4 py-24 sm:p-8 md:p-10">
-            {/* Mobile only: square workflow image (no card), on top */}
             <div className="md:hidden relative w-full max-w-[78vw] aspect-square rounded-xl overflow-hidden z-20 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/60">
               <Image
                 src={WORKFLOW_MOBILE}
@@ -113,7 +103,6 @@ export default function AppShowcase() {
                 unoptimized
               />
             </div>
-            {/* Desktop: workspace screenshot in card */}
             <div
               className="hidden md:flex app-showcase-img relative w-full max-w-[min(100%,960px)] rounded-lg overflow-hidden bg-white items-center justify-center"
               style={{
@@ -164,7 +153,6 @@ export default function AppShowcase() {
           `}</style>
         </div>
 
-        {/* CTA */}
         <div className="text-center mt-10 sm:mt-12">
           <SeeWorkspaceButton />
         </div>

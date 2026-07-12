@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
+import { BlurReveal } from "@/components/ui/BlurReveal";
 
 const CLOUDINARY_LANDING_BASE =
   "https://res.cloudinary.com/dqizbxc9e/image/upload";
@@ -145,7 +146,7 @@ export default function IndustrySection() {
       style={{
         position: "relative",
         width: "100%",
-        backgroundColor: "#f6f5f3",
+        backgroundColor: "#ffffff",
         padding: "4.5rem 1.5rem 5rem",
         boxSizing: "border-box",
         WebkitFontSmoothing: "antialiased",
@@ -162,12 +163,13 @@ export default function IndustrySection() {
           gap: "1.75rem",
         }}
       >
-        {/* Heading */}
-        <h2
+        {/* Heading — scroll blur → sharp reveal */}
+        <BlurReveal
+          as="h2"
           style={{
             margin: 0,
             textAlign: "center",
-            fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+            fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
             fontSize: "clamp(1.875rem, 4vw, 3rem)",
             fontWeight: 700,
             color: "#111",
@@ -181,7 +183,7 @@ export default function IndustrySection() {
           </em>
           <br />
           creators like you
-        </h2>
+        </BlurReveal>
 
         {/* ── MOBILE accordion ── */}
         <div className="flex flex-col gap-3 md:hidden">
@@ -192,10 +194,11 @@ export default function IndustrySection() {
                 key={item.id}
                 style={{
                   borderRadius: "1rem",
-                  border: `1px solid ${isOpen ? "rgba(17,17,17,0.12)" : "rgba(17,17,17,0.07)"}`,
-                  backgroundColor: isOpen ? "#fff" : "rgba(251,250,249,0.9)",
+                  border: `1px solid ${isOpen ? "rgba(17,17,17,0.12)" : "rgba(17,17,17,0.08)"}`,
+                  backgroundColor: "#ffffff",
                   overflow: "hidden",
                   transition: "border-color 0.2s, background-color 0.2s",
+                  boxShadow: isOpen ? "0 1px 2px rgba(17,17,17,0.04)" : "none",
                 }}
               >
                 {/* Accordion header */}
@@ -216,7 +219,7 @@ export default function IndustrySection() {
                 >
                   <span
                     style={{
-                      fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                      fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
                       fontSize: "1rem",
                       fontWeight: 600,
                       color: "#111",
@@ -269,7 +272,7 @@ export default function IndustrySection() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                      transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] as const }}
                       style={{ overflow: "hidden" }}
                     >
                       <div style={{ padding: "0 1.125rem 1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -280,7 +283,7 @@ export default function IndustrySection() {
                             width: "100%",
                             borderRadius: "0.75rem",
                             overflow: "hidden",
-                            backgroundColor: "#f0efed",
+                            backgroundColor: "#f5f5f5",
                             aspectRatio: "4/3",
                           }}
                         >
@@ -301,7 +304,7 @@ export default function IndustrySection() {
                         <h3
                           style={{
                             margin: 0,
-                            fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                            fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
                             fontSize: "1.125rem",
                             fontWeight: 700,
                             color: "#111",
@@ -320,7 +323,7 @@ export default function IndustrySection() {
                               <h4
                                 style={{
                                   margin: "0 0 0.3rem",
-                                  fontFamily: "'DM Sans', Arial, sans-serif",
+                                  fontFamily: "'DM Sans', sans-serif",
                                   fontSize: "0.9375rem",
                                   fontWeight: 600,
                                   color: "#111",
@@ -332,9 +335,9 @@ export default function IndustrySection() {
                               <p
                                 style={{
                                   margin: 0,
-                                  fontFamily: "'DM Sans', Arial, sans-serif",
+                                  fontFamily: "'DM Sans', sans-serif",
                                   fontSize: "0.875rem",
-                                  color: "#5e5c5a",
+                                  color: "#666",
                                   lineHeight: 1.65,
                                 }}
                               >
@@ -361,9 +364,9 @@ export default function IndustrySection() {
         <div
           style={{
             borderRadius: "1rem",
-            border: "1px solid rgba(17,17,17,0.06)",
-            backgroundColor: "#fbfaf9",
-            boxShadow: "0 1px 4px rgba(17,17,17,0.05), 0 0 0 1px rgba(17,17,17,0.03)",
+            border: "1px solid rgba(17,17,17,0.08)",
+            backgroundColor: "#ffffff",
+            boxShadow: "0 1px 2px rgba(17,17,17,0.04), 0 8px 24px -12px rgba(17,17,17,0.08)",
             overflow: "hidden",
           }}
         >
@@ -399,10 +402,13 @@ export default function IndustrySection() {
                       height: "100%",
                       overflow: "hidden",
                       borderRadius: "0.5rem",
-                      border: `1px solid ${isActive ? "rgba(17,17,17,0.10)" : "rgba(17,17,17,0.055)"}`,
-                      backgroundColor: isActive ? "rgba(255,255,255,0.96)" : "rgba(239,238,230,0.28)",
+                      border: `1px solid ${isActive ? "rgba(17,17,17,0.12)" : "rgba(17,17,17,0.06)"}`,
+                      backgroundColor: isActive ? "#ffffff" : "#fafafa",
                       padding: "0.75rem 0.375rem 1.25rem",
-                      transition: "background-color 0.25s cubic-bezier(0.215,0.61,0.355,1), border-color 0.25s",
+                      boxShadow: isActive
+                        ? "0 1px 2px rgba(17,17,17,0.04), 0 6px 16px -8px rgba(17,17,17,0.1)"
+                        : "none",
+                      transition: "background-color 0.25s cubic-bezier(0.215,0.61,0.355,1), border-color 0.25s, box-shadow 0.25s",
                     }}
                   >
                     <span
@@ -410,7 +416,7 @@ export default function IndustrySection() {
                         display: "block",
                         width: "100%",
                         textAlign: "center",
-                        fontFamily: "'DM Sans', Arial, sans-serif",
+                        fontFamily: "'DM Sans', sans-serif",
                         fontSize: "0.6875rem",
                         fontWeight: isActive ? 600 : 400,
                         color: isActive ? "#111" : "rgba(17,17,17,0.42)",
@@ -476,7 +482,7 @@ export default function IndustrySection() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.28, ease: [0.215, 0.61, 0.355, 1] }}
+                transition={{ duration: 0.28, ease: [0.215, 0.61, 0.355, 1] as const }}
                 style={{
                   display: "flex",
                   flexDirection: "row",
@@ -500,7 +506,7 @@ export default function IndustrySection() {
                   <h3
                     style={{
                       margin: 0,
-                      fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                      fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
                       fontSize: "clamp(1.375rem, 2.4vw, 1.875rem)",
                       fontWeight: 700,
                       color: "#111",
@@ -523,7 +529,7 @@ export default function IndustrySection() {
                       <h4
                         style={{
                           margin: "0 0 0.375rem",
-                          fontFamily: "'DM Sans', Arial, sans-serif",
+                          fontFamily: "'DM Sans', sans-serif",
                           fontSize: "1.0625rem",
                           fontWeight: 600,
                           color: "#111",
@@ -536,10 +542,10 @@ export default function IndustrySection() {
                       <p
                         style={{
                           margin: 0,
-                          fontFamily: "'DM Sans', Arial, sans-serif",
+                          fontFamily: "'DM Sans', sans-serif",
                           fontSize: "0.9375rem",
                           fontWeight: 400,
-                          color: "#5e5c5a",
+                          color: "#666",
                           letterSpacing: "-0.01em",
                           lineHeight: 1.7,
                         }}
@@ -577,7 +583,7 @@ function CtaLink({ label, href }: { label: string; href: string }) {
         borderRadius: "0.625rem",
         border: `1px solid ${hovered ? "rgba(17,17,17,0.18)" : "rgba(17,17,17,0.10)"}`,
         backgroundColor: hovered ? "rgba(17,17,17,0.04)" : "transparent",
-        fontFamily: "'DM Sans', Arial, sans-serif",
+        fontFamily: "'DM Sans', sans-serif",
         fontSize: "0.8125rem",
         fontWeight: 500,
         color: "#111",

@@ -76,7 +76,7 @@ export default function DocsPage() {
         <h1
           style={{
             margin: "0 0 1.25rem",
-            fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+            fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
             fontSize: "clamp(2rem, 5vw, 3.25rem)",
             fontWeight: 700,
             color: "#111",
@@ -110,7 +110,7 @@ export default function DocsPage() {
               borderRadius: "0.875rem",
               backgroundColor: "#111",
               color: "#fff",
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
               fontSize: "0.9375rem",
               fontWeight: 600,
               textDecoration: "none",
@@ -130,7 +130,7 @@ export default function DocsPage() {
               border: "1.5px solid rgba(17,17,17,0.14)",
               backgroundColor: "transparent",
               color: "#111",
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
               fontSize: "0.9375rem",
               fontWeight: 600,
               textDecoration: "none",

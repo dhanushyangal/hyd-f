@@ -31,7 +31,7 @@ export default function CareersPage() {
           {/* Subtitle */}
           <p 
             className="text-sm sm:text-base md:text-lg text-black/70 mb-4 sm:mb-6 tracking-wide"
-            style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, sans-serif' }}
+            style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
           >
             ( Join Our Team )
           </p>

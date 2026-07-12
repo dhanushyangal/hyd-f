@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   LayoutDashboard,
@@ -32,8 +32,10 @@ const navItems = [
 /** Credits usage card – wired to /api/payments/credits. Plan badge + progress. */
 function CreditsCard() {
   const { getToken, isSignedIn } = useAuth();
+  const { closeMobileSidebar } = useAppLayout();
   const [used, setUsed] = useState(0);
   const [total, setTotal] = useState(0);
+  const [remaining, setRemaining] = useState(0);
   const [plan, setPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,8 +50,15 @@ function CreditsCard() {
         });
         if (res.ok) {
           const { credits } = await res.json();
-          setUsed(credits.used ?? 0);
-          setTotal(credits.total ?? 0);
+          const nextUsed = credits.used ?? 0;
+          const nextTotal = credits.total ?? 0;
+          setUsed(nextUsed);
+          setTotal(nextTotal);
+          setRemaining(
+            typeof credits.remaining === "number"
+              ? credits.remaining
+              : Math.max(0, nextTotal - nextUsed)
+          );
           setPlan(credits.plan ?? null);
         } else {
           console.error("[Credits] Backend returned", res.status, res.statusText, "from", BACKEND_URL);
@@ -62,44 +71,90 @@ function CreditsCard() {
     })();
   }, [isSignedIn, getToken]);
 
-  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
-  const planLabel = plan ? `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan` : "Free";
+  const pctUsed = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+  const pctLeft = Math.max(0, 100 - pctUsed);
+  const planLabel = plan
+    ? `${plan.charAt(0).toUpperCase() + plan.slice(1)}`
+    : "Free";
+  const isLow = !loading && total > 0 && pctLeft <= 15;
 
   return (
-    <div
-      className="rounded-xl border bg-white p-3 font-dm-sans"
+    <Link
+      href="/app/pricing"
+      prefetch
+      onClick={closeMobileSidebar}
+      className="group block rounded-2xl p-3.5 font-dm-sans transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
       style={{
-        borderColor: "rgba(17,17,17,0.08)",
-        boxShadow: "0 1px 2px rgba(17,17,17,0.04)",
+        background:
+          "linear-gradient(165deg, #ffffff 0%, #f7f7f8 55%, #f2f2f4 100%)",
+        border: "1px solid rgba(17,17,17,0.06)",
+        boxShadow:
+          "0 1px 2px rgba(17,17,17,0.04), 0 8px 24px -12px rgba(17,17,17,0.12)",
       }}
     >
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-xs font-semibold text-neutral-800 tracking-tight">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-700">
+          <Sparkles className="w-2.5 h-2.5 text-neutral-500" strokeWidth={2.25} />
           {planLabel}
         </span>
-        <span className="text-xs font-medium text-neutral-500 tabular-nums">
-          {loading ? "–" : `${pct}%`}
+        <span
+          className={cn(
+            "text-[10px] font-medium tabular-nums tracking-tight",
+            isLow ? "text-amber-600" : "text-neutral-400"
+          )}
+        >
+          {loading ? "…" : `${pctLeft}% left`}
         </span>
       </div>
-      <div className="h-1.5 w-full rounded-full overflow-hidden bg-neutral-100" aria-label="Credits usage">
+
+      <div className="flex items-end justify-between gap-2 mb-2.5">
+        <div className="min-w-0">
+          <p className="text-[22px] leading-none font-semibold tracking-tight text-neutral-900 tabular-nums">
+            {loading ? "—" : remaining.toLocaleString()}
+          </p>
+          <p className="mt-1 text-[11px] text-neutral-500 font-medium">
+            credits remaining
+          </p>
+        </div>
+        <p className="text-[10px] text-neutral-400 tabular-nums shrink-0 pb-0.5">
+          {loading ? "" : `${used.toLocaleString()} / ${total.toLocaleString()}`}
+        </p>
+      </div>
+
+      <div
+        className="h-1 w-full rounded-full overflow-hidden bg-neutral-200/80"
+        aria-label="Credits remaining"
+      >
         <div
-          className="h-full rounded-full bg-neutral-900 transition-all duration-300"
-          style={{ width: loading ? "0%" : `${pct}%` }}
+          className={cn(
+            "h-full rounded-full transition-all duration-500 ease-out",
+            isLow ? "bg-amber-500" : "bg-neutral-900"
+          )}
+          style={{ width: loading ? "0%" : `${pctLeft}%` }}
         />
       </div>
-      <p className="mt-2 text-xs text-neutral-600 tabular-nums font-medium">
-        {loading ? "Loading…" : `${used} / ${total} credits`}
+
+      <p className="mt-2.5 text-[11px] font-medium text-neutral-500 group-hover:text-neutral-800 transition-colors">
+        Manage plan →
       </p>
-    </div>
+    </Link>
   );
 }
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const { getToken, isSignedIn } = useAuth();
   const { mobileSidebarOpen, closeMobileSidebar } = useAppLayout();
+
+  // Warm every app route so sidebar clicks feel instant.
+  useEffect(() => {
+    for (const { href } of navItems) {
+      router.prefetch(href);
+    }
+  }, [router]);
 
   useEffect(() => {
     if (!isSignedIn) { setHasActiveSubscription(false); return; }
@@ -135,11 +190,11 @@ export function AppSidebar() {
       <aside
         className={cn(
           "app-sidebar-root flex flex-col shrink-0 h-screen transition-[width,transform] duration-200 ease-out border-r",
-          "max-md:fixed max-md:left-0 max-md:top-0 max-md:bottom-0 max-md:z-50 max-md:w-[260px] max-md:translate-x-[-100%] max-md:shadow-xl",
+          "max-md:fixed max-md:left-0 max-md:top-0 max-md:bottom-0 max-md:z-50 max-md:w-[280px] max-md:translate-x-[-100%] max-md:shadow-xl",
           mobileSidebarOpen && "max-md:translate-x-0",
           "md:relative md:translate-x-0 md:shadow-none",
-          !collapsed && "md:w-[212px]",
-          collapsed && "md:w-[52px]"
+          !collapsed && "md:w-[232px]",
+          collapsed && "md:w-[56px]"
         )}
         style={{
           backgroundColor: "var(--sidebar-bg)",
@@ -149,14 +204,15 @@ export function AppSidebar() {
       >
         {/* Logo row – mobile: logo + close (X); desktop: logo + collapse toggle */}
         <div
-          className="flex items-center justify-between shrink-0 border-b py-4 px-3 transition-[padding] duration-200"
+          className="flex items-center justify-between shrink-0 border-b h-14 px-3.5 transition-[padding] duration-200"
           style={{ borderColor: sidebarBorder }}
         >
           <Link
-            href="/app"
+            href="/app/studio"
+            prefetch
             onClick={closeMobileSidebar}
             className={cn(
-              "flex items-center min-w-0 flex-1 font-dm-sans text-xl font-bold tracking-tight text-neutral-900",
+              "flex items-center min-w-0 flex-1 font-dm-sans text-[22px] font-semibold tracking-[-0.04em] text-neutral-900 hover:opacity-80 transition-opacity",
               collapsed && "md:w-0 md:overflow-hidden md:min-w-0"
             )}
           >
@@ -165,31 +221,35 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={closeMobileSidebar}
-            className="sidebar-toggle flex md:hidden items-center justify-center rounded-[var(--sidebar-radius)] shrink-0 w-8 h-8 opacity-80 hover:opacity-100"
+            className="sidebar-toggle flex md:hidden items-center justify-center rounded-full shrink-0 w-9 h-9 text-neutral-500"
             aria-label="Close menu"
           >
-            <X className="w-5 h-5" />
+            <X className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
             className={cn(
-              "sidebar-toggle hidden md:flex items-center justify-center rounded-[var(--sidebar-radius)] shrink-0 transition-[var(--sidebar-transition)] opacity-80 hover:opacity-100 w-8 h-8",
+              "sidebar-toggle hidden md:flex items-center justify-center rounded-full shrink-0 w-9 h-9 text-neutral-500",
               collapsed && "mx-auto"
             )}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {collapsed ? <PanelLeft className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            {collapsed ? (
+              <PanelLeft className="w-[18px] h-[18px]" strokeWidth={1.75} />
+            ) : (
+              <PanelLeftClose className="w-[18px] h-[18px]" strokeWidth={1.75} />
+            )}
           </button>
         </div>
 
         {/* Nav – always show labels on mobile overlay */}
         <nav
-          className="flex-1 overflow-y-auto py-3 flex flex-col"
+          className="flex-1 overflow-y-auto py-3.5 flex flex-col"
           style={{
             paddingLeft: "var(--sidebar-spacing)",
             paddingRight: "var(--sidebar-spacing)",
-            gap: "var(--sidebar-spacing)",
+            gap: "4px",
           }}
         >
           {navItems.map(({ href, label, icon: Icon }) => {
@@ -200,19 +260,24 @@ export function AppSidebar() {
               <Link
                 key={href}
                 href={href}
+                prefetch
                 onClick={closeMobileSidebar}
+                onMouseEnter={() => router.prefetch(href)}
                 className={cn(
-                  "sidebar-item flex items-center font-medium text-sm rounded-[999px] pl-3 pr-3 max-md:flex",
+                  "sidebar-item flex items-center text-[15px] font-medium tracking-[-0.015em] rounded-full pl-3.5 pr-3.5 max-md:flex",
                   collapsed && "md:justify-center md:px-0",
                   isActive && "active"
                 )}
                 style={{
                   minHeight: "var(--sidebar-item-height)",
-                  gap: "var(--sidebar-spacing)",
-                  color: isActive ? undefined : "hsl(var(--sidebar-fg-muted))",
+                  gap: "12px",
+                  color: isActive ? "#111" : "hsl(var(--sidebar-fg-muted))",
                 }}
               >
-                <Icon className="w-4 h-4 shrink-0" strokeWidth={1.75} />
+                <Icon
+                  className="w-[18px] h-[18px] shrink-0"
+                  strokeWidth={isActive ? 2.1 : 1.85}
+                />
                 <span className={cn("truncate", collapsed && "md:hidden")}>{label}</span>
               </Link>
             );
@@ -222,7 +287,7 @@ export function AppSidebar() {
         {/* Credits – hide when collapsed on desktop */}
         {!collapsed && (
           <div
-            className="shrink-0 px-2 pb-2"
+            className="shrink-0 pb-3"
             style={{
               paddingLeft: "var(--sidebar-spacing)",
               paddingRight: "var(--sidebar-spacing)",
@@ -245,8 +310,9 @@ export function AppSidebar() {
             {collapsed ? (
               <Link
                 href="/app/pricing"
+                prefetch
                 onClick={closeMobileSidebar}
-                className="sidebar-upgrade-btn flex items-center justify-center w-9 h-9 mx-auto rounded-lg bg-neutral-900 text-white font-medium text-xs hover:bg-neutral-800"
+                className="sidebar-upgrade-btn flex items-center justify-center w-10 h-10 mx-auto rounded-full bg-neutral-900 text-white font-medium text-xs hover:bg-neutral-800"
                 title="Upgrade"
               >
                 <Sparkles className="w-4 h-4" />
@@ -254,10 +320,11 @@ export function AppSidebar() {
             ) : (
               <Link
                 href="/app/pricing"
+                prefetch
                 onClick={closeMobileSidebar}
-                className="sidebar-upgrade-btn flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-neutral-900 text-white font-medium text-xs px-3 font-dm-sans hover:bg-neutral-800"
+                className="sidebar-upgrade-btn flex items-center justify-center gap-2 w-full h-11 rounded-full bg-neutral-900 text-white font-medium text-sm px-3 font-dm-sans hover:bg-neutral-800 shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
               >
-                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <Sparkles className="w-4 h-4 shrink-0" />
                 <span>Upgrade</span>
               </Link>
             )}

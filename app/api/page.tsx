@@ -87,7 +87,7 @@ export default function ApiPage() {
           <h1
             style={{
               margin: "0 0 1rem",
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
               fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
               fontWeight: 700,
               color: "#111",
@@ -120,7 +120,7 @@ export default function ApiPage() {
                 borderRadius: "0.875rem",
                 backgroundColor: "#111",
                 color: "#fff",
-                fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
                 fontSize: "0.9375rem",
                 fontWeight: 600,
                 textDecoration: "none",
@@ -140,7 +140,7 @@ export default function ApiPage() {
                 border: "1.5px solid rgba(17,17,17,0.14)",
                 backgroundColor: "transparent",
                 color: "#111",
-                fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+                fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
                 fontSize: "0.9375rem",
                 fontWeight: 600,
                 textDecoration: "none",

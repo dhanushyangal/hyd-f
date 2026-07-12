@@ -1,67 +1,79 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
-import { createPageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { createPageMetadata, getUseCaseJsonLd } from "@/lib/seo";
 import { USECASE_HERO } from "@/lib/cloudinary";
 
+const DESCRIPTION =
+  "Create lightweight, spatially coherent 3D assets for VR, AR, and spatial applications. Export formats ready for immersive pipelines.";
+
 const DATA = {
-  industry: "AR / VR & XR",
-  headline: "Assets Designed for Immersive Environments",
+  id: "arvr" as const,
+  headline: "Assets for immersive experiences",
   heroImages: [USECASE_HERO.arvr3, USECASE_HERO.arvrxr, USECASE_HERO.arvrxr2],
-  accentColor: "#3bbf8e",
+  capabilitiesHeading: "Built for spatial pipelines",
   tagline:
-    "Create lightweight assets and explore Gaussian splatting–based worlds for VR and XR. From real-time 3D models to interactive splat environments—inspired by approaches like World Labs' Splat World—optimized for immersive pipelines.",
-  backHref: "/usecase",
+    "Lightweight, spatially coherent 3D for VR, AR, and spatial apps—from prototype to production.",
   features: [
     {
-      title: "Real-time optimized models",
-      body: "Create lightweight assets suitable for interactive environments, simulations, and spatial applications.",
-    },
-    {
-      title: "Gaussian splatting & interactive worlds",
-      body: "Use 3D assets alongside splat-based environments for VR—similar to World Labs' Marble and Splat World: interactive, physics-aware scenes built in tools like Unity with real-time splat manipulation, lighting, and effects.",
+      title: "Real-time friendly models",
+      body: "Generate assets suited for interactive environments and spatial applications.",
     },
     {
       title: "Rapid spatial prototyping",
-      body: "Generate objects and environments quickly while developing immersive experiences.",
+      body: "Place objects and environments quickly while iterating immersive experiences.",
     },
     {
-      title: "Platform-ready exports",
-      body: "Export assets optimized for Meta Quest, Apple Vision Pro, and WebXR applications with no extra conversion.",
+      title: "Platform exports",
+      body: "Export GLB and related formats for Quest, Vision Pro, and WebXR workflows.",
     },
     {
-      title: "Consistent spatial scale",
-      body: "Generate assets with accurate real-world scale, ready for immediate placement in immersive environments.",
+      title: "Consistent scale",
+      body: "Produce assets with coherent proportions for placement in spatial scenes.",
     },
   ],
   who: [
     {
-      role: "XR Studios",
-      description: "Populate virtual spaces with contextual objects and environments generated at production speed.",
+      role: "XR studios",
+      description: "Populate virtual spaces with contextual objects at production speed.",
     },
     {
-      role: "Game Developers",
-      description: "Build AR and VR game worlds faster by generating optimized assets without bottlenecking the art team.",
+      role: "Game developers",
+      description: "Build AR and VR worlds without bottlenecking the art team.",
     },
     {
-      role: "Experience Designers",
-      description: "Prototype and iterate on spatial experiences quickly by generating the objects you need on demand.",
+      role: "Experience designers",
+      description: "Prototype spatial scenes by generating the objects you need on demand.",
     },
     {
-      role: "Enterprise Training Teams",
-      description: "Create 3D training environments and simulation assets without custom modeling for each scenario.",
+      role: "Training teams",
+      description: "Create simulation assets without custom modeling for every scenario.",
     },
   ],
 };
 
 export const metadata = createPageMetadata({
-  title: "AR / VR & XR",
-  description: DATA.tagline,
+  title: "AI 3D Assets for AR, VR & XR",
+  description: DESCRIPTION,
   path: "/usecase/arvr",
+  keywords: [
+    "AI 3D for VR",
+    "AR asset generation",
+    "WebXR 3D models",
+    "spatial computing assets",
+    "text to 3D for XR",
+  ],
+  ogImage: USECASE_HERO.arvr3,
 });
 
 export default function ARVRPage() {
   return (
     <>
+      <JsonLd data={getUseCaseJsonLd({
+        name: "AR / VR & XR",
+        description: DESCRIPTION,
+        path: "/usecase/arvr",
+      })} />
       <UseCasePage data={DATA} />
       <Footer />
     </>

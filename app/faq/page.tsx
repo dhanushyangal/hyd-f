@@ -33,7 +33,7 @@ export default function FAQPage() {
         <h1
           style={{
             margin: 0,
-            fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+            fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
             fontSize: "clamp(2.5rem, 6vw, 5rem)",
             fontWeight: 700,
             color: "#111",

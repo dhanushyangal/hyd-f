@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
-import { Minus, Plus } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { Plus } from "lucide-react";
+import { BlurReveal } from "@/components/ui/BlurReveal";
 
 const FAQ_ITEMS = [
   {
@@ -52,6 +53,10 @@ interface FAQItemProps {
 }
 
 function FAQChatItem({ question, answer, isOpen, onToggle, index }: FAQItemProps) {
+  const prefersReducedMotion = useReducedMotion();
+  const answerId = `faq-answer-${index}`;
+  const questionId = `faq-question-${index}`;
+
   return (
     <div className="faq-chat-item">
       <div className="faq-question-row">
@@ -60,11 +65,29 @@ function FAQChatItem({ question, answer, isOpen, onToggle, index }: FAQItemProps
           onClick={onToggle}
           aria-label={isOpen ? "Collapse answer" : "Expand answer"}
           aria-expanded={isOpen}
+          aria-controls={answerId}
           className="faq-toggle"
         >
-          {isOpen ? <Minus size={16} strokeWidth={1.8} /> : <Plus size={16} strokeWidth={1.8} />}
+          <motion.span
+            animate={{ rotate: isOpen ? 45 : 0 }}
+            transition={
+              prefersReducedMotion
+                ? { duration: 0 }
+                : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const }
+            }
+            className="faq-toggle-icon"
+          >
+            <Plus size={16} strokeWidth={1.8} />
+          </motion.span>
         </button>
-        <button type="button" className="faq-question-bubble" onClick={onToggle}>
+        <button
+          id={questionId}
+          type="button"
+          className="faq-question-bubble"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          aria-controls={answerId}
+        >
           {question}
         </button>
       </div>
@@ -73,22 +96,40 @@ function FAQChatItem({ question, answer, isOpen, onToggle, index }: FAQItemProps
         {isOpen && (
           <motion.div
             key={`answer-${index}`}
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -5, scale: 0.98 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="faq-answer-row"
+            id={answerId}
+            role="region"
+            aria-labelledby={questionId}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={
+              prefersReducedMotion
+                ? { duration: 0 }
+                : {
+                    height: { duration: 0.34, ease: [0.22, 1, 0.36, 1] as const },
+                    opacity: { duration: 0.2, ease: "easeOut" },
+                  }
+            }
+            className="faq-answer-clip"
           >
-            <div className="faq-avatar">
-              <Image
-                src="/hyd01.png"
-                alt="Hydrilla"
-                fill
-                style={{ objectFit: "contain", padding: "4px" }}
-                sizes="34px"
-              />
-            </div>
-            <p className="faq-answer-bubble">{answer}</p>
+            <motion.div
+              initial={prefersReducedMotion ? false : { y: -6 }}
+              animate={{ y: 0 }}
+              exit={prefersReducedMotion ? undefined : { y: -4 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] as const }}
+              className="faq-answer-row"
+            >
+              <div className="faq-avatar">
+                <Image
+                  src="/hyd01.png"
+                  alt="Hydrilla"
+                  fill
+                  style={{ objectFit: "contain", padding: "4px" }}
+                  sizes="34px"
+                />
+              </div>
+              <p className="faq-answer-bubble">{answer}</p>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -119,7 +160,7 @@ export default function FAQSection() {
         }
         .faq-kicker {
           margin: 0 0 0.875rem;
-          font-family: 'DM Sans', Arial, sans-serif;
+          font-family: 'DM Sans', sans-serif;
           font-size: 0.75rem;
           font-weight: 700;
           letter-spacing: 0.12em;
@@ -128,7 +169,7 @@ export default function FAQSection() {
         }
         .faq-title {
           margin: 0;
-          font-family: 'Space Grotesk', 'DM Sans', Arial, sans-serif;
+          font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
           font-size: clamp(2rem, 4.5vw, 3.25rem);
           font-weight: 700;
           color: #111827;
@@ -176,6 +217,12 @@ export default function FAQSection() {
           box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
           transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
         }
+        .faq-toggle-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          will-change: transform;
+        }
         .faq-toggle:hover {
           transform: translateY(-1px);
           background: #0f172a;
@@ -186,7 +233,7 @@ export default function FAQSection() {
           border-radius: 1.45rem 1.45rem 0.25rem 1.45rem;
           background: linear-gradient(135deg, #111827, #1f2937);
           color: #fff;
-          font-family: 'DM Sans', Arial, sans-serif;
+          font-family: 'DM Sans', sans-serif;
           font-size: 1rem;
           font-weight: 500;
           line-height: 1.55;
@@ -202,6 +249,14 @@ export default function FAQSection() {
           transform: translateY(-1px);
           box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
         }
+        .faq-toggle:focus-visible,
+        .faq-question-bubble:focus-visible {
+          outline: 2px solid #2563eb;
+          outline-offset: 3px;
+        }
+        .faq-answer-clip {
+          overflow: hidden;
+        }
         .faq-answer-row {
           display: flex;
           align-items: flex-end;
@@ -210,6 +265,12 @@ export default function FAQSection() {
           margin-right: auto;
           width: 100%;
           transform-origin: top left;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .faq-toggle,
+          .faq-question-bubble {
+            transition: none;
+          }
         }
         .faq-avatar {
           position: relative;
@@ -228,7 +289,7 @@ export default function FAQSection() {
           background: #fff;
           border: 1px solid rgba(148, 163, 184, 0.24);
           box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
-          font-family: 'DM Sans', Arial, sans-serif;
+          font-family: 'DM Sans', sans-serif;
           font-size: 0.98rem;
           color: #334155;
           line-height: 1.7;
@@ -274,18 +335,20 @@ export default function FAQSection() {
       <div className="faq-shell">
         <div className="faq-header">
           <p className="faq-kicker">FAQ</p>
-          <h2 className="faq-title">Questions &amp; answers</h2>
+          <BlurReveal as="h2" className="faq-title">
+            Questions & answers
+          </BlurReveal>
         </div>
 
         <div className="faq-chat">
           {FAQ_ITEMS.map((item, i) => (
             <FAQChatItem
-              key={i}
+              key={item.question}
               index={i}
               question={item.question}
               answer={item.answer}
               isOpen={openIndex === i}
-              onToggle={() => setOpenIndex(openIndex === i ? null : i)}
+              onToggle={() => setOpenIndex((current) => (current === i ? null : i))}
             />
           ))}
         </div>

@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { HERO_POSTER_URL, HERO_VIDEO_URL } from "@/lib/cloudinary";
 
+const CONTACT_EMAIL = "founders@hydrilla.ai";
+
 const FOOTER_NAV = [
   {
     heading: "Product",
@@ -37,8 +39,13 @@ const FOOTER_NAV = [
       { label: "Contact", href: "/contact" },
       { label: "Careers", href: "/careers" },
     ],
-    email: "founders@hydrilla.ai",
   },
+];
+
+const LEGAL_LINKS = [
+  { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Terms of Service", href: "/terms-and-conditions" },
+  { label: "Cookie Policy", href: "/cookie-policy" },
 ];
 
 const SOCIAL_LINKS = [
@@ -46,7 +53,7 @@ const SOCIAL_LINKS = [
     label: "X (Twitter)",
     href: "https://x.com/hydrillaai",
     icon: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+      <svg className="w-[18px] h-[18px]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
       </svg>
     ),
@@ -55,7 +62,7 @@ const SOCIAL_LINKS = [
     label: "LinkedIn",
     href: "https://www.linkedin.com/company/hydrilla-ai",
     icon: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+      <svg className="w-[18px] h-[18px]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
         <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
       </svg>
     ),
@@ -64,7 +71,7 @@ const SOCIAL_LINKS = [
     label: "Reddit",
     href: "https://www.reddit.com/r/hydrilla",
     icon: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+      <svg className="w-[18px] h-[18px]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
         <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z" />
       </svg>
     ),
@@ -73,125 +80,79 @@ const SOCIAL_LINKS = [
     label: "Instagram",
     href: "https://www.instagram.com/hydrilla.ai",
     icon: (
-      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+      <svg className="w-[18px] h-[18px]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
         <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
       </svg>
     ),
   },
 ];
 
-const headingStyle = {
-  margin: "0 0 1.25rem",
-  fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-  fontSize: "0.75rem",
-  fontWeight: 600,
-  letterSpacing: "0.1em",
-  textTransform: "uppercase" as const,
-  color: "rgba(17,17,17,0.65)",
-};
-const linkStyle = {
-  fontFamily: "'DM Sans', Arial, sans-serif",
-  fontSize: "1rem",
-  fontWeight: 400,
-  color: "rgba(17,17,17,0.7)",
-  textDecoration: "none" as const,
-  transition: "color 0.18s ease",
-  letterSpacing: "-0.01em",
-};
+function MailIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+  );
+}
+
+function FooterEmail() {
+  return (
+    <a
+      href={`mailto:${CONTACT_EMAIL}`}
+      className="footer-email"
+      aria-label={`Email ${CONTACT_EMAIL}`}
+    >
+      <span className="footer-email-icon">
+        <MailIcon />
+      </span>
+      <span className="footer-email-text">{CONTACT_EMAIL}</span>
+    </a>
+  );
+}
 
 export default function Footer() {
   const [videoError, setVideoError] = useState(false);
+
   return (
-    <footer
-      style={{
-        width: "100%",
-        backgroundColor: "#faf9f7",
-        fontFamily: "'DM Sans', Arial, sans-serif",
-        WebkitFontSmoothing: "antialiased",
-        boxSizing: "border-box",
-        overflow: "hidden",
-      }}
-    >
-      {/* Top nav — desktop (lg+): 4 cols only. Mobile/tablet (< lg): single 2x2 grid only. */}
-      <div
-        style={{
-          maxWidth: "80rem",
-          margin: "0 auto",
-          padding: "4.5rem 2rem 3.5rem",
-          boxSizing: "border-box",
-        }}
-        className="max-md:py-10 max-md:px-4 max-sm:py-6 max-sm:px-4 max-sm:pb-4"
-      >
-        {/* Desktop only (lg and up) — no inline display so hidden works on mobile */}
-        <div className="hidden lg:grid lg:grid-cols-4 lg:gap-10">
+    <footer className="footer-root" id="site-footer" role="contentinfo">
+      {/* Primary nav */}
+      <div className="footer-inner footer-nav">
+        <div className="footer-brand-col">
+          <p className="footer-brand-name">Hydrilla</p>
+          <p className="footer-brand-tag">
+            Production-ready 3D assets from a single prompt.
+          </p>
+          <div className="footer-email-wrap">
+            <p className="footer-col-heading">Get in touch</p>
+            <FooterEmail />
+          </div>
+        </div>
+
+        <div className="footer-cols">
           {FOOTER_NAV.map((col) => (
-            <div key={col.heading}>
-              <p style={headingStyle}>{col.heading}</p>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div key={col.heading} className="footer-col">
+              <p className="footer-col-heading">{col.heading}</p>
+              <ul className="footer-link-list">
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    <Link href={link.href} style={linkStyle} className="footer-link">
+                    <Link href={link.href} className="footer-link">
                       {link.label}
                     </Link>
                   </li>
                 ))}
               </ul>
-              {"email" in col && col.email && (
-                <div style={{ marginTop: "1rem" }}>
-                  <a href={`mailto:${col.email}`} style={{ ...linkStyle, fontSize: "0.9375rem", fontWeight: 600, color: "rgba(17,17,17,0.9)" }} className="footer-link footer-email">
-                    {col.email}
-                  </a>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Mobile & tablet only (< lg): one clean 2x2 grid — headings highlighted */}
-        <div className="lg:hidden grid grid-cols-2 gap-x-6 gap-y-6 max-sm:gap-y-5 max-sm:gap-x-4">
-          {FOOTER_NAV.map((col) => (
-            <div key={col.heading}>
-              <p className="mb-4 text-[#111] font-bold text-xs uppercase tracking-widest border-b border-[#11111118] pb-2" style={{ fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif" }}>{col.heading}</p>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {col.links.map((link) => (
-                  <li key={link.label}>
-                    <Link href={link.href} style={linkStyle} className="footer-link">
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              {"email" in col && col.email && (
-                <div style={{ marginTop: "1rem" }}>
-                  <a href={`mailto:${col.email}`} style={{ ...linkStyle, fontSize: "0.9375rem", fontWeight: 600, color: "rgba(17,17,17,0.9)" }} className="footer-link footer-email">
-                    {col.email}
-                  </a>
-                </div>
-              )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Divider */}
-      <div style={{ maxWidth: "80rem", margin: "0 auto", padding: "0 2rem", boxSizing: "border-box" }} className="max-sm:px-4">
-        <div style={{ borderTop: "1px solid rgba(17,17,17,0.08)" }} />
+      <div className="footer-inner">
+        <div className="footer-rule" />
       </div>
 
-      {/* Large wordmark with video / image background */}
-      <div
-        style={{
-          maxWidth: "80rem",
-          margin: "0 auto",
-          padding: "2.5rem 2rem 0",
-          boxSizing: "border-box",
-          overflow: "hidden",
-          position: "relative",
-          minHeight: "12rem",
-        }}
-        className="max-sm:px-4 max-sm:pt-6 max-sm:min-h-[8rem] max-sm:flex max-sm:flex-col max-sm:items-center max-sm:justify-center"
-      >
-        {/* Background: video with poster fallback; if video errors or slow, show image */}
+      {/* Large wordmark */}
+      <div className="footer-inner footer-wordmark">
         {!videoError ? (
           <video
             autoPlay
@@ -200,27 +161,17 @@ export default function Footer() {
             playsInline
             poster={HERO_POSTER_URL}
             onError={() => setVideoError(true)}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              pointerEvents: "none",
-            }}
+            className="footer-wordmark-media"
           >
             <source src={HERO_VIDEO_URL} type="video/mp4" />
           </video>
-        ) : null}
-        {videoError && (
+        ) : (
           <div
+            className="footer-wordmark-media"
             style={{
-              position: "absolute",
-              inset: 0,
               backgroundImage: `url(${HERO_POSTER_URL})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              pointerEvents: "none",
             }}
           />
         )}
@@ -228,8 +179,7 @@ export default function Footer() {
           viewBox="0 0 1561 456"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-auto block relative z-10 max-sm:w-[85vw] max-sm:max-w-[340px] max-sm:mx-auto max-sm:flex-shrink-0"
-          style={{ position: "relative", zIndex: 1 }}
+          className="footer-wordmark-svg"
           preserveAspectRatio="xMidYMid meet"
           aria-label="Hydrilla"
         >
@@ -246,36 +196,22 @@ export default function Footer() {
         </svg>
       </div>
 
-      {/* Bottom legal bar — mobile: stack and center */}
-      <div
-        style={{
-          maxWidth: "80rem",
-          margin: "0 auto",
-          padding: "1.5rem 2rem 2.5rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          boxSizing: "border-box",
-          flexWrap: "wrap",
-        }}
-        className="max-sm:flex-col max-sm:items-center max-sm:justify-center max-sm:gap-4 max-sm:px-4 max-sm:pb-8 max-sm:text-center"
-      >
-        <p style={{ margin: 0, fontFamily: "'DM Sans', Arial, sans-serif", fontSize: "0.875rem", color: "rgba(17,17,17,0.65)", letterSpacing: "-0.01em" }}>
-          © 2026 Hydrilla. All rights reserved.
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }} className="max-sm:justify-center">
-          {[
-            { label: "Privacy Policy", href: "/privacy-policy" },
-            { label: "Terms of Service", href: "/terms-and-conditions" },
-            { label: "Cookie Policy", href: "/cookie-policy" },
-          ].map((l) => (
-            <Link key={l.label} href={l.href} style={{ ...linkStyle, fontSize: "0.875rem", color: "rgba(17,17,17,0.65)" }} className="footer-link">
-              {l.label}
-            </Link>
+      {/* Bottom bar */}
+      <div className="footer-inner footer-bottom">
+        <p className="footer-copy">© 2026 Hydrilla. All rights reserved.</p>
+
+        <nav className="footer-legal" aria-label="Legal">
+          {LEGAL_LINKS.map((l, i) => (
+            <React.Fragment key={l.label}>
+              {i > 0 && <span className="footer-legal-dot" aria-hidden />}
+              <Link href={l.href} className="footer-legal-link">
+                {l.label}
+              </Link>
+            </React.Fragment>
           ))}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.875rem" }} className="max-sm:justify-center">
+        </nav>
+
+        <div className="footer-socials">
           {SOCIAL_LINKS.map((s) => (
             <a
               key={s.label}
@@ -283,18 +219,6 @@ export default function Footer() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={s.label}
-              style={{
-                width: "2.25rem",
-                height: "2.25rem",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "0.5rem",
-                backgroundColor: "rgba(17,17,17,0.06)",
-                color: "rgba(17,17,17,0.6)",
-                transition: "background-color 0.18s ease, color 0.18s ease",
-                textDecoration: "none",
-              }}
               className="footer-social"
             >
               {s.icon}
@@ -304,9 +228,329 @@ export default function Footer() {
       </div>
 
       <style>{`
-        .footer-link:hover { color: #111 !important; }
-        .footer-email:hover { color: #111 !important; text-decoration: underline; }
-        .footer-social:hover { background-color: rgba(17,17,17,0.1) !important; color: #111 !important; }
+        .footer-root {
+          width: 100%;
+          background: #f7f6f3;
+          font-family: 'DM Sans', Arial, sans-serif;
+          -webkit-font-smoothing: antialiased;
+          box-sizing: border-box;
+          overflow: hidden;
+          border-top: 1px solid rgba(17, 17, 17, 0.06);
+        }
+
+        .footer-inner {
+          max-width: 80rem;
+          margin: 0 auto;
+          padding-left: 2rem;
+          padding-right: 2rem;
+          box-sizing: border-box;
+        }
+
+        .footer-nav {
+          padding-top: 5rem;
+          padding-bottom: 4rem;
+          display: grid;
+          grid-template-columns: minmax(220px, 1.15fr) 2.4fr;
+          gap: 3.5rem 4rem;
+          align-items: start;
+        }
+
+        .footer-brand-name {
+          margin: 0 0 0.75rem;
+          font-family: 'RoobertVF', 'Roobert', 'DM Sans', sans-serif;
+          font-size: 1.75rem;
+          font-weight: 600;
+          letter-spacing: -0.03em;
+          color: #111;
+          line-height: 1.1;
+        }
+
+        .footer-brand-tag {
+          margin: 0 0 2rem;
+          max-width: 16rem;
+          font-size: 0.9375rem;
+          line-height: 1.55;
+          color: rgba(17, 17, 17, 0.55);
+          letter-spacing: -0.01em;
+        }
+
+        .footer-email-wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 0.65rem;
+        }
+
+        .footer-cols {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 2rem 2.5rem;
+        }
+
+        .footer-col-heading {
+          margin: 0 0 1.15rem;
+          font-family: 'RoobertVF', 'Roobert', 'DM Sans', sans-serif;
+          font-size: 0.6875rem;
+          font-weight: 600;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(17, 17, 17, 0.42);
+        }
+
+        .footer-link-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.7rem;
+        }
+
+        .footer-link {
+          font-size: 0.9375rem;
+          font-weight: 400;
+          color: rgba(17, 17, 17, 0.72);
+          text-decoration: none;
+          letter-spacing: -0.015em;
+          transition: color 0.15s ease;
+          line-height: 1.35;
+        }
+
+        .footer-link:hover {
+          color: #111;
+        }
+
+        /* Email — clear, scannable, not buried in a link list */
+        .footer-email {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.55rem;
+          max-width: 100%;
+          padding: 0.65rem 0.85rem;
+          border-radius: 0.5rem;
+          background: #111;
+          color: #fff;
+          text-decoration: none;
+          transition: background 0.15s ease, transform 0.15s ease;
+        }
+
+        .footer-email:hover {
+          background: #2a2a2a;
+        }
+
+        .footer-email:active {
+          transform: scale(0.98);
+        }
+
+        .footer-email-icon {
+          display: flex;
+          flex-shrink: 0;
+          opacity: 0.75;
+        }
+
+        .footer-email-text {
+          font-size: 0.875rem;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .footer-rule {
+          border-top: 1px solid rgba(17, 17, 17, 0.08);
+        }
+
+        .footer-wordmark {
+          position: relative;
+          padding-top: 2.75rem;
+          padding-bottom: 0;
+          min-height: 11rem;
+          overflow: hidden;
+        }
+
+        .footer-wordmark-media {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          pointer-events: none;
+        }
+
+        .footer-wordmark-svg {
+          position: relative;
+          z-index: 1;
+          display: block;
+          width: 100%;
+          height: auto;
+        }
+
+        .footer-bottom {
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          gap: 1.25rem 1.5rem;
+          padding-top: 1.75rem;
+          padding-bottom: 2.25rem;
+        }
+
+        .footer-copy {
+          margin: 0;
+          font-size: 0.8125rem;
+          color: rgba(17, 17, 17, 0.45);
+          letter-spacing: -0.01em;
+        }
+
+        .footer-legal {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 0.15rem 0.65rem;
+        }
+
+        .footer-legal-dot {
+          width: 3px;
+          height: 3px;
+          border-radius: 50%;
+          background: rgba(17, 17, 17, 0.2);
+          flex-shrink: 0;
+        }
+
+        .footer-legal-link {
+          font-size: 0.8125rem;
+          color: rgba(17, 17, 17, 0.5);
+          text-decoration: none;
+          letter-spacing: -0.01em;
+          transition: color 0.15s ease;
+        }
+
+        .footer-legal-link:hover {
+          color: #111;
+        }
+
+        .footer-socials {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 0.4rem;
+        }
+
+        .footer-social {
+          width: 2.125rem;
+          height: 2.125rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 0.4rem;
+          color: rgba(17, 17, 17, 0.45);
+          text-decoration: none;
+          transition: color 0.15s ease, background 0.15s ease;
+        }
+
+        .footer-social:hover {
+          color: #111;
+          background: rgba(17, 17, 17, 0.05);
+        }
+
+        @media (max-width: 1023px) {
+          .footer-nav {
+            grid-template-columns: 1fr;
+            gap: 2.75rem;
+            padding-top: 3.5rem;
+            padding-bottom: 3rem;
+          }
+
+          .footer-brand-tag {
+            max-width: 22rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .footer-cols {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 2rem 1.75rem;
+          }
+
+          .footer-bottom {
+            grid-template-columns: 1fr;
+            justify-items: start;
+            gap: 1.25rem;
+            padding-top: 1.5rem;
+            padding-bottom: 2rem;
+          }
+
+          .footer-legal {
+            justify-content: flex-start;
+          }
+
+          .footer-socials {
+            justify-content: flex-start;
+          }
+        }
+
+        @media (max-width: 639px) {
+          .footer-inner {
+            padding-left: 1.25rem;
+            padding-right: 1.25rem;
+          }
+
+          .footer-nav {
+            padding-top: 2.75rem;
+            padding-bottom: 2.25rem;
+            gap: 2.25rem;
+          }
+
+          .footer-brand-name {
+            font-size: 1.5rem;
+          }
+
+          .footer-cols {
+            gap: 1.75rem 1.25rem;
+          }
+
+          .footer-col-heading {
+            margin-bottom: 0.85rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(17, 17, 17, 0.08);
+          }
+
+          .footer-link {
+            font-size: 0.875rem;
+          }
+
+          .footer-email {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .footer-wordmark {
+            min-height: 7.5rem;
+            padding-top: 1.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .footer-wordmark-svg {
+            width: 85vw;
+            max-width: 340px;
+          }
+
+          .footer-bottom {
+            justify-items: center;
+            text-align: center;
+            padding-bottom: 2.5rem;
+            gap: 1.35rem;
+          }
+
+          .footer-legal {
+            justify-content: center;
+          }
+
+          .footer-socials {
+            justify-content: center;
+          }
+        }
       `}</style>
     </footer>
   );

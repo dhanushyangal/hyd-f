@@ -1,63 +1,79 @@
 import UseCasePage from "../../../components/sections/UseCasePage";
 import Footer from "../../../components/layout/Footer";
-import { createPageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { createPageMetadata, getUseCaseJsonLd } from "@/lib/seo";
 import { USECASE_HERO } from "@/lib/cloudinary";
 
+const DESCRIPTION =
+  "Turn product concepts into polished 3D for marketing, e-commerce, and digital storefronts. Export standard formats for your stack.";
+
 const DATA = {
-  industry: "Product Visualization",
-  headline: "Product Assets for Visualization and Marketing",
+  id: "productdesign" as const,
+  headline: "Product visuals from concept to commerce",
   heroImage: USECASE_HERO.prod,
-  accentColor: "#f0a830",
+  capabilitiesHeading: "Built for product teams",
   tagline:
-    "Create detailed models suitable for product visualization, marketing assets, and e-commerce experiences—from concept to production in seconds.",
-  backHref: "/usecase",
+    "Marketing-ready 3D for packaging, campaigns, and digital storefronts.",
   features: [
     {
-      title: "Clean product model generation",
-      body: "Create detailed models suitable for product visualization, marketing assets, and e-commerce experiences.",
+      title: "Clean product models",
+      body: "Generate detailed product forms for visualization and marketing.",
     },
     {
-      title: "Flexible concept presentation",
-      body: "Turn early product ideas into visual assets that teams can use across design, marketing, and presentation workflows.",
+      title: "Concept to presentation",
+      body: "Turn early ideas into assets design and marketing can share.",
     },
     {
-      title: "E-commerce ready",
-      body: "Generate product visuals optimized for 3D commerce platforms and AR try-on experiences.",
+      title: "Commerce-ready exports",
+      body: "Download GLB and related formats for 3D viewers and digital storefronts.",
     },
     {
-      title: "Rapid variant creation",
-      body: "Create color, material, and configuration variants of products quickly for comprehensive marketing coverage.",
+      title: "Rapid variants",
+      body: "Explore color, material, and configuration options without remastering each asset.",
     },
   ],
   who: [
     {
-      role: "Product Designers",
-      description: "Visualize product concepts in 3D early in the process to validate design direction before physical prototyping.",
+      role: "Product designers",
+      description: "Validate form and direction in 3D before physical prototyping.",
     },
     {
-      role: "Marketing Teams",
-      description: "Generate a full library of product visuals for campaigns, ads, and digital channels without a full studio shoot.",
+      role: "Marketing teams",
+      description: "Build campaign visuals without a full studio shoot for every SKU.",
     },
     {
-      role: "E-commerce Brands",
-      description: "Create 3D product listings and AR try-on experiences that increase buyer confidence and reduce returns.",
+      role: "E-commerce brands",
+      description: "Add 3D product views that help buyers decide with confidence.",
     },
     {
-      role: "Industrial Designers",
-      description: "Accelerate the concepting phase by generating and iterating on 3D product forms rapidly.",
+      role: "Industrial designers",
+      description: "Iterate product forms faster in early concept phases.",
     },
   ],
 };
 
 export const metadata = createPageMetadata({
-  title: "Product Visualization",
-  description: DATA.tagline,
+  title: "AI 3D Assets for Product Visualization",
+  description: DESCRIPTION,
   path: "/usecase/productdesign",
+  keywords: [
+    "AI product visualization",
+    "3D product models",
+    "e-commerce 3D assets",
+    "text to 3D product design",
+    "marketing 3D generation",
+  ],
+  ogImage: USECASE_HERO.prod,
 });
 
 export default function ProductDesignPage() {
   return (
     <>
+      <JsonLd data={getUseCaseJsonLd({
+        name: "Product Visualization",
+        description: DESCRIPTION,
+        path: "/usecase/productdesign",
+      })} />
       <UseCasePage data={DATA} />
       <Footer />
     </>

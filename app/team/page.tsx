@@ -104,7 +104,7 @@ export default function TeamPage() {
           {/* Subtitle */}
           <p 
             className="text-sm sm:text-base md:text-lg text-white/90 mb-4 sm:mb-6 font-mono tracking-wide"
-            style={{ fontFamily: 'var(--font-space-grotesk), Space Grotesk, monospace' }}
+            style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
           >
             ( Our team is here for you. )
           </p>

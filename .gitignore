@@ -40,6 +40,9 @@ next-env.d.ts
 public/3d-models/
 public/3dheroimages/
 public/reference/
+# Local source media (served via Cloudinary)
+public/why-hydrilla/
+public/pricing/
 # clerk configuration (can include secrets)
 /.clerk/
 /.claude/

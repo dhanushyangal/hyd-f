@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ClientProviders } from "../components/ClientProviders";
 import { ConditionalNavbar } from "../components/layout/ConditionalNavbar";
-import { DM_Sans, Space_Grotesk } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
@@ -22,14 +22,6 @@ const dmSans = DM_Sans({
   variable: "--font-dm-sans",
   display: "swap",
   preload: true,
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "700"],
-  variable: "--font-space-grotesk",
-  display: "swap",
-  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -103,7 +95,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       signInFallbackRedirectUrl="/app/studio"
       signUpFallbackRedirectUrl="/app/studio"
     >
-    <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
+    <html lang="en" className={dmSans.variable}>
         <head>
           <link rel="preload" as="image" href={HERO_POSTER_PRELOAD_URL} fetchPriority="high" />
           <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="" />

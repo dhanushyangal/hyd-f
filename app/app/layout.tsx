@@ -28,11 +28,11 @@ export default function AppLayout({
       <SignedIn>
         <AccessGate>
           <AppLayoutProvider>
-            <div className="h-screen flex bg-white">
+            <div className="h-screen flex bg-[#fafafa]">
               <AppSidebar />
               <div className="flex-1 flex flex-col min-h-0 min-w-0">
                 <AppNavbar />
-                <div className="flex-1 min-h-0 overflow-auto">
+                <div className="flex-1 min-h-0 overflow-auto bg-[#fafafa]">
                   {children}
                 </div>
               </div>

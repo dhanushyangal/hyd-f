@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Footer from "../../components/layout/Footer";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Calendar, Mail, Send } from "lucide-react";
 
 const BOOK_DEMO_URL = "https://cal.com/hydrilla";
@@ -84,7 +84,7 @@ export default function ContactPage() {
           <h1
             className="m-0 mb-4 text-[#111] font-bold tracking-tight"
             style={{
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
+              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
               fontSize: "clamp(2.5rem, 6vw, 4rem)",
               letterSpacing: "-0.045em",
               lineHeight: 1.08,

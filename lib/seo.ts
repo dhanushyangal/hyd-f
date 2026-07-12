@@ -54,6 +54,8 @@ type PageMetadataOptions = {
   /** Use for the homepage to avoid the title template suffix. */
   absoluteTitle?: boolean;
   noIndex?: boolean;
+  keywords?: string[];
+  ogImage?: string;
 };
 
 export function absoluteUrl(path: string): string {
@@ -67,13 +69,17 @@ export function createPageMetadata({
   path,
   absoluteTitle = false,
   noIndex = false,
+  keywords,
+  ogImage,
 }: PageMetadataOptions): Metadata {
   const url = absoluteUrl(path);
   const fullTitle = absoluteTitle ? title : `${title} | ${SITE_NAME}`;
+  const image = ogImage || DEFAULT_OG_IMAGE;
 
   return {
     title: absoluteTitle ? { absolute: fullTitle } : title,
     description,
+    keywords: keywords?.length ? keywords : undefined,
     alternates: { canonical: url },
     openGraph: {
       type: "website",
@@ -84,10 +90,10 @@ export function createPageMetadata({
       description,
       images: [
         {
-          url: DEFAULT_OG_IMAGE,
+          url: image,
           width: 1200,
           height: 630,
-          alt: SITE_NAME,
+          alt: fullTitle,
         },
       ],
     },
@@ -97,7 +103,7 @@ export function createPageMetadata({
       creator: "@hydrillaai",
       title: fullTitle,
       description,
-      images: [DEFAULT_OG_IMAGE],
+      images: [image],
     },
     robots: noIndex
       ? { index: false, follow: false }
@@ -112,6 +118,61 @@ export function createPageMetadata({
             "max-video-preview": -1,
           },
         },
+  };
+}
+
+/** JSON-LD for industry use-case landing pages. */
+export function getUseCaseJsonLd(opts: {
+  name: string;
+  description: string;
+  path: string;
+}) {
+  const url = absoluteUrl(opts.path);
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": `${url}#webpage`,
+        url,
+        name: `${opts.name} | ${SITE_NAME}`,
+        description: opts.description,
+        isPartOf: { "@id": `${SITE_URL}/#website` },
+        about: {
+          "@type": "SoftwareApplication",
+          name: SITE_NAME,
+          applicationCategory: "DesignApplication",
+          offers: {
+            "@type": "Offer",
+            price: "0",
+            priceCurrency: "USD",
+          },
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: SITE_URL,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Use cases",
+            item: absoluteUrl("/usecase"),
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: opts.name,
+            item: url,
+          },
+        ],
+      },
+    ],
   };
 }
 

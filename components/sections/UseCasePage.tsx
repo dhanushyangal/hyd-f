@@ -1,15 +1,28 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "@clerk/nextjs";
-import { SignUpButton } from "@clerk/nextjs";
+import { motion, AnimatePresence } from "motion/react";
+import { useAuth, SignUpButton } from "@clerk/nextjs";
+import {
+  ChevronDown,
+  Check,
+  Boxes,
+  Layers,
+  Workflow,
+  Download,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
+import { USE_CASE_NAV, type UseCaseId } from "@/lib/usecases";
+import { cn } from "@/lib/utils";
 
 export interface UseCaseFeature {
   title: string;
   body: string;
+  icon?: LucideIcon;
 }
 
 export interface UseCaseWho {
@@ -18,272 +31,217 @@ export interface UseCaseWho {
 }
 
 export interface UseCaseData {
-  industry: string;
+  id: UseCaseId;
   headline: string;
   tagline: string;
   features: UseCaseFeature[];
   who: UseCaseWho[];
-  backHref?: string;
-  /** Single hero image path (e.g. /usecase/games.jpg) */
   heroImage?: string;
-  /** Multiple hero images for cycling (e.g. AR/VR) */
   heroImages?: string[];
-  /** Use portrait/vertical card (e.g. Film) */
   cardVertical?: boolean;
-  /** Accent colour for the page (e.g. "#3b8ee8") */
-  accentColor?: string;
+  /** Short SEO-friendly capability heading */
+  capabilitiesHeading?: string;
 }
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 28 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.215, 0.61, 0.355, 1] } },
-};
-
-const stagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.1 } },
-};
 
 const CAL_DEMO_URL = "https://cal.com/hydrilla";
 
+const DEFAULT_FEATURE_ICONS: LucideIcon[] = [Boxes, Layers, Workflow, Download, Users];
+
+function UseCaseSwitcher({ currentId }: { currentId: UseCaseId }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const current = USE_CASE_NAV.find((u) => u.id === currentId)!;
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative z-30 inline-flex flex-col items-start">
+      <div className="inline-flex items-stretch overflow-hidden border border-neutral-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <span className="inline-flex items-center bg-[#c8e05a] px-3.5 py-2.5 text-[13px] font-semibold tracking-tight text-neutral-950 sm:px-4">
+          Hydrilla for
+        </span>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex items-center gap-2 border-l border-neutral-200 bg-white px-3.5 py-2.5 text-[13px] font-semibold tracking-tight text-neutral-900 hover:bg-neutral-50 transition-colors sm:px-4"
+        >
+          {current.label}
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 text-neutral-500 transition-transform duration-200",
+              open && "rotate-180"
+            )}
+            strokeWidth={2.25}
+          />
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] as const }}
+            role="listbox"
+            aria-label="Use cases"
+            className="absolute left-0 top-[calc(100%+6px)] w-[min(100vw-2rem,320px)] border border-neutral-200 bg-white p-1.5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.18)]"
+          >
+            {USE_CASE_NAV.map((item) => {
+              const active = item.id === currentId;
+              const Icon = item.Icon;
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "flex items-start gap-3 px-3 py-2.5 transition-colors",
+                    active
+                      ? "bg-neutral-950 text-white"
+                      : "text-neutral-800 hover:bg-neutral-50"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "mt-0.5 h-4 w-4 shrink-0",
+                      active ? "text-white/80" : "text-neutral-400"
+                    )}
+                    strokeWidth={1.75}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold tracking-tight">
+                        {item.label}
+                      </span>
+                      {active && <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />}
+                    </span>
+                    <span
+                      className={cn(
+                        "mt-0.5 block text-[12px] leading-snug",
+                        active ? "text-white/65" : "text-neutral-500"
+                      )}
+                    >
+                      {item.blurb}
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function PrimaryCta({
+  isSignedIn,
+  className,
+}: {
+  isSignedIn: boolean | undefined;
+  className?: string;
+}) {
+  const base =
+    "inline-flex h-12 items-center justify-center px-6 text-[14px] font-semibold tracking-tight transition-colors " +
+    (className ?? "");
+
+  if (isSignedIn) {
+    return (
+      <Link href="/app/studio" className={cn(base, "bg-neutral-950 text-white hover:bg-neutral-800")}>
+        Start for free
+      </Link>
+    );
+  }
+
+  return (
+    <SignUpButton mode="modal" forceRedirectUrl="/app/studio">
+      <button
+        type="button"
+        className={cn(base, "bg-neutral-950 text-white hover:bg-neutral-800 border-0 cursor-pointer")}
+      >
+        Start for free
+      </button>
+    </SignUpButton>
+  );
+}
+
 export default function UseCasePage({ data }: { data: UseCaseData }) {
   const { isSignedIn } = useAuth();
-  const accent = data.accentColor ?? "#3b8ee8";
   const heroSources = data.heroImages?.length
     ? data.heroImages
     : data.heroImage
       ? [data.heroImage]
       : [];
   const [cyclingIndex, setCyclingIndex] = useState(0);
+
   useEffect(() => {
     if (heroSources.length <= 1) return;
     const t = setInterval(() => {
       setCyclingIndex((i) => (i + 1) % heroSources.length);
-    }, 4000);
+    }, 4500);
     return () => clearInterval(t);
   }, [heroSources.length]);
+
   const displayHeroSrc = heroSources[cyclingIndex] ?? heroSources[0];
-  const hasHeroCard = heroSources.length > 0;
+  const hasHero = Boolean(displayHeroSrc);
 
   return (
-    <main
-      style={{
-        width: "100%",
-        backgroundColor: "#fff",
-        fontFamily: "'DM Sans', Arial, sans-serif",
-        WebkitFontSmoothing: "antialiased",
-        paddingLeft: "env(safe-area-inset-left)",
-        paddingRight: "env(safe-area-inset-right)",
-      }}
-    >
-      {/* ── Hero ── */}
-      <section
-        style={{
-          position: "relative",
-          width: "100%",
-          minHeight: "100dvh",
-          background: "#0a0a0a",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "max(env(safe-area-inset-top), 6rem) 1.25rem 5rem",
-          paddingLeft: "max(1.25rem, env(safe-area-inset-left))",
-          paddingRight: "max(1.25rem, env(safe-area-inset-right))",
-          boxSizing: "border-box",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(ellipse 80% 55% at 50% 0%, rgba(255,255,255,0.04) 0%, transparent 60%)",
-            pointerEvents: "none",
-          }}
-        />
+    <main className="w-full bg-white font-dm-sans antialiased">
+      {/* Hero — Clay-style: switcher + headline + CTA + image */}
+      <section className="relative overflow-hidden border-b border-neutral-200/80 bg-[#fafafa]">
+        <div className="mx-auto grid max-w-6xl gap-10 px-5 pb-14 pt-28 sm:px-6 sm:pb-16 sm:pt-32 lg:grid-cols-[minmax(0,1fr)_minmax(280px,480px)] lg:items-end lg:gap-12 lg:pb-20 lg:pt-36">
+          <div className="flex min-w-0 flex-col items-start gap-6">
+            <UseCaseSwitcher currentId={data.id} />
 
-        <div
-          className={`grid gap-6 md:gap-10 w-full max-w-6xl mx-auto ${hasHeroCard ? "md:grid-cols-[1fr_minmax(280px,420px)]" : ""}`}
-          style={{
-            alignItems: "center",
-            justifyContent: "center",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          {/* Left: content */}
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            style={{
-              width: "100%",
-              textAlign: hasHeroCard ? "left" : "center",
-              display: "flex",
-              flexDirection: "column",
-              gap: "1.25rem",
-              minWidth: 0,
-            }}
-          >
-            <motion.div variants={fadeUp}>
-              <Link
-                href={data.backHref ?? "/"}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.375rem",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "100px",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  backgroundColor: "rgba(255,255,255,0.05)",
-                  color: "rgba(255,255,255,0.55)",
-                  fontSize: "0.75rem",
-                  fontWeight: 500,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  textDecoration: "none",
-                  marginBottom: "0.25rem",
-                  minHeight: "44px",
-                  boxSizing: "border-box",
-                  justifyContent: "center",
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-                  <path d="M8 10L4 6l4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                {data.industry}
-              </Link>
-            </motion.div>
-            <motion.h1
-              variants={fadeUp}
-              style={{
-                margin: 0,
-                fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                fontSize: "clamp(2rem, 5vw, 4rem)",
-                fontWeight: 700,
-                color: "#fff",
-                letterSpacing: "-0.04em",
-                lineHeight: 1.08,
-              }}
-            >
-              {data.headline}
-            </motion.h1>
-            <motion.p
-              variants={fadeUp}
-              style={{
-                margin: 0,
-                fontFamily: "'DM Sans', Arial, sans-serif",
-                fontSize: "clamp(0.9375rem, 1.8vw, 1.1875rem)",
-                fontWeight: 400,
-                color: "rgba(255,255,255,0.55)",
-                lineHeight: 1.65,
-                maxWidth: hasHeroCard ? "36rem" : "40rem",
-                alignSelf: hasHeroCard ? "stretch" : "center",
-              }}
-            >
-              {data.tagline}
-            </motion.p>
-            <motion.div
-              variants={fadeUp}
-              style={{
-                display: "flex",
-                gap: "0.75rem",
-                justifyContent: hasHeroCard ? "flex-start" : "center",
-                flexWrap: "wrap",
-                marginTop: "0.25rem",
-              }}
-            >
-              {isSignedIn ? (
-                <Link
-                  href="/app/studio"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0.875rem 1.75rem",
-                    minHeight: "48px",
-                    borderRadius: "100px",
-                    backgroundColor: "#fff",
-                    color: "#111",
-                    fontSize: "0.9375rem",
-                    fontWeight: 600,
-                    textDecoration: "none",
-                    letterSpacing: "-0.01em",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Start Creating
-                </Link>
-              ) : (
-                <SignUpButton mode="modal" forceRedirectUrl="/app/studio">
-                  <button
-                    type="button"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "0.875rem 1.75rem",
-                      minHeight: "48px",
-                      borderRadius: "100px",
-                      backgroundColor: "#fff",
-                      color: "#111",
-                      fontSize: "0.9375rem",
-                      fontWeight: 600,
-                      letterSpacing: "-0.01em",
-                      whiteSpace: "nowrap",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Start Creating
-                  </button>
-                </SignUpButton>
-              )}
+            <div className="max-w-xl">
+              <h1 className="text-[36px] font-semibold leading-[1.08] tracking-[-0.035em] text-neutral-950 sm:text-[44px] lg:text-[52px]">
+                {data.headline}
+              </h1>
+              <p className="mt-4 max-w-lg text-[16px] leading-7 text-neutral-600 sm:text-[17px]">
+                {data.tagline}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <PrimaryCta isSignedIn={isSignedIn} />
               <a
                 href={CAL_DEMO_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "0.875rem 1.75rem",
-                  minHeight: "48px",
-                  borderRadius: "100px",
-                  border: "1.5px solid rgba(255,255,255,0.2)",
-                  backgroundColor: "transparent",
-                  color: "#fff",
-                  fontSize: "0.9375rem",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  letterSpacing: "-0.01em",
-                  whiteSpace: "nowrap",
-                }}
+                className="inline-flex h-12 items-center justify-center border border-neutral-300 bg-white px-6 text-[14px] font-semibold tracking-tight text-neutral-900 hover:bg-neutral-50 transition-colors"
               >
-                Book Demo
+                Book a demo
               </a>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
 
-          {/* Right: hero image card (HowItWorks-style) */}
-          {hasHeroCard && displayHeroSrc && (
-            <motion.div
-              variants={fadeUp}
-              initial="hidden"
-              animate="show"
-              style={{
-                width: "100%",
-                maxWidth: "100%",
-                borderRadius: "1.25rem",
-                overflow: "hidden",
-                backgroundColor: "#f5f4f2",
-                aspectRatio: data.cardVertical ? "3 / 4" : "4 / 5",
-                maxHeight: data.cardVertical ? "520px" : "480px",
-                position: "relative",
-              }}
+          {hasHero && displayHeroSrc && (
+            <div
+              className={cn(
+                "relative w-full overflow-hidden border border-neutral-200/80 bg-neutral-100 shadow-[0_20px_50px_-24px_rgba(0,0,0,0.25)]",
+                data.cardVertical ? "aspect-[3/4] max-h-[520px]" : "aspect-[4/5] max-h-[480px] lg:aspect-[5/6]"
+              )}
             >
               <AnimatePresence mode="wait">
                 <motion.div
@@ -292,364 +250,116 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.35 }}
-                  style={{ position: "absolute", inset: 0 }}
+                  className="absolute inset-0"
                 >
                   <Image
                     src={displayHeroSrc}
                     alt=""
                     fill
-                    sizes="(max-width: 768px) 100vw, 420px"
-                    style={{ objectFit: "contain", objectPosition: "center" }}
+                    sizes="(max-width: 1024px) 100vw, 480px"
+                    className="object-cover object-center"
+                    priority
                     unoptimized
                   />
                 </motion.div>
               </AnimatePresence>
-            </motion.div>
+            </div>
           )}
         </div>
       </section>
 
-      {/* ── Features ── */}
-      <section
-        style={{
-          width: "100%",
-          backgroundColor: "#fff",
-          padding: "3rem 1.25rem 4rem",
-          boxSizing: "border-box",
-        }}
-        className="md:py-16 md:px-6"
-      >
-        <div style={{ maxWidth: "72rem", margin: "0 auto" }} className="px-0">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.5, ease: [0.215, 0.61, 0.355, 1] }}
-            style={{ textAlign: "center", marginBottom: "3.5rem" }}
-          >
-            <p
-              style={{
-                margin: "0 0 0.625rem",
-                fontSize: "0.6875rem",
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "#888",
-              }}
-            >
+      {/* Capabilities */}
+      <section className="border-b border-neutral-200/80 bg-white px-5 py-16 sm:px-6 sm:py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">
               Capabilities
             </p>
-            <h2
-              style={{
-                margin: 0,
-                fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                fontSize: "clamp(1.75rem, 3.5vw, 2.75rem)",
-                fontWeight: 700,
-                color: "#111",
-                letterSpacing: "-0.035em",
-                lineHeight: 1.15,
-              }}
-            >
-              What you can build
+            <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.03em] text-neutral-950 sm:text-[32px]">
+              {data.capabilitiesHeading ?? "Built for your pipeline"}
             </h2>
-          </motion.div>
+          </div>
 
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: "-60px" }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5"
-          >
-            {data.features.map((feature, idx) => (
-              <motion.div
-                key={feature.title}
-                variants={fadeUp}
-                style={{
-                  padding: "1.75rem 2rem",
-                  borderRadius: "1rem",
-                  border: "1px solid rgba(17,17,17,0.07)",
-                  backgroundColor: "#fafaf9",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.75rem",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.875rem" }}>
-                  <span
-                    style={{
-                      flexShrink: 0,
-                      width: "28px",
-                      height: "28px",
-                      borderRadius: "8px",
-                      backgroundColor: `color-mix(in srgb, ${accent} 12%, transparent)`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontFamily: "'Space Grotesk', sans-serif",
-                      fontSize: "0.6875rem",
-                      fontWeight: 700,
-                      color: accent,
-                      letterSpacing: "0.02em",
-                      marginTop: "2px",
-                    }}
-                  >
-                    {String(idx + 1).padStart(2, "0")}
-                  </span>
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                      fontSize: "1.0625rem",
-                      fontWeight: 600,
-                      color: "#111",
-                      letterSpacing: "-0.025em",
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {feature.title}
-                  </h3>
-                </div>
-                <p
-                  style={{
-                    margin: "0 0 0 2.875rem",
-                    fontSize: "0.875rem",
-                    color: "#5e5c5a",
-                    lineHeight: 1.7,
-                    letterSpacing: "-0.01em",
-                  }}
+          <div className="mt-10 grid grid-cols-1 gap-px overflow-hidden border border-neutral-200 bg-neutral-200 sm:grid-cols-2">
+            {data.features.map((feature, idx) => {
+              const Icon = feature.icon ?? DEFAULT_FEATURE_ICONS[idx % DEFAULT_FEATURE_ICONS.length];
+              return (
+                <div
+                  key={feature.title}
+                  className="flex gap-4 bg-white p-6 sm:p-7"
                 >
-                  {feature.body}
-                </p>
-              </motion.div>
-            ))}
-          </motion.div>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-neutral-200 bg-neutral-50 text-neutral-800">
+                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-[15px] font-semibold tracking-tight text-neutral-950">
+                      {feature.title}
+                    </h3>
+                    <p className="mt-1.5 text-[14px] leading-6 text-neutral-600">
+                      {feature.body}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
-      {/* ── Who uses this ── */}
-      <section
-        style={{
-          width: "100%",
-          backgroundColor: "#f6f5f3",
-          padding: "3rem 1.25rem 4rem",
-          boxSizing: "border-box",
-        }}
-        className="md:py-14 md:px-6"
-      >
-        <div style={{ maxWidth: "72rem", margin: "0 auto" }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.5, ease: [0.215, 0.61, 0.355, 1] }}
-            style={{ textAlign: "center", marginBottom: "3.5rem" }}
-          >
-            <p
-              style={{
-                margin: "0 0 0.625rem",
-                fontSize: "0.6875rem",
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "#888",
-              }}
-            >
-              Who it&apos;s for
+      {/* Who */}
+      <section className="border-b border-neutral-200/80 bg-[#fafafa] px-5 py-16 sm:px-6 sm:py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">
+              Teams
             </p>
-            <h2
-              style={{
-                margin: 0,
-                fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                fontSize: "clamp(1.75rem, 3.5vw, 2.75rem)",
-                fontWeight: 700,
-                color: "#111",
-                letterSpacing: "-0.035em",
-                lineHeight: 1.15,
-              }}
-            >
-              Built for teams that move fast
+            <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.03em] text-neutral-950 sm:text-[32px]">
+              Who uses Hydrilla
             </h2>
-          </motion.div>
+          </div>
 
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, margin: "-60px" }}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "1rem",
-            }}
-          >
+          <div className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {data.who.map((item) => (
-              <motion.div
+              <div
                 key={item.role}
-                variants={fadeUp}
-                style={{
-                  padding: "1.5rem 1.75rem",
-                  borderRadius: "0.875rem",
-                  border: "1px solid rgba(17,17,17,0.07)",
-                  backgroundColor: "#fff",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.5rem",
-                }}
+                className="border border-neutral-200 bg-white p-5"
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.125rem" }}>
-                  <span
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      backgroundColor: accent,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <p
-                    style={{
-                      margin: 0,
-                      fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-                      fontSize: "0.9375rem",
-                      fontWeight: 600,
-                      color: "#111",
-                      letterSpacing: "-0.02em",
-                    }}
-                  >
-                    {item.role}
-                  </p>
-                </div>
-                <p
-                  style={{
-                    margin: "0 0 0 1.25rem",
-                    fontSize: "0.8125rem",
-                    color: "#5e5c5a",
-                    lineHeight: 1.65,
-                    letterSpacing: "-0.01em",
-                  }}
-                >
+                <p className="text-[14px] font-semibold tracking-tight text-neutral-950">
+                  {item.role}
+                </p>
+                <p className="mt-2 text-[13px] leading-6 text-neutral-600">
                   {item.description}
                 </p>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         </div>
       </section>
 
-      {/* ── Final CTA ── */}
-      <section
-        style={{
-          width: "100%",
-          backgroundColor: "#0a0a0a",
-          padding: "3rem 1.25rem 4rem",
-          boxSizing: "border-box",
-          textAlign: "center",
-        }}
-        className="md:py-16 md:px-6"
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.55, ease: [0.215, 0.61, 0.355, 1] }}
-          style={{
-            maxWidth: "40rem",
-            margin: "0 auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1.75rem",
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: "'Space Grotesk', 'DM Sans', Arial, sans-serif",
-              fontSize: "clamp(1.875rem, 4vw, 3rem)",
-              fontWeight: 700,
-              color: "#fff",
-              letterSpacing: "-0.04em",
-              lineHeight: 1.12,
-            }}
-          >
-            Ready to build faster?
+      {/* Final CTA */}
+      <section className="bg-neutral-950 px-5 py-16 sm:px-6 sm:py-20">
+        <div className="mx-auto flex max-w-3xl flex-col items-start gap-6 sm:items-center sm:text-center">
+          <h2 className="text-[28px] font-semibold tracking-[-0.03em] text-white sm:text-[36px]">
+            Start generating today
           </h2>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "1rem",
-              color: "rgba(255,255,255,0.5)",
-              lineHeight: 1.65,
-            }}
-          >
-            Start generating production-ready 3D assets today or book a demo to see what&apos;s possible.
+          <p className="max-w-md text-[15px] leading-7 text-neutral-400">
+            Production-ready 3D from text or image. Export GLB, FBX, and OBJ.
           </p>
-          <div style={{ display: "flex", gap: "0.875rem", justifyContent: "center", flexWrap: "wrap" }}>
-            {isSignedIn ? (
-              <Link
-                href="/app/studio"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "0.875rem 2rem",
-                  borderRadius: "100px",
-                  backgroundColor: "#fff",
-                  color: "#111",
-                  fontSize: "0.9375rem",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                Start Creating
-              </Link>
-            ) : (
-              <SignUpButton mode="modal" forceRedirectUrl="/app/studio">
-                <button
-                  type="button"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0.875rem 2rem",
-                    borderRadius: "100px",
-                    backgroundColor: "#fff",
-                    color: "#111",
-                    fontSize: "0.9375rem",
-                    fontWeight: 600,
-                    letterSpacing: "-0.01em",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  Start Creating
-                </button>
-              </SignUpButton>
-            )}
+          <div className="flex flex-wrap gap-3 sm:justify-center">
+            <PrimaryCta
+              isSignedIn={isSignedIn}
+              className="!bg-white !text-neutral-950 hover:!bg-neutral-100"
+            />
             <a
               href={CAL_DEMO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0.875rem 2rem",
-                borderRadius: "100px",
-                border: "1.5px solid rgba(255,255,255,0.2)",
-                backgroundColor: "transparent",
-                color: "#fff",
-                fontSize: "0.9375rem",
-                fontWeight: 600,
-                textDecoration: "none",
-                letterSpacing: "-0.01em",
-              }}
+              className="inline-flex h-12 items-center justify-center border border-white/25 px-6 text-[14px] font-semibold tracking-tight text-white hover:bg-white/5 transition-colors"
             >
-              Book Demo
+              Book a demo
             </a>
           </div>
-        </motion.div>
+        </div>
       </section>
     </main>
   );
