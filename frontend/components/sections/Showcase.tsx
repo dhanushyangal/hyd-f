@@ -224,51 +224,89 @@ export default function Showcase() {
     }
   };
 
-  // Handle scroll snap and update index, prevent vertical scroll lock
+  // Image loop animation for Trellis 2 card — only while carousel is in view
+  useEffect(() => {
+    const trellisItem = showcaseItems.find(item => item.id === 'trellis-2');
+    if (!trellisItem?.images) return;
+
+    const root = scrollContainerRef.current;
+    if (!root) return;
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(() => {
+        setImageLoopIndex((prev) => (prev + 1) % trellisItem.images!.length);
+      }, 2000);
+    };
+    const stop = () => {
+      if (!interval) return;
+      clearInterval(interval);
+      interval = null;
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) start();
+        else stop();
+      },
+      { rootMargin: "80px 0px", threshold: 0.15 }
+    );
+    observer.observe(root);
+
+    return () => {
+      observer.disconnect();
+      stop();
+    };
+  }, []);
+
+  // Scroll index updates — rAF + skip unchanged index
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
+    let raf = 0;
     const handleScroll = () => {
-      const scrollLeft = container.scrollLeft;
-      const containerPadding = parseInt(getComputedStyle(container).paddingLeft || '0');
-      const scrollPosition = scrollLeft + containerPadding;
-      
-      // Find which card is currently in view (check all cards, not just up to maxNavIndex)
-      let newIndex = 0;
-      let minDistance = Infinity;
-      
-      cardRefs.current.forEach((card, index) => {
-        if (card) {
-          const cardLeft = card.offsetLeft;
-          const cardCenter = cardLeft + card.offsetWidth / 2;
-          const viewportCenter = scrollPosition + container.clientWidth / 2;
-          const distance = Math.abs(viewportCenter - cardCenter);
-          
-          if (distance < minDistance) {
-            minDistance = distance;
-            newIndex = index;
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        const scrollLeft = container.scrollLeft;
+        const containerPadding = parseInt(getComputedStyle(container).paddingLeft || "0");
+        const scrollPosition = scrollLeft + containerPadding;
+
+        let newIndex = 0;
+        let minDistance = Infinity;
+
+        cardRefs.current.forEach((card, index) => {
+          if (card) {
+            const cardLeft = card.offsetLeft;
+            const cardCenter = cardLeft + card.offsetWidth / 2;
+            const viewportCenter = scrollPosition + container.clientWidth / 2;
+            const distance = Math.abs(viewportCenter - cardCenter);
+
+            if (distance < minDistance) {
+              minDistance = distance;
+              newIndex = index;
+            }
           }
-        }
+        });
+
+        const clampedIndex = Math.min(Math.max(minNavIndex, newIndex), maxNavIndex);
+        setCurrentIndex((prev) => (prev === clampedIndex ? prev : clampedIndex));
       });
-      
-      // Clamp to navigation limits
-      const clampedIndex = Math.min(Math.max(minNavIndex, newIndex), maxNavIndex);
-      setCurrentIndex(clampedIndex);
     };
 
-    // Allow normal horizontal scrolling without preventing default
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    
+    container.addEventListener("scroll", handleScroll, { passive: true });
+
     return () => {
-      container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener("scroll", handleScroll);
+      if (raf) window.cancelAnimationFrame(raf);
     };
   }, [maxNavIndex, minNavIndex]);
 
   // Center first card on initial load (especially important for mobile)
   useEffect(() => {
     if (scrollContainerRef.current && cardRefs.current[0] && isMobile) {
-      // Small delay to ensure layout is complete
       const timer = setTimeout(() => {
         const card = cardRefs.current[0];
         const container = scrollContainerRef.current;
@@ -276,33 +314,21 @@ export default function Showcase() {
           const cardLeft = card.offsetLeft;
           const cardRect = card.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
-          const containerPadding = parseInt(getComputedStyle(container).paddingLeft || '0');
-          
+          const containerPadding = parseInt(getComputedStyle(container).paddingLeft || "0");
+
           const cardCenter = cardLeft + cardRect.width / 2;
           const containerCenter = containerPadding + containerRect.width / 2;
           const scrollLeft = cardCenter - containerCenter;
-          
+
           container.scrollTo({
             left: Math.max(0, scrollLeft),
-            behavior: 'auto',
+            behavior: "auto",
           });
         }
       }, 100);
       return () => clearTimeout(timer);
     }
   }, [isMobile]);
-
-  // Image loop animation for Trellis 2 card
-  useEffect(() => {
-    const trellisItem = showcaseItems.find(item => item.id === 'trellis-2');
-    if (!trellisItem?.images) return;
-
-    const interval = setInterval(() => {
-      setImageLoopIndex((prev) => (prev + 1) % trellisItem.images!.length);
-    }, 2000); // Change image every 2 seconds
-
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <section className="relative w-full bg-neutral-50 py-16 sm:py-20 md:py-24 pb-24 sm:pb-28 md:pb-32">

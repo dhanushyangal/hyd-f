@@ -58,27 +58,34 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   const isThreeDAIPageInSecondSection = isThreeDAIPage && isInSecondSection;
   const isHomePageInSecondSection = isHomePage && isInSecondSection;
 
-  // Scroll detection for hero variant and team page
+  // Scroll detection for hero variant and team page (passive + rAF)
   useEffect(() => {
     if (!useHeroStyling) return;
 
+    let raf = 0;
     const handleScroll = () => {
-      const scrollY = window.scrollY;
-      setIsScrolled(scrollY > 50);
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        const scrollY = window.scrollY;
+        setIsScrolled(scrollY > 50);
 
-      // For team page, FAQ, case study, 3D & AI, and home pages, detect if we're in the second section
-      if (isTeamPage || isFAQPage || isCaseStudyPage || isThreeDAIPage || isHomePage) {
-        const heroSection = document.querySelector('section[class*="min-h-screen"]');
-        if (heroSection) {
-          const heroBottom = heroSection.getBoundingClientRect().bottom;
-          setIsInSecondSection(heroBottom <= 100);
+        if (isTeamPage || isFAQPage || isCaseStudyPage || isThreeDAIPage || isHomePage) {
+          const heroSection = document.querySelector('section[class*="min-h-screen"]');
+          if (heroSection) {
+            const heroBottom = heroSection.getBoundingClientRect().bottom;
+            setIsInSecondSection(heroBottom <= 100);
+          }
         }
-      }
+      });
     };
 
-    window.addEventListener("scroll", handleScroll);
-    handleScroll(); // Initial check
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
   }, [useHeroStyling, isTeamPage, isFAQPage, isCaseStudyPage, isThreeDAIPage, isHomePage]);
 
   // Close mobile menu when clicking outside
@@ -103,10 +110,10 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     };
   }, [mobileMenuOpen]);
 
-  // Premium ultra-clear liquid glass effect for all pages
+  // Clean solid / light glass for marketing pages (avoid 80px blur — major GPU cost)
   const containerClasses = useHeroStyling
-    ? "bg-white/2 backdrop-blur-[80px] border border-gray-200/20 shadow-2xl"
-    : "bg-white/60 backdrop-blur-xl border border-gray-200/50 shadow-lg";
+    ? "bg-white/85 backdrop-blur-md border border-neutral-200/60 shadow-lg"
+    : "bg-white/90 backdrop-blur-md border border-neutral-200/50 shadow-md";
   
   // Home page hero is light (white bg) → use black nav; use-case pages are always light
   const isLightHeroPage = pathname === "/" || pathname.startsWith("/usecase");

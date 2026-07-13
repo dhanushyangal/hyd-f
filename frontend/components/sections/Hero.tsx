@@ -6,9 +6,21 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { MotionValue } from "motion/react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useReducedMotion } from "motion/react";
-import { PromptBox } from "../PromptBox";
 import { SignUpButton, useAuth } from "@clerk/nextjs";
 import { savePendingHeroPrompt } from "@/lib/pendingHeroPrompt";
+
+const PromptBox = dynamic(
+  () => import("../PromptBox").then((m) => ({ default: m.PromptBox })),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-[72px] w-full max-w-[min(90vw,720px)] rounded-[28px] border border-white/45 bg-white/55 shadow-[0_16px_48px_-18px_rgba(0,0,0,0.18)]"
+        aria-hidden
+      />
+    ),
+  }
+);
 
 const Showcase = dynamic(() => import("@/components/sections/Showcase"), {
   ssr: false,
@@ -38,7 +50,6 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 import {
   HERO_POSTER_PRELOAD_URL,
-  HERO_POSTER_URL,
   HERO_VIDEO_URL,
 } from "@/lib/cloudinary";
 import { BlurReveal } from "@/components/ui/BlurReveal";
@@ -90,7 +101,7 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
   return (
     <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden>
       <Image
-        src={HERO_POSTER_URL}
+        src={HERO_POSTER_PRELOAD_URL}
         alt=""
         fill
         priority
@@ -105,7 +116,7 @@ function HeroBackdropMedia({ reduceMotion }: { reduceMotion: boolean }) {
             videoPlaying ? "opacity-100" : "opacity-0"
           }`}
           src={HERO_VIDEO_URL}
-          poster={HERO_POSTER_URL}
+          poster={HERO_POSTER_PRELOAD_URL}
           autoPlay
           muted
           loop
@@ -163,21 +174,40 @@ export default function Hero() {
   const reduceMotion = useReducedMotion();
   const tiltX = useMotionValue(0);
   const tiltY = useMotionValue(0);
-  const tiltSpringX = useSpring(tiltX, { stiffness: 120, damping: 32, mass: 0.32 });
-  const tiltSpringY = useSpring(tiltY, { stiffness: 120, damping: 32, mass: 0.32 });
-  const headlineRotateX = useTransform(tiltSpringY, [-0.5, 0.5], [9, -9]);
-  const headlineRotateY = useTransform(tiltSpringX, [-0.5, 0.5], [-12, 12]);
+  const tiltSpringX = useSpring(tiltX, { stiffness: 90, damping: 28, mass: 0.4 });
+  const tiltSpringY = useSpring(tiltY, { stiffness: 90, damping: 28, mass: 0.4 });
+  const headlineRotateX = useTransform(tiltSpringY, [-0.5, 0.5], [5, -5]);
+  const headlineRotateY = useTransform(tiltSpringX, [-0.5, 0.5], [-7, 7]);
+  const tiltRafRef = useRef<number | null>(null);
+  const tiltPendingRef = useRef<{ x: number; y: number } | null>(null);
 
   const onHeroPointerMove = (e: React.MouseEvent<HTMLElement>) => {
     if (reduceMotion) return;
+    // Skip continuous tilt work on coarse pointers / touch devices.
+    if (typeof window !== "undefined" && window.matchMedia("(hover: none)").matches) return;
     const r = e.currentTarget.getBoundingClientRect();
     const nx = (e.clientX - r.left) / r.width - 0.5;
     const ny = (e.clientY - r.top) / r.height - 0.5;
-    tiltX.set(Math.max(-0.5, Math.min(0.5, nx * 1.2)));
-    tiltY.set(Math.max(-0.5, Math.min(0.5, ny * 1.2)));
+    tiltPendingRef.current = {
+      x: Math.max(-0.5, Math.min(0.5, nx)),
+      y: Math.max(-0.5, Math.min(0.5, ny)),
+    };
+    if (tiltRafRef.current != null) return;
+    tiltRafRef.current = window.requestAnimationFrame(() => {
+      tiltRafRef.current = null;
+      const next = tiltPendingRef.current;
+      if (!next) return;
+      tiltX.set(next.x);
+      tiltY.set(next.y);
+    });
   };
 
   const onHeroPointerLeave = () => {
+    if (tiltRafRef.current != null) {
+      window.cancelAnimationFrame(tiltRafRef.current);
+      tiltRafRef.current = null;
+    }
+    tiltPendingRef.current = null;
     tiltX.set(0);
     tiltY.set(0);
   };
@@ -272,7 +302,7 @@ export default function Hero() {
 
             {/* Segmented control: Create | Book Demo — liquid glass */}
             <div
-              className="flex p-1 rounded-full border border-white/35 bg-white/15 backdrop-blur-2xl shadow-[0_8px_32px_-8px_rgba(0,0,0,0.12),inset_0_1px_0_0_rgba(255,255,255,0.35)] [transform-style:preserve-3d]"
+              className="flex p-1 rounded-full border border-white/50 bg-white/70 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.14),inset_0_1px_0_0_rgba(255,255,255,0.7)]"
             >
               <button
                 type="button"
@@ -282,8 +312,8 @@ export default function Hero() {
                 {mode === "create" && (
                   <motion.div
                     layoutId="hero-segment"
-                    className="absolute inset-0 rounded-full border border-white/45 bg-white/35 backdrop-blur-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)]"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                    className="absolute inset-0 rounded-full border border-neutral-200/80 bg-white shadow-sm"
+                    transition={{ type: "spring", bounce: 0.18, duration: 0.35 }}
                   />
                 )}
                 <span className="relative z-10">Create</span>
@@ -296,8 +326,8 @@ export default function Hero() {
                 {mode === "demo" && (
                   <motion.div
                     layoutId="hero-segment"
-                    className="absolute inset-0 rounded-full border border-white/45 bg-white/35 backdrop-blur-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)]"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                    className="absolute inset-0 rounded-full border border-neutral-200/80 bg-white shadow-sm"
+                    transition={{ type: "spring", bounce: 0.18, duration: 0.35 }}
                   />
                 )}
                 <span className="relative z-10">Book Demo</span>
@@ -333,7 +363,7 @@ export default function Hero() {
                     transition={{ duration: 0.2 }}
                     className="w-full max-w-[min(90vw,720px)]"
                   >
-                    <div className="flex min-h-[72px] flex-col items-stretch gap-3 rounded-[28px] border border-white/45 bg-white/55 px-4 py-3.5 shadow-[0_16px_48px_-18px_rgba(0,0,0,0.22),inset_0_1px_0_0_rgba(255,255,255,0.65)] backdrop-blur-2xl sm:flex-row sm:items-center sm:rounded-[32px] sm:px-5 sm:py-4">
+                    <div className="flex min-h-[72px] flex-col items-stretch gap-3 rounded-[28px] border border-neutral-200 bg-white px-4 py-3.5 shadow-[0_12px_36px_-16px_rgba(0,0,0,0.2)] sm:flex-row sm:items-center sm:rounded-[32px] sm:px-5 sm:py-4">
                       <input
                         type="email"
                         value={demoEmail}

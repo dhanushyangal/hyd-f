@@ -91,7 +91,8 @@ type BlurRevealProps = {
 };
 
 /**
- * Main-heading scroll reveal: each word slowly clears from blur → sharp.
+ * Heading scroll reveal — opacity + translate only (no CSS blur filters).
+ * Blur-per-word was a major GPU cost on long marketing pages.
  */
 export function BlurReveal({
   children,
@@ -99,11 +100,11 @@ export function BlurReveal({
   className,
   style,
   delay = 0,
-  stagger = 0.1,
-  duration = 0.75,
+  stagger = 0.06,
+  duration = 0.55,
   margin = "-10% 0px -6% 0px",
-  blurPx = 12,
-  y = 14,
+  blurPx = 0,
+  y = 10,
   once = true,
   id,
 }: BlurRevealProps) {
@@ -112,6 +113,9 @@ export function BlurReveal({
   const units = toWordUnits(children);
   const words = units.filter((u) => u.kind === "word");
   const plainText = words.map((u) => (u as { text: string }).text).join(" ");
+  // Cap expensive per-word work; long lines animate as a single block.
+  const usePerWord = words.length > 0 && words.length <= 8;
+  void blurPx;
 
   if (reduceMotion || words.length === 0) {
     const StaticTag = as;
@@ -119,6 +123,22 @@ export function BlurReveal({
       <StaticTag id={id} className={className} style={style}>
         {children}
       </StaticTag>
+    );
+  }
+
+  if (!usePerWord) {
+    return (
+      <Tag
+        id={id}
+        className={cn(className)}
+        style={style}
+        initial={{ opacity: 0, y }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once, margin, amount: 0.35 }}
+        transition={{ duration, delay, ease: EASE }}
+      >
+        {children}
+      </Tag>
     );
   }
 
@@ -144,7 +164,7 @@ export function BlurReveal({
             <motion.span
               key={`w-${i}-${unit.text}`}
               className={cn(
-                "inline-block will-change-[filter,opacity,transform]",
+                "inline-block will-change-[opacity,transform]",
                 unit.italic && "italic"
               )}
               style={{
@@ -152,15 +172,13 @@ export function BlurReveal({
               }}
               initial={{
                 opacity: 0,
-                filter: `blur(${blurPx}px)`,
                 y,
               }}
               whileInView={{
                 opacity: 1,
-                filter: "blur(0px)",
                 y: 0,
               }}
-              viewport={{ once, margin, amount: 0.4 }}
+              viewport={{ once, margin, amount: 0.35 }}
               transition={{
                 duration,
                 delay: delay + index * stagger,

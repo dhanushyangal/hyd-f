@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { HERO_POSTER_URL, HERO_VIDEO_URL } from "@/lib/cloudinary";
 
@@ -113,6 +113,25 @@ function FooterEmail() {
 
 export default function Footer() {
   const [videoError, setVideoError] = useState(false);
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(false);
+  const wordmarkRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = wordmarkRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoadVideo(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px 0px", threshold: 0.01 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <footer className="footer-root" id="site-footer" role="contentinfo">
@@ -152,13 +171,14 @@ export default function Footer() {
       </div>
 
       {/* Large wordmark */}
-      <div className="footer-inner footer-wordmark">
-        {!videoError ? (
+      <div className="footer-inner footer-wordmark" ref={wordmarkRef}>
+        {shouldLoadVideo && !videoError ? (
           <video
             autoPlay
             muted
             loop
             playsInline
+            preload="none"
             poster={HERO_POSTER_URL}
             onError={() => setVideoError(true)}
             className="footer-wordmark-media"

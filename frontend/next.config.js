@@ -9,7 +9,9 @@ const nextConfig = {
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "**.tencentcos.cn" },
       { protocol: "https", hostname: "**.myqcloud.com" },
-      { protocol: "https", hostname: "**" },
+      { protocol: "https", hostname: "hydrilla-outputs-1.s3.amazonaws.com" },
+      { protocol: "https", hostname: "**.amazonaws.com" },
+      { protocol: "https", hostname: "img.clerk.com" },
     ],
     // Cap sizes to avoid "Array buffer allocation failed" (sharp allocates less memory)
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],

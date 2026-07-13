@@ -1,8 +1,13 @@
+import dynamic from "next/dynamic";
 import Hero from "../components/sections/Hero";
-import Footer from "../components/layout/Footer";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { HomeAuthRedirect } from "@/components/HomeAuthRedirect";
 import { createPageMetadata, getHomepageJsonLd } from "@/lib/seo";
+
+const Footer = dynamic(() => import("../components/layout/Footer"), {
+  ssr: true,
+  loading: () => <div className="min-h-[280px] w-full bg-white" aria-hidden />,
+});
 
 export const metadata = createPageMetadata({
   title: "Hydrilla AI | Production-Ready 3D Assets, Generated Fast",
@@ -16,7 +21,7 @@ export default function Home() {
       <JsonLd data={getHomepageJsonLd()} />
       <HomeAuthRedirect />
       <Hero />
-      {/* Site footer — always at the end of the marketing homepage */}
+      {/* Site footer — deferred JS; poster-only until near viewport */}
       <Footer />
     </>
   );

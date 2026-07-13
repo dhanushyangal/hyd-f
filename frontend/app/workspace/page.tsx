@@ -5,6 +5,7 @@ import { Suspense, useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
+import { motion } from "motion/react";
 import { Slider } from "../../components/ui/slider";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -565,12 +566,23 @@ function WorkspacePage() {
   const [resizingLeft, setResizingLeft] = useState(false);
   const resizeStartRef = useRef({ x: 0, leftW: 0 });
 
-  // Mobile: bottom two sections — Canvas (output) | Create (library + form)
+  // Compact (phone + tablet < lg): Canvas | Create tabs instead of 3-panel desktop
   const [mobileTab, setMobileTab] = useState<"canvas" | "create">("create");
+  const [isCompact, setIsCompact] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 1023px)").matches : false
+  );
 
   const MIN_PANEL = 200;
   const MAX_LEFT = 500;
   const RIGHT_PANEL_WIDTH = 320; // fixed width, not resizable; collapse gives more space to viewer
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setIsCompact(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     if (!resizingLeft) return;
@@ -2009,27 +2021,31 @@ function WorkspacePage() {
         </div>
       )}
 
-      {/* Mobile-only: top bar — back + name + tools */}
-      <header className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200/70 bg-white/90 backdrop-blur-xl shrink-0">
+      {/* Compact-only: top bar — back + name + tools (phones + tablets) */}
+      <header className="lg:hidden flex items-center justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 border-b border-neutral-200 bg-white shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <Link
             href="/app/studio"
-            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-neutral-100 text-neutral-500 transition-colors shrink-0"
+            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
             aria-label="Back to Studio"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </Link>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-400">Workspace</p>
-            <p className="text-[15px] font-semibold tracking-tight text-neutral-900 truncate" title={workspaceName.trim() ? workspaceName : "Hydrilla"}>
-              {workspaceName.trim() ? workspaceName : "Hydrilla"}
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Hydrilla</p>
+            <p className="text-[15px] font-semibold tracking-tight text-neutral-900 truncate" title={workspaceName.trim() ? workspaceName : "Workspace"}>
+              {workspaceName.trim() ? workspaceName : "Workspace"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="hidden min-[400px]:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800" title="Credits remaining">
+            <svg className="w-3.5 h-3.5 shrink-0 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <span className="text-[12px] font-semibold tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
+          </div>
           <Link
             href="/rigging"
-            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
+            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
             aria-label="3D Rigging"
             title="3D Rigging"
           >
@@ -2037,7 +2053,7 @@ function WorkspacePage() {
           </Link>
           <Link
             href="/generations"
-            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
+            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
             aria-label="Workspace generations"
             title="Generations"
           >
@@ -2046,25 +2062,25 @@ function WorkspacePage() {
         </div>
       </header>
 
-      {/* Mobile-only: large generating card on Create tab (canvas is hidden — user needs clear feedback); Canvas tab uses main column */}
+      {/* Compact: large generating card on Create tab */}
       {mobileTab === "create" && mobileCanvasGenerating && (
         <div
-          className="md:hidden fixed inset-x-0 z-[35] flex items-center justify-center px-4 pointer-events-auto bg-black/25 backdrop-blur-sm"
+          className="lg:hidden fixed inset-x-0 z-[35] flex items-center justify-center px-4 pointer-events-auto bg-black/25"
           style={{
-            top: "calc(3.5rem + env(safe-area-inset-top, 0px))",
-            bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
+            top: "calc(3.75rem + env(safe-area-inset-top, 0px))",
+            bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))",
           }}
           role="status"
           aria-live="polite"
           aria-busy="true"
         >
-          <div className="w-full max-w-sm min-h-[min(48vh,300px)] rounded-[28px] bg-white text-neutral-900 shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] flex flex-col items-center justify-center gap-5 px-8 py-10 mx-auto border border-neutral-200/60">
+          <div className="w-full max-w-sm min-h-[min(48vh,300px)] rounded-[28px] bg-white text-neutral-900 shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] flex flex-col items-center justify-center gap-5 px-8 py-10 mx-auto border border-neutral-200">
             <div className="w-12 h-12 border-2 border-neutral-200 border-t-neutral-900 rounded-full animate-spin shrink-0" />
             <div className="text-center space-y-1.5">
               <p className="text-[15px] font-semibold leading-snug tracking-tight">{mobileGeneratingMessage}</p>
               <p className="text-sm text-neutral-500 tabular-nums">{Math.round(mobileGeneratingProgress)}%</p>
             </div>
-            <div className="w-full max-w-[220px] h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+            <div className="w-full max-w-[220px] h-1.5 bg-neutral-200/80 rounded-full overflow-hidden">
               <div
                 className="h-full bg-neutral-900 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(mobileGeneratingProgress, 100)}%` }}
@@ -2074,22 +2090,22 @@ function WorkspacePage() {
         </div>
       )}
       {mobileGeneratedToast && (
-        <div className="md:hidden fixed left-0 right-0 top-[65px] z-30 flex justify-center px-3 py-2 pointer-events-none">
-          <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900 text-white text-xs font-medium shadow-lg">
+        <div className="lg:hidden fixed left-0 right-0 top-[calc(3.75rem+env(safe-area-inset-top,0px))] z-30 flex justify-center px-3 py-2 pointer-events-none">
+          <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-950 text-white text-xs font-medium shadow-lg">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             Generated
           </span>
         </div>
       )}
 
-      {/* 3-panel layout — on mobile: single column, show canvas OR (library + form) based on bottom tab */}
-      <div className="flex-1 flex min-h-0 overflow-hidden relative flex-col md:flex-row">
+      {/* 3-panel on desktop; compact: single column via Canvas | Create */}
+      <div className="flex-1 flex min-h-0 overflow-hidden relative flex-col lg:flex-row">
         {/* Left panel toggle */}
         <button
           type="button"
           onClick={() => setLeftPanelOpen(true)}
           className={cn(
-            "absolute left-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-r-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] md:flex",
+            "absolute left-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-r-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] lg:flex",
             leftPanelOpen
               ? "pointer-events-none -translate-x-2 opacity-0"
               : "pointer-events-auto translate-x-0 opacity-100"
@@ -2114,7 +2130,7 @@ function WorkspacePage() {
           }}
           className={cn(
             "flex shrink-0 flex-col overflow-hidden border-r border-neutral-200/70 bg-white will-change-[width]",
-            "max-md:hidden",
+            "max-lg:hidden",
             !leftPanelOpen && "border-transparent"
           )}
         >
@@ -2122,7 +2138,7 @@ function WorkspacePage() {
           <div className="flex h-full shrink-0" style={{ width: leftPanelWidth }}>
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Left navbar: Logo + New Workspace */}
-          <div className="hidden md:flex h-14 px-4 border-b border-neutral-200/60 items-center justify-between gap-2">
+          <div className="hidden lg:flex h-14 px-4 border-b border-neutral-200/60 items-center justify-between gap-2">
             <Link href="/app/studio" className="text-[17px] font-semibold text-neutral-900 tracking-[-0.03em] shrink-0 hover:opacity-70 transition-opacity">
               Hydrilla
             </Link>
@@ -2138,7 +2154,7 @@ function WorkspacePage() {
               <span>New</span>
             </Button>
           </div>
-          <div className="hidden md:flex px-3 py-3 border-b border-neutral-200/60 items-center gap-2">
+          <div className="hidden lg:flex px-3 py-3 border-b border-neutral-200/60 items-center gap-2">
             <Button type="button" onClick={() => setLeftPanelOpen(false)} variant="ghost" size="sm" className="h-9 w-9 shrink-0 rounded-full p-0" title="Close library" aria-label="Close library panel">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </Button>
@@ -2160,12 +2176,22 @@ function WorkspacePage() {
             <div
               role="tablist"
               aria-label="Library tabs"
-              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-neutral-200/70 bg-neutral-100/80 p-1 text-neutral-500"
+              className="relative inline-flex h-9 w-full items-center rounded-full border border-neutral-200 bg-neutral-100 p-1 text-neutral-500"
             >
+              <motion.div
+                className="absolute top-1 bottom-1 rounded-full bg-neutral-950 shadow-sm"
+                initial={false}
+                animate={{
+                  left: leftLibraryTab === "images" ? 4 : "50%",
+                  width: "calc(50% - 4px)",
+                }}
+                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+                aria-hidden
+              />
               <Button
                 type="button"
                 role="tab"
-                variant={leftLibraryTab === "images" ? "outline" : "ghost"}
+                variant="ghost"
                 size="sm"
                 {...(leftLibraryTab === "images" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
                 aria-controls="library-images-panel"
@@ -2173,7 +2199,10 @@ function WorkspacePage() {
                 tabIndex={leftLibraryTab === "images" ? 0 : -1}
                 onClick={() => setLeftLibraryTab("images")}
                 title="Images"
-                className={`h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] ${leftLibraryTab === "images" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500"}`}
+                className={cn(
+                  "relative z-10 h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] hover:bg-transparent",
+                  leftLibraryTab === "images" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
+                )}
               >
                 <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
                 <span>Images</span>
@@ -2181,7 +2210,7 @@ function WorkspacePage() {
               <Button
                 type="button"
                 role="tab"
-                variant={leftLibraryTab === "3d" ? "outline" : "ghost"}
+                variant="ghost"
                 size="sm"
                 {...(leftLibraryTab === "3d" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
                 aria-controls="library-3d-panel"
@@ -2189,7 +2218,10 @@ function WorkspacePage() {
                 tabIndex={leftLibraryTab === "3d" ? 0 : -1}
                 onClick={() => setLeftLibraryTab("3d")}
                 title="3D Assets"
-                className={`h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] ${leftLibraryTab === "3d" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500"}`}
+                className={cn(
+                  "relative z-10 h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] hover:bg-transparent",
+                  leftLibraryTab === "3d" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
+                )}
               >
                 <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
                 <span>3D</span>
@@ -2309,14 +2341,14 @@ function WorkspacePage() {
                   resizeStartRef.current = { x: e.clientX, leftW: leftPanelWidth };
                   setResizingLeft(true);
                 }}
-                className={`hidden md:block w-1 flex-shrink-0 bg-transparent hover:bg-neutral-200 active:bg-black/20 cursor-col-resize transition-colors ${resizingLeft ? "bg-black/20" : ""}`}
+                className={`hidden lg:block w-1 flex-shrink-0 bg-transparent hover:bg-neutral-200 active:bg-black/20 cursor-col-resize transition-colors ${resizingLeft ? "bg-black/20" : ""}`}
               />
             )}
           </div>
         </aside>
 
         {/* Center - Preview / 3D / generating; on mobile: visible only when Canvas tab */}
-        <main className={cn("flex-1 flex flex-col min-w-0 min-h-0 bg-[#fafafa] overflow-y-auto", mobileTab === "canvas" ? "max-md:flex" : "max-md:hidden")}>
+        <main className={cn("flex-1 flex flex-col min-w-0 min-h-0 bg-[#fafafa] overflow-y-auto", mobileTab === "canvas" ? "max-lg:flex" : "max-lg:hidden")}>
           {centerView.type === "empty" && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[20px] border border-neutral-200/80 bg-white text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(0,0,0,0.12)]">
@@ -2412,7 +2444,7 @@ function WorkspacePage() {
           )}
 
           {centerView.type === "3d" && (
-            <div className="flex-1 flex flex-col min-h-0 max-md:min-h-[50vh]">
+            <div className="flex-1 flex flex-col min-h-0 max-lg:min-h-[50vh]">
               <div className={`flex-1 min-h-0 relative ${fullView ? "flex justify-center items-center" : ""}`}>
                 <div className={fullView ? "w-full h-full min-w-0 min-h-0" : "h-full w-full"}>
                 <ThreeViewer
@@ -2510,21 +2542,21 @@ function WorkspacePage() {
               <div className="relative">
               <div className="flex items-center justify-center gap-2.5 p-3.5 border-t border-neutral-200/60 bg-white/90 backdrop-blur-xl flex-wrap">
                 <a href={centerView.glbUrl} download className="inline-flex items-center h-10 px-4 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors">
-                  <span className="md:hidden">Download</span>
-                  <span className="hidden md:inline">Download GLB</span>
+                  <span className="lg:hidden">Download</span>
+                  <span className="hidden lg:inline">Download GLB</span>
                 </a>
                 {/* Mobile-only: info icon to open generation info popover above */}
                 {selectedJobInfo && (
                   <button
                     type="button"
                     onClick={() => setMobileGenInfoOpen((v) => !v)}
-                    className="md:hidden flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors"
+                    className="lg:hidden flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors"
                     aria-label="Generation info"
                   >
                     <svg className="w-5 h-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </button>
                 )}
-                <span className="hidden md:inline-flex items-center gap-3 flex-wrap">
+                <span className="hidden lg:inline-flex items-center gap-3 flex-wrap">
                   {fullView ? (
                     <button type="button" onClick={() => { setFullView(false); setLeftPanelOpen(true); setRightPanelOpen(true); }} className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors">Exit full view</button>
                   ) : (
@@ -2574,8 +2606,8 @@ function WorkspacePage() {
               {/* Mobile-only: popover above the action row with generation info */}
               {mobileGenInfoOpen && selectedJobInfo && (
                 <>
-                  <div className="fixed inset-0 z-40 md:hidden" aria-hidden onClick={() => setMobileGenInfoOpen(false)} />
-                  <div className="absolute bottom-full left-0 right-0 z-50 md:hidden mb-1 mx-2 max-h-[60vh] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
+                  <div className="fixed inset-0 z-40 lg:hidden" aria-hidden onClick={() => setMobileGenInfoOpen(false)} />
+                  <div className="absolute bottom-full left-0 right-0 z-50 lg:hidden mb-1 mx-2 max-h-[60vh] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
                     <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100 bg-neutral-50">
                       <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Generation Info</span>
                       <button type="button" onClick={() => setMobileGenInfoOpen(false)} className="p-1 rounded hover:bg-neutral-200" aria-label="Close">
@@ -2714,7 +2746,7 @@ function WorkspacePage() {
 
           {/* ──────────── Generation Info Panel (header always visible when job selected; content toggles) — hidden on mobile; use info icon + popover there ──────────── */}
           {selectedJobInfo && centerView.type !== "empty" && (
-            <div className="flex-shrink-0 border-t border-neutral-200/70 bg-white/95 backdrop-blur-xl min-h-[44px] max-md:hidden">
+            <div className="flex-shrink-0 border-t border-neutral-200/70 bg-white/95 backdrop-blur-xl min-h-[44px] max-lg:hidden">
               {/* Toggle header - always visible so user can expand again */}
               <button
                 type="button"
@@ -2861,7 +2893,7 @@ function WorkspacePage() {
           type="button"
           onClick={() => setRightPanelOpen(true)}
           className={cn(
-            "absolute right-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-l-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[-4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] md:flex",
+            "absolute right-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-l-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[-4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] lg:flex",
             rightPanelOpen
               ? "pointer-events-none translate-x-2 opacity-0"
               : "pointer-events-auto translate-x-0 opacity-100"
@@ -2874,28 +2906,43 @@ function WorkspacePage() {
           <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Create</span>
         </button>
 
-        {/* Right Panel — fixed inner width so open/close stays smooth & fast */}
+        {/* Right Panel — fixed inner width on desktop; full-bleed on phone/tablet */}
         <aside
           style={{
-            width: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0,
-            minWidth: rightPanelOpen ? RIGHT_PANEL_WIDTH : 0,
-            transition:
-              "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1)",
+            width: isCompact
+              ? mobileTab === "create"
+                ? "100%"
+                : 0
+              : rightPanelOpen
+                ? RIGHT_PANEL_WIDTH
+                : 0,
+            minWidth: isCompact
+              ? mobileTab === "create"
+                ? "100%"
+                : 0
+              : rightPanelOpen
+                ? RIGHT_PANEL_WIDTH
+                : 0,
+            transition: isCompact
+              ? "none"
+              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
           className={cn(
             "flex-shrink-0 flex flex-col bg-white border-l border-neutral-200/70 overflow-hidden will-change-[width]",
-            "max-md:border-l-0 max-md:border-t max-md:border-neutral-200",
-            !rightPanelOpen && "max-md:border-transparent",
-            mobileTab === "create" ? "max-md:!w-full max-md:!min-w-0 max-md:flex-1 max-md:min-h-0 max-md:overflow-auto" : "max-md:hidden"
+            "max-lg:border-l-0 max-lg:border-t max-lg:border-neutral-200 max-lg:bg-white",
+            !rightPanelOpen && "max-lg:border-transparent",
+            mobileTab === "create"
+              ? "max-lg:!w-full max-lg:!min-w-0 max-lg:flex-1 max-lg:min-h-0 max-lg:overflow-auto"
+              : "max-lg:hidden"
           )}
         >
           <div
-            className="flex h-full shrink-0 max-md:w-full max-md:min-w-0"
-            style={{ width: RIGHT_PANEL_WIDTH }}
+            className="flex h-full shrink-0 max-lg:!w-full max-lg:!min-w-0 max-lg:!max-w-full"
+            style={{ width: isCompact ? "100%" : RIGHT_PANEL_WIDTH, maxWidth: isCompact ? "100%" : undefined }}
           >
           <div className="h-full min-w-0 flex-1 overflow-y-auto flex flex-col [tab-size:4]">
-          {/* Right navbar: workspace name, credits, My Library, Profile, Collapse — hidden on mobile */}
-          <div className="hidden md:flex h-14 flex-shrink-0 px-3 border-b border-neutral-200/60 items-center gap-1.5 min-w-0">
+          {/* Right navbar: workspace name, credits, My Library, Profile, Collapse — desktop only */}
+          <div className="hidden lg:flex h-14 flex-shrink-0 px-3 border-b border-neutral-200/60 items-center gap-1.5 min-w-0">
             <Input
               type="text"
               value={workspaceName}
@@ -2921,13 +2968,78 @@ function WorkspacePage() {
             </button>
           </div>
           <ScrollArea className="flex-1 min-h-0 w-full">
-          <div className="px-5 pt-5 pb-8 space-y-5 leading-[1.15]">
+          <div className="mx-auto w-full max-w-xl lg:max-w-none px-4 sm:px-6 lg:px-5 pt-4 sm:pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8 space-y-4 sm:space-y-5 leading-[1.15]">
             {/* Input mode — Text | Image | Edit | Combine */}
-            <div role="tablist" aria-label="Input mode" className="grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-2xl border border-neutral-200/70 bg-neutral-100/80 p-1 text-neutral-500">
-              <Button type="button" role="tab" size="sm" variant={inputMode === "text" ? "outline" : "ghost"} onClick={() => setInputMode("text")} title="Text prompt only" className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><span className="text-xs font-semibold leading-none sm:text-sm">T</span><span>Text</span></Button>
-              <Button type="button" role="tab" size="sm" variant={inputMode === "image" ? "outline" : "ghost"} onClick={() => setInputMode("image")} title="Upload an image to generate a 3D model" className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span>Image</span></Button>
-              <Button type="button" role="tab" size="sm" variant={inputMode === "text_1img" ? "outline" : "ghost"} disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_1img")} title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"} className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><svg className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg><span>Edit</span></Button>
-              <Button type="button" role="tab" size="sm" variant={inputMode === "text_2img" ? "outline" : "ghost"} disabled={!primaryApiUp} onClick={() => primaryApiUp && setInputMode("text_2img")} title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"} className="h-9 gap-1 rounded-xl border-transparent px-1.5 text-[11px] sm:px-2 sm:text-xs"><div className="flex -space-x-0.5 shrink-0"><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /><div className="w-2 h-2 rounded-sm bg-current opacity-70 sm:w-2.5 sm:h-2.5" /></div><span>Combine</span></Button>
+            <div
+              role="tablist"
+              aria-label="Input mode"
+              className="grid grid-cols-4 gap-1 rounded-2xl border border-neutral-200 bg-neutral-100 p-1 text-neutral-500"
+            >
+              <Button
+                type="button"
+                role="tab"
+                size="sm"
+                variant={inputMode === "text" ? "outline" : "ghost"}
+                onClick={() => setInputMode("text")}
+                title="Text prompt only"
+                className={cn(
+                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
+                  inputMode === "text" && "border-transparent bg-white text-neutral-950 shadow-sm"
+                )}
+              >
+                <span className="text-xs font-bold leading-none sm:text-sm">T</span>
+                <span>Text</span>
+              </Button>
+              <Button
+                type="button"
+                role="tab"
+                size="sm"
+                variant={inputMode === "image" ? "outline" : "ghost"}
+                onClick={() => setInputMode("image")}
+                title="Upload an image to generate a 3D model"
+                className={cn(
+                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
+                  inputMode === "image" && "border-transparent bg-white text-neutral-950 shadow-sm"
+                )}
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <span>Image</span>
+              </Button>
+              <Button
+                type="button"
+                role="tab"
+                size="sm"
+                variant={inputMode === "text_1img" ? "outline" : "ghost"}
+                disabled={!primaryApiUp}
+                onClick={() => primaryApiUp && setInputMode("text_1img")}
+                title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"}
+                className={cn(
+                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
+                  inputMode === "text_1img" && "border-transparent bg-white text-neutral-950 shadow-sm"
+                )}
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
+                <span>Edit</span>
+              </Button>
+              <Button
+                type="button"
+                role="tab"
+                size="sm"
+                variant={inputMode === "text_2img" ? "outline" : "ghost"}
+                disabled={!primaryApiUp}
+                onClick={() => primaryApiUp && setInputMode("text_2img")}
+                title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"}
+                className={cn(
+                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
+                  inputMode === "text_2img" && "border-transparent bg-white text-neutral-950 shadow-sm"
+                )}
+              >
+                <div className="flex -space-x-0.5 shrink-0">
+                  <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
+                  <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
+                </div>
+                <span>Combine</span>
+              </Button>
             </div>
 
             {/* Image slots — same spacing as reference */}
@@ -3006,7 +3118,7 @@ function WorkspacePage() {
                   onChange={(e) => setPrompt(e.target.value.slice(0, 800))}
                   maxLength={800}
                   placeholder={inputMode === "text" ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe." : inputMode === "text_1img" ? "Describe how to edit this image..." : "Describe how to combine these images..."}
-                  className="min-h-[132px] resize-none rounded-2xl border-neutral-200/80 bg-neutral-50/80 pb-8 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/[0.04]"
+                  className="min-h-[132px] sm:min-h-[148px] resize-none rounded-2xl border-neutral-200 bg-neutral-50 pb-8 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/10"
                   rows={4}
                 />
                 <span className="absolute bottom-2.5 right-3 text-[11px] text-neutral-400 tabular-nums">{prompt.length}/800</span>
@@ -3019,7 +3131,7 @@ function WorkspacePage() {
               <div className="px-3 py-2.5 text-sm bg-red-50 text-red-600 rounded-xl border border-red-200">{error}</div>
             )}
             {mobileTab === "create" && centerView.type === "error" && (
-              <div className="md:hidden space-y-3 px-0.5">
+              <div className="lg:hidden space-y-3 px-0.5">
                 <div className="px-3 py-3 text-sm bg-red-50 text-red-700 rounded-xl border border-red-200 flex gap-3 items-start">
                   <span className="shrink-0 mt-0.5 text-red-500" aria-hidden>
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -3038,7 +3150,7 @@ function WorkspacePage() {
                       setCenterView({ type: "empty" });
                     }
                   }}
-                  className="w-full py-2.5 text-sm font-semibold text-white bg-black rounded-xl hover:bg-neutral-800 transition-colors"
+                  className="w-full py-2.5 text-sm font-semibold text-white bg-neutral-950 rounded-xl hover:bg-neutral-800 transition-colors"
                 >
                   Try again
                 </button>
@@ -3049,7 +3161,7 @@ function WorkspacePage() {
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
               <div className="flex items-center gap-1.5">
                 <label className="text-sm font-semibold text-neutral-800">AI Model</label>
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="3D generation model" aria-label="Info">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600" title="3D generation model" aria-label="Info">
                   <span className="text-[10px] font-bold leading-none">i</span>
                 </span>
               </div>
@@ -3057,7 +3169,7 @@ function WorkspacePage() {
                 <button
                   type="button"
                   onClick={() => setModelDropdownOpen((o) => !o)}
-                  className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-full bg-white border border-neutral-200/80 text-left text-xs text-neutral-800 hover:bg-neutral-50 transition-colors duration-150"
+                  className="w-full flex items-center justify-between gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-full bg-white border border-neutral-200 text-left text-xs text-neutral-800 hover:bg-neutral-50 transition-colors duration-150"
                 >
                   <span className="truncate">{modelOptions.find((m) => m.id === selectedModel)?.label ?? selectedModel}</span>
                   <svg className={`w-3.5 h-3.5 shrink-0 text-neutral-500 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -3100,16 +3212,16 @@ function WorkspacePage() {
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
               <div className="flex items-center gap-1.5">
                 <label className="text-sm font-semibold text-neutral-800">Number of Generations</label>
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="How many variants to generate" aria-label="Info">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600" title="How many variants to generate" aria-label="Info">
                   <span className="text-[10px] font-bold leading-none">i</span>
                 </span>
               </div>
-              <div className="flex items-center rounded-lg bg-white border border-neutral-200 overflow-hidden">
-                <button type="button" onClick={() => setNumGenerations((n) => Math.max(1, n - 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors" title="Decrease number of generations" aria-label="Decrease number of generations">
+              <div className="flex items-center rounded-xl bg-white border border-neutral-200 overflow-hidden">
+                <button type="button" onClick={() => setNumGenerations((n) => Math.max(1, n - 1))} className="px-3 py-2.5 sm:px-2 sm:py-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 transition-colors" title="Decrease number of generations" aria-label="Decrease number of generations">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
-                <span className="min-w-[2ch] text-center text-sm text-neutral-800 py-1.5">{numGenerations}</span>
-                <button type="button" onClick={() => setNumGenerations((n) => Math.min(10, n + 1))} className="px-2 py-2 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-colors" title="Increase number of generations" aria-label="Increase number of generations">
+                <span className="min-w-[2.5ch] text-center text-sm font-semibold text-neutral-800 py-1.5">{numGenerations}</span>
+                <button type="button" onClick={() => setNumGenerations((n) => Math.min(10, n + 1))} className="px-3 py-2.5 sm:px-2 sm:py-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 transition-colors" title="Increase number of generations" aria-label="Increase number of generations">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                 </button>
               </div>
@@ -3124,9 +3236,10 @@ function WorkspacePage() {
               const total = creditsLoading ? 0 : creditsTotal;
               return (
                 <div className="flex items-center justify-center gap-2 text-sm text-neutral-600">
-                  <span className="tabular-nums">{isImageOrEdit ? "~30s" : "~1 min"}</span>
+                  <span className="tabular-nums text-neutral-500">{isImageOrEdit ? "~30s" : "~1 min"}</span>
+                  <span className="h-1 w-1 rounded-full bg-neutral-300" aria-hidden />
                   <span className="flex items-center gap-1.5 font-medium text-neutral-800">
-                    <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <svg className="w-4 h-4 text-neutral-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <span className="tabular-nums">{cost} / {total}</span>
                     <span className="text-neutral-500 font-normal">credits</span>
                   </span>
@@ -3152,13 +3265,14 @@ function WorkspacePage() {
               }}
               disabled={isGenerating}
               size="lg"
-              className="w-full h-12 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.08),0_8px_20px_-8px_rgba(0,0,0,0.25)]"
+              variant="default"
+              className="w-full h-12 sm:h-[52px] rounded-full text-[15px]"
             >
               {isGenerating ? (
-                <><div className="w-4 h-4 border-2 border-neutral-500/40 border-t-neutral-800 rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
+                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
               ) : (
                 <>
-                  <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-90 invert brightness-110" />
+                  <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-95 invert brightness-110" />
                   <span className="tracking-tight font-semibold">{inputMode === "image" ? "Generate 3D" : "Generate"}</span>
                 </>
               )}
@@ -3238,16 +3352,30 @@ function WorkspacePage() {
         </aside>
       </div>
 
-      {/* Mobile-only: bottom bar — Canvas | Create (blue highlight, big text & icons, smooth) */}
-      <div className="md:hidden flex items-center justify-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/90 backdrop-blur-xl border-t border-neutral-200/70">
-        <div className="inline-flex h-[52px] w-full max-w-[340px] items-center rounded-full bg-neutral-100/90 p-1.5 border border-neutral-200/60">
+      {/* Compact: bottom Canvas | Create with sliding pill */}
+      <nav
+        className="lg:hidden shrink-0 border-t border-neutral-200 bg-white px-3 pt-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))]"
+        aria-label="Workspace sections"
+      >
+        <div className="relative mx-auto flex h-[56px] w-full max-w-[420px] items-center rounded-full bg-neutral-100 p-1.5 border border-neutral-200">
+          <motion.div
+            className="absolute top-1.5 bottom-1.5 rounded-full bg-neutral-950 shadow-sm"
+            initial={false}
+            animate={{
+              left: mobileTab === "canvas" ? 6 : "50%",
+              width: "calc(50% - 6px)",
+            }}
+            transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+            aria-hidden
+          />
           <Button
             type="button"
-            variant={mobileTab === "canvas" ? "default" : "ghost"}
+            variant="ghost"
             onClick={() => setMobileTab("canvas")}
+            aria-pressed={mobileTab === "canvas"}
             className={cn(
-              "h-full flex-1 gap-2 rounded-full text-sm font-semibold",
-              mobileTab === "canvas" ? "shadow-sm" : "text-neutral-500"
+              "relative z-10 h-full flex-1 gap-2 rounded-full text-[15px] font-semibold hover:bg-transparent",
+              mobileTab === "canvas" ? "text-white hover:text-white" : "text-neutral-600 hover:text-neutral-900"
             )}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
@@ -3255,18 +3383,19 @@ function WorkspacePage() {
           </Button>
           <Button
             type="button"
-            variant={mobileTab === "create" ? "default" : "ghost"}
+            variant="ghost"
             onClick={() => setMobileTab("create")}
+            aria-pressed={mobileTab === "create"}
             className={cn(
-              "h-full flex-1 gap-2 rounded-full text-sm font-semibold",
-              mobileTab === "create" ? "shadow-sm" : "text-neutral-500"
+              "relative z-10 h-full flex-1 gap-2 rounded-full text-[15px] font-semibold hover:bg-transparent",
+              mobileTab === "create" ? "text-white hover:text-white" : "text-neutral-600 hover:text-neutral-900"
             )}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16m8-8H4" /></svg>
             Create
           </Button>
         </div>
-      </div>
+      </nav>
     </div>
   );
 }

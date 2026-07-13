@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { motion } from "motion/react";
 import { fetchWorkspace, fetchWorkspaceJobs, getProxiedImageUrl } from "../../lib/api";
-import { getCurrentWorkspaceId } from "../../lib/utils";
+import { cn, getCurrentWorkspaceId } from "../../lib/utils";
 import type { BackendJob } from "../../lib/api";
+import { Button } from "../../components/ui/button";
 
 const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
 
@@ -80,17 +82,17 @@ export default function GenerationsPage() {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       {/* Header: back to workspace + title */}
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200 bg-white/95 backdrop-blur-md shrink-0">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200 bg-white shrink-0">
         <Link
           href="/workspace"
-          className="flex items-center justify-center w-10 h-10 rounded-xl hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
+          className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
           aria-label="Back to workspace"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </Link>
-        <h1 className="text-lg font-bold text-neutral-900 truncate flex-1 text-center mx-2">
+        <h1 className="text-lg font-semibold tracking-tight text-neutral-900 truncate flex-1 text-center mx-2">
           {workspaceName || "Generations"}
         </h1>
         <div className="w-10 shrink-0" />
@@ -118,22 +120,34 @@ export default function GenerationsPage() {
         </div>
       </div>
 
-      {/* Tabs: Images | 3D (smooth, liquid-glass style) */}
+      {/* Tabs: Images | 3D — shadcn buttons + sliding pill */}
       <div className="px-3 pt-3 pb-2">
         <div
           role="tablist"
           aria-label="Library tabs"
-          className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-neutral-100/90 p-1.5 text-neutral-500 border border-neutral-200/60 shadow-sm transition-all duration-200"
+          className="relative inline-flex h-11 w-full items-center rounded-full bg-neutral-100 p-1 border border-neutral-200/80"
         >
-          <button
+          <motion.div
+            className="absolute top-1 bottom-1 rounded-full bg-neutral-950 shadow-sm"
+            initial={false}
+            animate={{
+              left: tab === "images" ? 4 : "50%",
+              width: "calc(50% - 4px)",
+            }}
+            transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+            aria-hidden
+          />
+          <Button
             type="button"
             role="tab"
-            {...(tab === "images" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
+            variant="ghost"
+            aria-selected={tab === "images"}
             onClick={() => setTab("images")}
             title="Images"
-            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg h-full text-sm font-semibold transition-all duration-200 ${
-              tab === "images" ? "bg-white text-neutral-900 shadow-sm border border-neutral-200/80" : "text-neutral-500 hover:bg-neutral-200/60 hover:text-neutral-700"
-            }`}
+            className={cn(
+              "relative z-10 h-full flex-1 gap-2 rounded-full text-sm font-semibold hover:bg-transparent",
+              tab === "images" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
+            )}
           >
             <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -141,16 +155,18 @@ export default function GenerationsPage() {
               <path d="M21 15l-5-5L5 21" />
             </svg>
             Images
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             role="tab"
-            {...(tab === "3d" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
+            variant="ghost"
+            aria-selected={tab === "3d"}
             onClick={() => setTab("3d")}
             title="3D Assets"
-            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg h-full text-sm font-semibold transition-all duration-200 ${
-              tab === "3d" ? "bg-white text-neutral-900 shadow-sm border border-neutral-200/80" : "text-neutral-500 hover:bg-neutral-200/60 hover:text-neutral-700"
-            }`}
+            className={cn(
+              "relative z-10 h-full flex-1 gap-2 rounded-full text-sm font-semibold hover:bg-transparent",
+              tab === "3d" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
+            )}
           >
             <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -158,7 +174,7 @@ export default function GenerationsPage() {
               <line x1="12" y1="22.08" x2="12" y2="12" />
             </svg>
             3D
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -190,6 +206,7 @@ export default function GenerationsPage() {
                     className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-lg active:scale-[0.98] transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-neutral-300"
                   >
                     {(item.previewImageUrl || item.imageUrl) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={displayImageUrl(item.previewImageUrl || item.imageUrl)}
                         alt={item.prompt || "Image"}
@@ -231,6 +248,7 @@ export default function GenerationsPage() {
                     className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-lg active:scale-[0.98] transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-neutral-300"
                   >
                     {item.previewImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={displayImageUrl(item.previewImageUrl)}
                         alt={item.prompt || "3D Asset"}
@@ -252,10 +270,10 @@ export default function GenerationsPage() {
         )}
       </div>
 
-      {/* Image preview popup (mobile) — tap X to close */}
+      {/* Image preview popup — tap X to close */}
       {previewImage && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
           onClick={() => setPreviewImage(null)}
           role="dialog"
           aria-modal="true"
@@ -266,6 +284,7 @@ export default function GenerationsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {(previewImage.previewImageUrl || previewImage.imageUrl) ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={displayImageUrl(previewImage.previewImageUrl || previewImage.imageUrl)}
                 alt={previewImage.prompt || "Preview"}
@@ -281,16 +300,17 @@ export default function GenerationsPage() {
                 {previewImage.prompt}
               </p>
             )}
-            <button
+            <Button
               type="button"
               onClick={() => setPreviewImage(null)}
-              className="absolute top-2 right-2 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
+              size="sm"
+              className="absolute top-2 right-2 h-10 w-10 rounded-full bg-black/50 p-0 hover:bg-black/70"
               aria-label="Close preview"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </button>
+            </Button>
           </div>
         </div>
       )}
