@@ -48,7 +48,7 @@ export default function ThreeDAIPage() {
         </div>
       </section>
 
-      {/* Content Section */}
+      {/* Content-3d-ai Section */}
       <section 
         ref={contentSectionRef}
         className="relative py-20 sm:py-24 md:py-32 px-4 sm:px-6 md:px-8 bg-gradient-to-b from-neutral-50 to-white"
