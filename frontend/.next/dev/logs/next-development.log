@@ -1,0 +1,5 @@
+[00:29:55.150] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/tharak/Developer/hydrilla-ai/hyd-f/frontend/app'
+[00:29:55.156] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/tharak/Developer/hydrilla-ai/hyd-f/frontend/app'
+[00:29:55.277] Server  ERROR   Error: ENOENT: no such file or directory, scandir '/Users/tharak/Developer/hydrilla-ai/hyd-f/frontend/app'
+[00:29:55.277] Server  ERROR   ⨯ "unhandledRejection:" Error: ENOENT: no such file or directory, scandir '/Users/tharak/Developer/hydrilla-ai/hyd-f/frontend/app'
+[00:29:55.278] Server  ERROR   ⨯ "unhandledRejection: " Error: ENOENT: no such file or directory, scandir '/Users/tharak/Developer/hydrilla-ai/hyd-f/frontend/app'

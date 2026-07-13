@@ -110,10 +110,10 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     };
   }, [mobileMenuOpen]);
 
-  // Clean solid / light glass for marketing pages (avoid 80px blur — major GPU cost)
+  // Premium ultra-clear liquid glass effect for all pages
   const containerClasses = useHeroStyling
-    ? "bg-white/85 backdrop-blur-md border border-neutral-200/60 shadow-lg"
-    : "bg-white/90 backdrop-blur-md border border-neutral-200/50 shadow-md";
+    ? "bg-white/2 backdrop-blur-[80px] border border-gray-200/20 shadow-2xl"
+    : "bg-white/60 backdrop-blur-xl border border-gray-200/50 shadow-lg";
   
   // Home page hero is light (white bg) → use black nav; use-case pages are always light
   const isLightHeroPage = pathname === "/" || pathname.startsWith("/usecase");
