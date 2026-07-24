@@ -15,6 +15,7 @@ import {
 
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { PRICING_IMAGES } from "@/lib/cloudinary";
+import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 const FONT = "var(--font-dm-sans), 'DM Sans', sans-serif";
@@ -171,6 +172,13 @@ function PlanAction({ plan, state }: { plan: Plan; state: CtaState }) {
   return (
     <Link
       href={plan.href}
+      onClick={() =>
+        track("plan_cta_clicked", {
+          plan: plan.id,
+          cta_label: state.label,
+          featured: plan.featured,
+        })
+      }
       className={cn(
         "inline-flex h-12 w-full items-center justify-center gap-1 rounded-full text-[15px] font-semibold tracking-[-0.01em] transition-colors",
         plan.featured

@@ -5,8 +5,9 @@ import posthog from "posthog-js";
 import { useEffect, useRef } from "react";
 
 /**
- * Links Clerk users to PostHog for session replay + error tracking.
- * PostHog itself is initialized in instrumentation-client.ts (Next.js 15.3+).
+ * Links Clerk users to PostHog so product events, session replay, and errors
+ * share one person profile. Call identify after login; reset on logout.
+ * See: https://posthog.com/docs/product-analytics/identify
  */
 export function PostHogIdentify() {
   const { isSignedIn, userId } = useAuth();

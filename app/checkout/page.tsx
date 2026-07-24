@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { track } from "@/lib/analytics";
 
 // Ensure we never point at the frontend; use production API when env is wrong or unset
 const ENV_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "";
@@ -74,6 +75,7 @@ function CheckoutContent() {
   async function startCheckout() {
     setStatus("loading");
     setError(null);
+    track("checkout_initiated", { plan });
 
     const url = `${BACKEND_URL}/api/payments/create-checkout`;
     try {
@@ -107,6 +109,10 @@ function CheckoutContent() {
     } catch (err: any) {
       const msg = err?.message || "";
       const isNetworkError = msg === "Failed to fetch" || msg === "Load failed" || msg === "NetworkError when attempting to fetch resource";
+      track("checkout_error", {
+        plan,
+        error_type: isNetworkError ? "network" : "server",
+      });
       setError(
         isNetworkError
           ? "Could not reach the payment server. Check your connection and try again, or contact support if it persists."

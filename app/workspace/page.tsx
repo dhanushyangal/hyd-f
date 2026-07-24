@@ -43,6 +43,7 @@ import {
   LineageItem,
 } from "../../lib/api";
 import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
+import { track, isPaywallError } from "../../lib/analytics";
 import {
   consumeWorkspaceBootstrap,
   consumeWorkspacePrefill,
@@ -688,6 +689,7 @@ function WorkspacePage() {
       }
 
       const ws = await createWorkspaceApi(name, tokenGetter);
+      track("workspace_created", { source: "workspace_modal" });
       setShowNewWorkspaceModal(false);
       setForcedWorkspaceModal(false);
       setNewWorkspaceName("");
@@ -882,6 +884,9 @@ function WorkspacePage() {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
           }
+          track("3d_generation_completed", {
+            model: selectedModel,
+          });
           const glbUrl = getGlbUrl(status);
           setCurrentGenerating((prev) =>
             prev ? { ...prev, status: "completed", progress: 100, glbUrl: glbUrl || undefined } : null
@@ -915,6 +920,10 @@ function WorkspacePage() {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
           }
+          track("3d_generation_failed", {
+            stage: "processing",
+            reason: "job_failed",
+          });
           const userFacing = toUserFacingGpuError(status.error || "Generation failed");
           setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
           void (async () => {
@@ -927,6 +936,10 @@ function WorkspacePage() {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
           }
+          track("3d_generation_failed", {
+            stage: "processing",
+            reason: "cancelled",
+          });
           setCurrentGenerating(null);
           setCenterView({ type: "error", message: "Job cancelled" });
         }
@@ -937,6 +950,10 @@ function WorkspacePage() {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
           }
+          track("3d_generation_failed", {
+            stage: "polling",
+            reason: "connection_lost",
+          });
           setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
           setCenterView({ type: "error", message: "Lost connection to server" });
         }
@@ -1034,6 +1051,11 @@ function WorkspacePage() {
         setError("Please create a workspace first");
         return;
       }
+      track("image_to_3d_started", {
+        model: selectedModel,
+        has_local_file: !!localFile,
+        has_preview_id: !!previewId,
+      });
       const tokenGetter = async () => await getToken();
       setLeftLibraryTab("3d"); // Switch to 3D tab so result will show in 3D section below search
       markMobileGenerationStart();
@@ -1085,6 +1107,10 @@ function WorkspacePage() {
         setCenterView({ type: "error", message: userFacing });
         removePendingJob(pendingId);
         setLoading(false);
+        track("3d_generation_failed", {
+          stage: "queue_info",
+          reason: msg?.includes("GPU is currently offline") ? "gpu_offline" : "queue_error",
+        });
         return;
       }
       const estimatedTotal = queueInfo?.estimated_total_seconds || 300;
@@ -1131,6 +1157,13 @@ function WorkspacePage() {
         refreshLibrary();
       } catch (err: unknown) {
         const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "Failed to start 3D";
+        if (isPaywallError(msg)) {
+          track("paywall_hit", { source: "image_to_3d", action: "generate_3d" });
+        }
+        track("3d_generation_failed", {
+          stage: "submit",
+          reason: isPaywallError(msg) ? "insufficient_credits" : "submit_error",
+        });
         const userFacing = toUserFacingGpuError(msg);
         await waitMobileGpuOfflineMinimum(msg, userFacing);
         mobileGenStartedAtRef.current = null;
@@ -1164,6 +1197,7 @@ function WorkspacePage() {
     if (inputMode === "text") {
       if (!prompt.trim()) { setError("Please enter a prompt"); return; }
 
+      track("text_to_image_started", { then_generate_3d: !!thenGenerate3D });
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Generating image from text..." });
@@ -1257,6 +1291,9 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.preview_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
+        if (isPaywallError(err?.message)) {
+          track("paywall_hit", { source: "text_to_image", action: "generate_image" });
+        }
         const userFacing = toUserFacingGpuError(err.message || "Failed to generate image");
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
@@ -1321,6 +1358,7 @@ function WorkspacePage() {
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Editing image..." });
+      track("image_edit_started", { mode: "text_1img" });
 
       const pendingEditId = addPendingJob({
         generateType: "EditImage",
@@ -1412,6 +1450,9 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.edit_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
+        if (isPaywallError(err?.message)) {
+          track("paywall_hit", { source: "image_edit", action: "edit_image" });
+        }
         const userFacing = toUserFacingGpuError(err.message || "Failed to edit image");
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
@@ -1430,6 +1471,7 @@ function WorkspacePage() {
       if (!hasImage1 || !hasImage2) { setError("Please provide both images"); return; }
       if (!prompt.trim()) { setError("Please enter a prompt"); return; }
 
+      track("image_edit_started", { mode: "text_2img" });
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Combining images..." });
@@ -1561,6 +1603,9 @@ function WorkspacePage() {
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.combined_id);
       } catch (err: any) {
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
+        if (isPaywallError(err?.message)) {
+          track("paywall_hit", { source: "combined_edit", action: "combine_images" });
+        }
         const userFacing = toUserFacingGpuError(err.message || "Failed to combine images");
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
@@ -2541,7 +2586,12 @@ function WorkspacePage() {
               {/* Actions: mobile = Download + info icon; desktop = Download + Full View + optional Create another 3D / Edit */}
               <div className="relative">
               <div className="flex items-center justify-center gap-2.5 p-3.5 border-t border-neutral-200/60 bg-white/90 backdrop-blur-xl flex-wrap">
-                <a href={centerView.glbUrl} download className="inline-flex items-center h-10 px-4 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors">
+                <a
+                  href={centerView.glbUrl}
+                  download
+                  onClick={() => track("model_downloaded", { format: "glb" })}
+                  className="inline-flex items-center h-10 px-4 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors"
+                >
                   <span className="lg:hidden">Download</span>
                   <span className="hidden lg:inline">Download GLB</span>
                 </a>

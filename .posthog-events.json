@@ -1,67 +1,97 @@
 [
   {
+    "event_name": "start_generating_clicked",
+    "event_description": "User clicked the hero Start Generating CTA.",
+    "file": "components/StartGeneratingButton.tsx"
+  },
+  {
+    "event_name": "plan_cta_clicked",
+    "event_description": "User clicked a pricing plan CTA (subscribe / upgrade).",
+    "file": "components/sections/PricingSection.tsx"
+  },
+  {
+    "event_name": "upgrade_clicked",
+    "event_description": "User clicked Upgrade in the app sidebar.",
+    "file": "components/app/AppSidebar.tsx"
+  },
+  {
+    "event_name": "paywall_hit",
+    "event_description": "User hit insufficient credits or clicked exhausted-credits CTA.",
+    "file": "app/workspace/page.tsx, components/Navigation.tsx"
+  },
+  {
     "event_name": "checkout_initiated",
-    "event_description": "User landed on the checkout page and a checkout session creation was triggered for a plan.",
+    "event_description": "Client started creating a Dodo checkout session for a plan.",
     "file": "app/checkout/page.tsx"
   },
   {
     "event_name": "checkout_error",
-    "event_description": "An error occurred while creating or redirecting to the payment checkout session.",
+    "event_description": "Checkout session creation or redirect failed on the client.",
     "file": "app/checkout/page.tsx"
   },
   {
-    "event_name": "subscription_activated",
-    "event_description": "User's subscription was confirmed as active on the checkout success page.",
-    "file": "app/checkout/success/page.tsx"
+    "event_name": "checkout_session_created",
+    "event_description": "Backend successfully created a Dodo checkout session.",
+    "file": "backend/.../routes/payments.ts"
   },
   {
-    "event_name": "plan_cta_clicked",
-    "event_description": "User clicked the subscribe or get-started CTA button on a pricing plan card.",
-    "file": "components/sections/PricingSection.tsx"
+    "event_name": "subscription_activated",
+    "event_description": "Subscription confirmed active (client success page and/or Dodo webhook).",
+    "file": "app/checkout/success/page.tsx, backend/.../routes/payments.ts"
+  },
+  {
+    "event_name": "subscription_renewed",
+    "event_description": "Paid subscription renewed and credits reset (webhook).",
+    "file": "backend/.../routes/payments.ts"
+  },
+  {
+    "event_name": "subscription_cancelled",
+    "event_description": "Subscription cancelled or expired (webhook).",
+    "file": "backend/.../routes/payments.ts"
   },
   {
     "event_name": "workspace_created",
-    "event_description": "User successfully created a new workspace from the Studio dashboard.",
-    "file": "app/app/studio/page.tsx"
+    "event_description": "User created a workspace from Studio or workspace modal.",
+    "file": "app/app/studio/page.tsx, app/workspace/page.tsx"
   },
   {
     "event_name": "workspace_opened",
-    "event_description": "User opened an existing workspace from the Studio dashboard.",
+    "event_description": "User opened an existing workspace from Studio.",
     "file": "app/app/studio/page.tsx"
   },
   {
     "event_name": "workspace_deleted",
-    "event_description": "User deleted a workspace from the Studio dashboard.",
+    "event_description": "User deleted a workspace from Studio.",
     "file": "app/app/studio/page.tsx"
   },
   {
     "event_name": "text_to_image_started",
-    "event_description": "User submitted a text prompt to generate a 2D preview image in the workspace.",
-    "file": "app/workspace/page.tsx"
-  },
-  {
-    "event_name": "image_to_3d_started",
-    "event_description": "User initiated a 3D model generation from an image in the workspace.",
+    "event_description": "User started text-to-image generation (no prompt content captured).",
     "file": "app/workspace/page.tsx"
   },
   {
     "event_name": "image_edit_started",
-    "event_description": "User submitted a text + image prompt to edit an existing image in the workspace.",
+    "event_description": "User started image edit or combined edit (no prompt content captured).",
+    "file": "app/workspace/page.tsx"
+  },
+  {
+    "event_name": "image_to_3d_started",
+    "event_description": "User started image-to-3D generation.",
     "file": "app/workspace/page.tsx"
   },
   {
     "event_name": "3d_generation_completed",
-    "event_description": "A 3D model generation job completed successfully and the GLB is available.",
+    "event_description": "Aha moment: 3D model finished successfully.",
     "file": "app/workspace/page.tsx"
   },
   {
     "event_name": "3d_generation_failed",
-    "event_description": "A 3D model generation job failed, including GPU-offline and server errors.",
+    "event_description": "3D generation failed (queue, submit, processing, or connection).",
     "file": "app/workspace/page.tsx"
   },
   {
-    "event_name": "start_generating_clicked",
-    "event_description": "User clicked the 'Start Generating' hero CTA button to enter the app.",
-    "file": "components/StartGeneratingButton.tsx"
+    "event_name": "model_downloaded",
+    "event_description": "User downloaded a generated GLB model.",
+    "file": "app/workspace/page.tsx"
   }
 ]

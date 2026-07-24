@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { track } from "../../lib/analytics";
 import { useAppLayout } from "../../context/AppLayoutContext";
 
 const RAW_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
@@ -311,7 +312,10 @@ export function AppSidebar() {
               <Link
                 href="/app/pricing"
                 prefetch
-                onClick={closeMobileSidebar}
+                onClick={() => {
+                  track("upgrade_clicked", { source: "app_sidebar", collapsed: true });
+                  closeMobileSidebar();
+                }}
                 className="sidebar-upgrade-btn flex items-center justify-center w-10 h-10 mx-auto rounded-full bg-neutral-900 text-white font-medium text-xs hover:bg-neutral-800"
                 title="Upgrade"
               >
@@ -321,7 +325,10 @@ export function AppSidebar() {
               <Link
                 href="/app/pricing"
                 prefetch
-                onClick={closeMobileSidebar}
+                onClick={() => {
+                  track("upgrade_clicked", { source: "app_sidebar", collapsed: false });
+                  closeMobileSidebar();
+                }}
                 className="sidebar-upgrade-btn flex items-center justify-center gap-2 w-full h-11 rounded-full bg-neutral-900 text-white font-medium text-sm px-3 font-dm-sans hover:bg-neutral-800 shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
               >
                 <Sparkles className="w-4 h-4 shrink-0" />

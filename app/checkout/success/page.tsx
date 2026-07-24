@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { track } from "@/lib/analytics";
 
 const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app").replace(/\/+$/, "");
 
@@ -23,6 +24,7 @@ function CheckoutSuccessContent() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<
     "checking" | "active" | "pending" | "error"
   >("checking");
+  const activatedTracked = useRef(false);
 
   // Dodo returns different params depending on payment type:
   //   subscription: ?subscription_id=sub_xxx&status=active&email=...
@@ -92,7 +94,16 @@ function CheckoutSuccessContent() {
 
       setSubscriptionStatus((prev) => {
         if (prev === "active") return prev;
-        return hasActiveSubscription || hasCredits ? "active" : "pending";
+        const next = hasActiveSubscription || hasCredits ? "active" : "pending";
+        if (next === "active" && !activatedTracked.current) {
+          activatedTracked.current = true;
+          track("subscription_activated", {
+            source: "checkout_success",
+            has_subscription_id: !!subscriptionIdFromUrl,
+            has_payment_id: !!paymentId,
+          });
+        }
+        return next;
       });
     } catch {
       setSubscriptionStatus("pending");

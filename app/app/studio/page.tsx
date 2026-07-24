@@ -16,6 +16,7 @@ import {
   bootstrapHeroWorkspace,
   peekPendingHeroPrompt,
 } from "../../../lib/pendingHeroPrompt";
+import { track } from "../../../lib/analytics";
 import { MessageSquare, FolderOpen, Plus, Search, Trash2, MoreVertical, Copy, Pencil } from "lucide-react";
 
 function getGreeting() {
@@ -175,6 +176,7 @@ export default function StudioPage() {
     try {
       const tokenGetter = async () => await getToken();
       const ws = await createWorkspaceApi(name, tokenGetter);
+      track("workspace_created", { source: "studio" });
       setShowNewModal(false);
       setNewName("");
       setCurrentWorkspaceId(ws.id);
@@ -192,6 +194,7 @@ export default function StudioPage() {
   };
 
   const handleOpenWorkspace = (workspaceId: string) => {
+    track("workspace_opened", { source: "studio" });
     setCurrentWorkspaceId(workspaceId);
     router.push(`/workspace/${workspaceId}`);
   };
@@ -202,6 +205,7 @@ export default function StudioPage() {
     try {
       const tokenGetter = async () => await getToken();
       await deleteWorkspaceApi(workspaceId, tokenGetter);
+      track("workspace_deleted", { source: "studio" });
       setWorkspaces((prev) => prev.filter((ws) => ws.id !== workspaceId));
     } catch (err: unknown) {
       console.error("Failed to delete workspace:", err);

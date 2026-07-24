@@ -12,6 +12,7 @@ import {
 } from "@clerk/nextjs";
 import Link from "next/link";
 import { getCredits, type CreditsInfo } from "@/lib/api";
+import { track } from "@/lib/analytics";
 
 export function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -71,6 +72,9 @@ export function Navigation() {
                   <Link
                     href="/checkout"
                     className="text-sm font-medium text-amber-600 hover:text-amber-700 transition-colors"
+                    onClick={() =>
+                      track("paywall_hit", { source: "nav_credits_exhausted" })
+                    }
                   >
                     You&apos;ve used all your credits
                   </Link>
@@ -145,7 +149,10 @@ export function Navigation() {
                 <Link
                   href="/checkout"
                   className="block px-4 py-3 text-base font-medium text-amber-600 hover:bg-amber-50 rounded-xl transition-colors"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => {
+                    track("paywall_hit", { source: "nav_mobile_credits_exhausted" });
+                    setMobileMenuOpen(false);
+                  }}
                 >
                   You&apos;ve used all your credits — Get more
                 </Link>
