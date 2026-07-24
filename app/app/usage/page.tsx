@@ -24,6 +24,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { checkoutHref, formatUsd, PRICING } from "@/lib/pricing";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 
@@ -53,30 +54,30 @@ type UsageRow = {
 const PLANS = [
   {
     id: "free",
-    name: "Free",
-    price: "$0",
-    credits: "200 credits / month",
+    name: PRICING.free.label,
+    price: formatUsd(PRICING.free.monthly),
+    credits: PRICING.free.creditsLabel,
     tagline: "Explore image and 3D generation.",
     cta: "Start creating",
     href: "/generate",
   },
   {
     id: "creator",
-    name: "Creator",
-    price: "$8.99",
-    credits: "1,000 credits / month",
+    name: PRICING.creator.label,
+    price: formatUsd(PRICING.creator.monthly),
+    credits: PRICING.creator.creditsLabel,
     tagline: "More volume and quality for creators.",
     cta: "Choose Creator",
-    href: "/checkout?plan=creator",
+    href: checkoutHref("creator"),
   },
   {
     id: "studio",
-    name: "Studio",
-    price: "$27.99",
-    credits: "4,000 credits / month",
+    name: PRICING.studio.label,
+    price: formatUsd(PRICING.studio.monthly),
+    credits: PRICING.studio.creditsLabel,
     tagline: "Collaboration and scale for teams.",
     cta: "Choose Studio",
-    href: "/checkout?plan=studio",
+    href: checkoutHref("studio"),
   },
 ] as const;
 

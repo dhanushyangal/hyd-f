@@ -17,7 +17,7 @@ export default function CookiePolicyPage() {
               Cookie Policy
             </h1>
             <p className="text-base sm:text-lg text-black/80 font-dm-sans">
-              Effective Date: Monday, January 23rd, 2026
+              Last Updated: July 14, 2026
             </p>
           </div>
         </div>
@@ -30,51 +30,99 @@ export default function CookiePolicyPage() {
             style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
           >
             <section>
-              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">1. What are cookies</h2>
+              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">
+                1. Introduction
+              </h2>
               <p>
-                Cookies are small text files that websites place on your device (computer, tablet, or phone) when you visit. They help the site remember your preferences, keep you signed in, and understand how the site is used.
+                This Cookie Policy explains how Hydrilla AI (&quot;we,&quot; &quot;our,&quot; or
+                &quot;us&quot;) uses cookies and similar technologies on our Service. It
+                should be read together with our{" "}
+                <a
+                  href="/privacy-policy"
+                  className="text-black underline hover:text-gray-700"
+                >
+                  Privacy Policy
+                </a>
+                .
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">2. How we use cookies</h2>
-              <p>Hydrilla AI uses cookies to:</p>
+              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">
+                2. What Are Cookies?
+              </h2>
+              <p>
+                Cookies are small text files stored on your device when you
+                visit a website. They help the site function, remember your
+                preferences, and understand how it is used.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">
+                3. How We Use Cookies
+              </h2>
+              <p>We use cookies to:</p>
               <ul className="list-disc pl-6 space-y-2">
-                <li>Keep you logged in and manage your session</li>
-                <li>Remember your preferences and settings</li>
-                <li>Understand how our site and product are used (e.g. analytics)</li>
-                <li>Improve performance and security</li>
+                <li>Keep you signed in and secure your session</li>
+                <li>Remember your preferences</li>
+                <li>Understand how the Service is used</li>
+                <li>Improve performance and reliability</li>
               </ul>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">3. Types of cookies we use</h2>
+              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">
+                4. Types of Cookies We Use
+              </h2>
               <ul className="list-disc pl-6 space-y-2">
-                <li><strong>Strictly necessary:</strong> Required for the site to work (e.g. authentication). You cannot turn these off and still use the service.</li>
-                <li><strong>Functional:</strong> Remember choices you make (e.g. language, region) to give you a better experience.</li>
-                <li><strong>Analytics:</strong> Help us see how people use our site (e.g. pages visited, features used) so we can improve it. We may use services like PostHog for this.</li>
+                <li>
+                  <strong>Essential cookies</strong> — required for the Service
+                  to work, including authentication and security.
+                </li>
+                <li>
+                  <strong>Functional cookies</strong> — remember choices you
+                  make to improve your experience.
+                </li>
+                <li>
+                  <strong>Analytics cookies</strong> — help us understand usage
+                  and improve the Service. We use analytics tools such as
+                  PostHog for this purpose.
+                </li>
               </ul>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">4. Managing cookies</h2>
+              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">
+                5. Managing Cookies
+              </h2>
               <p>
-                You can control or delete cookies through your browser settings. Disabling or blocking certain cookies may affect how the site works (for example, you may need to sign in again or some features may not work as intended).
+                You can control or delete cookies through your browser settings.
+                Please note that disabling certain cookies may affect how the
+                Service works.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">5. Changes</h2>
+              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">
+                6. Changes
+              </h2>
               <p>
-                We may update this Cookie Policy from time to time. We will post the updated version on this page and change the effective date when we do.
+                We may update this Cookie Policy from time to time. Changes will
+                be posted on this page with an updated &quot;Last Updated&quot; date.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">6. Contact</h2>
+              <h2 className="text-2xl font-bold text-black mt-8 mb-4 font-dm-sans">
+                7. Contact
+              </h2>
               <p>
-                If you have questions about our use of cookies, contact us at{" "}
-                <a href="mailto:founders@hydrilla.ai" className="text-black underline hover:text-gray-700">
+                Questions about this Cookie Policy? Contact us at{" "}
+                <a
+                  href="mailto:founders@hydrilla.ai"
+                  className="text-black underline hover:text-gray-700"
+                >
                   founders@hydrilla.ai
                 </a>
                 .

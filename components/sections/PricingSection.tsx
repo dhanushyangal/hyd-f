@@ -16,6 +16,12 @@ import {
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { PRICING_IMAGES } from "@/lib/cloudinary";
 import { track } from "@/lib/analytics";
+import {
+  YEARLY_DISCOUNT_PERCENT,
+  checkoutHref,
+  formatUsd,
+  PRICING,
+} from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 
 const FONT = "var(--font-dm-sans), 'DM Sans', sans-serif";
@@ -37,11 +43,8 @@ interface Plan {
   image: string;
   monthlyPrice: string;
   yearlyPrice: string;
-  monthlyPrevious?: string;
-  yearlyPrevious?: string;
   credits: string;
   cta: string;
-  href: string;
   featured?: boolean;
   mobileFeatures: string[];
 }
@@ -54,28 +57,24 @@ interface Feature {
 const PLANS: Plan[] = [
   {
     id: "free",
-    name: "Free",
+    name: PRICING.free.label,
     description: "Try Hydrilla and ship your first production-ready assets.",
     image: PRICING_IMAGES.free,
-    monthlyPrice: "$0",
-    yearlyPrice: "$0",
-    credits: "200 credits / month",
+    monthlyPrice: formatUsd(PRICING.free.monthly),
+    yearlyPrice: formatUsd(PRICING.free.yearlyMonthlyEquivalent),
+    credits: PRICING.free.creditsLabel,
     cta: "Start creating",
-    href: "/generate",
     mobileFeatures: ["GLB export", "1 queued task", "Community support"],
   },
   {
     id: "creator",
-    name: "Creator",
+    name: PRICING.creator.label,
     description: "Higher volume, more formats, and priority for independent work.",
     image: PRICING_IMAGES.creator,
-    monthlyPrice: "$8.99",
-    yearlyPrice: "$7.25",
-    monthlyPrevious: "$14.99",
-    yearlyPrevious: "$11.49",
-    credits: "1,000 credits / month",
+    monthlyPrice: formatUsd(PRICING.creator.monthly),
+    yearlyPrice: formatUsd(PRICING.creator.yearlyMonthlyEquivalent),
+    credits: PRICING.creator.creditsLabel,
     cta: "Choose Creator",
-    href: "/checkout?plan=creator",
     featured: true,
     mobileFeatures: [
       "All export formats",
@@ -85,16 +84,13 @@ const PLANS: Plan[] = [
   },
   {
     id: "studio",
-    name: "Studio",
+    name: PRICING.studio.label,
     description: "Seats, API access, and capacity for teams shipping every week.",
     image: PRICING_IMAGES.studio,
-    monthlyPrice: "$27.99",
-    yearlyPrice: "$21.59",
-    monthlyPrevious: "$39.99",
-    yearlyPrevious: "$31.99",
-    credits: "4,000 credits / month",
+    monthlyPrice: formatUsd(PRICING.studio.monthly),
+    yearlyPrice: formatUsd(PRICING.studio.yearlyMonthlyEquivalent),
+    credits: PRICING.studio.creditsLabel,
     cta: "Choose Studio",
-    href: "/checkout?plan=studio",
     mobileFeatures: [
       "5 team seats",
       "20 queued tasks",
@@ -149,7 +145,15 @@ function getCtaState(
   return { label: plan.cta, disabled: false, current: false };
 }
 
-function PlanAction({ plan, state }: { plan: Plan; state: CtaState }) {
+function PlanAction({
+  plan,
+  state,
+  yearly,
+}: {
+  plan: Plan;
+  state: CtaState;
+  yearly: boolean;
+}) {
   if (state.disabled) {
     return (
       <button
@@ -169,14 +173,20 @@ function PlanAction({ plan, state }: { plan: Plan; state: CtaState }) {
     );
   }
 
+  const href =
+    plan.id === "free"
+      ? "/generate"
+      : checkoutHref(plan.id, yearly ? "yearly" : "monthly");
+
   return (
     <Link
-      href={plan.href}
+      href={href}
       onClick={() =>
         track("plan_cta_clicked", {
           plan: plan.id,
           cta_label: state.label,
           featured: plan.featured,
+          billing: yearly ? "yearly" : "monthly",
         })
       }
       className={cn(
@@ -203,7 +213,6 @@ function PlanCard({
   yearly: boolean;
 }) {
   const price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
-  const previous = yearly ? plan.yearlyPrevious : plan.monthlyPrevious;
 
   return (
     <article
@@ -270,14 +279,6 @@ function PlanCard({
           >
             / mo
           </span>
-          {previous && (
-            <span
-              className="pb-2 text-[14px] font-medium text-neutral-400 line-through"
-              style={{ fontFamily: FONT }}
-            >
-              {previous}
-            </span>
-          )}
         </div>
 
         <p
@@ -287,7 +288,7 @@ function PlanCard({
           {plan.credits}
           {yearly && plan.id !== "free" && (
             <span className="ml-1.5 font-medium text-neutral-400">
-              billed yearly
+              · ${plan.id === "creator" ? PRICING.creator.yearlyTotal : PRICING.studio.yearlyTotal}/yr
             </span>
           )}
         </p>
@@ -309,7 +310,7 @@ function PlanCard({
         </ul>
 
         <div className="mt-auto pt-7">
-          <PlanAction plan={plan} state={state} />
+          <PlanAction plan={plan} state={state} yearly={yearly} />
         </div>
       </div>
     </article>
@@ -505,7 +506,7 @@ export default function PricingSection({
                   yearly ? "text-white/75" : "text-neutral-400"
                 )}
               >
-                −20%
+                −{YEARLY_DISCOUNT_PERCENT}%
               </span>
             </button>
           </div>
