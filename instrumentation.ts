@@ -11,6 +11,29 @@ export async function onRequestError(
 ) {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  const { isServerActionSkewError } = await import("./lib/server-action-skew");
+  // Expected during rollouts when a stale tab posts an old Server Action ID
+  // (e.g. Clerk invalidateCacheAction). Do not raise as an app exception.
+  if (isServerActionSkewError(err)) {
+    const {
+      getPostHogLogger,
+      flushPostHogLogs,
+      SeverityNumber,
+    } = await import("./lib/posthog-logs");
+    const logger = getPostHogLogger();
+    logger?.emit({
+      body: err.message,
+      severityNumber: SeverityNumber.WARN,
+      attributes: {
+        digest: err.digest,
+        source: "nextjs-onRequestError",
+        expected_server_action_skew: true,
+      },
+    });
+    await flushPostHogLogs();
+    return;
+  }
+
   const { getPostHogDistinctIdFromCookie } = await import("./lib/posthog");
   const { getPostHogServer } = await import("./lib/posthog-server");
   const {

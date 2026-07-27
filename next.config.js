@@ -4,6 +4,12 @@ const nextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Skew protection (stale Server Action IDs after deploy):
+  // 1. Enable in Vercel → Project → Settings → Advanced → Skew Protection
+  // 2. Optionally set build+runtime env NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+  //    (`openssl rand -base64 32`) so action encryption stays stable across builds.
+  // https://nextjs.org/docs/messages/failed-to-find-server-action
+  // https://vercel.com/docs/skew-protection
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "res.cloudinary.com" },
@@ -67,4 +73,3 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
-

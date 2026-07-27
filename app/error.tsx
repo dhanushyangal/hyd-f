@@ -2,6 +2,7 @@
 
 import posthog from "posthog-js";
 import { useEffect } from "react";
+import { useServerActionSkewReload } from "@/lib/use-server-action-skew-reload";
 
 export default function Error({
   error,
@@ -10,12 +11,23 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const isSkew = useServerActionSkewReload(error);
+
   useEffect(() => {
+    if (isSkew) return;
     posthog.captureException(error, {
       digest: error.digest,
       source: "app-error-boundary",
     });
-  }, [error]);
+  }, [error, isSkew]);
+
+  if (isSkew) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-neutral-50">
+        <p className="text-sm text-gray-600">Updating to the latest version…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-neutral-50">
