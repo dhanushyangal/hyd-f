@@ -38,6 +38,16 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Marketing home — allow CDN to reuse prerender briefly (pairs with revalidate on page).
+        source: "/",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
         source: "/_next/static/:path*",
         headers: [
           {

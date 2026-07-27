@@ -53,18 +53,38 @@ export default clerkMiddleware(async (auth, req) => {
     await auth.protect({
       unauthenticatedUrl: new URL("/sign-in", req.url).toString(),
     });
+    // Skew pin only for app shells — avoid Set-Cookie on marketing `/` (CDN/TTFB).
+    return withSkewProtectionCookie(req, NextResponse.next());
   }
 
-  return withSkewProtectionCookie(req, NextResponse.next());
+  return NextResponse.next();
 });
 
 export const config = {
+  // Auth middleware only where needed. Marketing `/` skips Clerk edge work → better TTFB.
+  // Client ClerkProvider still hydrates auth on public pages.
   matcher: [
-    // Run on every route except Next.js internals and static asset files.
-    // This is required so that pages that call `auth()` (e.g. `/`) are
-    // covered by clerkMiddleware.
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    // Always run for API routes
-    "/(api|trpc)(.*)",
+    "/app",
+    "/app/(.*)",
+    "/workspace",
+    "/workspace/(.*)",
+    "/generate",
+    "/generate/(.*)",
+    "/generations",
+    "/generations/(.*)",
+    "/library",
+    "/library/(.*)",
+    "/checkout",
+    "/checkout/(.*)",
+    "/rigging",
+    "/rigging/(.*)",
+    "/admin",
+    "/admin/(.*)",
+    "/sign-in",
+    "/sign-in/(.*)",
+    "/sign-up",
+    "/sign-up/(.*)",
+    "/api/(.*)",
+    "/trpc/(.*)",
   ],
 };

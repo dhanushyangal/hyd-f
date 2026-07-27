@@ -14,14 +14,13 @@ import {
   SITE_NAME,
   SITE_URL,
 } from "@/lib/seo";
-import { HERO_POSTER_PRELOAD_URL } from "@/lib/cloudinary";
-
 const dmSans = DM_Sans({
   subsets: ["latin"],
   weight: ["400", "600", "700"],
   variable: "--font-dm-sans",
   display: "swap",
   preload: true,
+  adjustFontFallback: true,
 });
 
 export const metadata: Metadata = {
@@ -97,7 +96,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
     <html lang="en" className={dmSans.variable}>
         <head>
-          <link rel="preload" as="image" href={HERO_POSTER_PRELOAD_URL} fetchPriority="high" />
           <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="" />
           {/* Preconnect only to auth — analytics loads lazily after idle */}
           <link rel="preconnect" href="https://clerk.hydrilla.ai" />

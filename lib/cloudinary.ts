@@ -25,13 +25,13 @@ export function cloudinaryVideo(
 /** Full-viewport hero poster (WebP). */
 export const HERO_POSTER_URL = cloudinaryImage(
   "hydrilla-landing/hero/poster",
-  "f_webp,q_auto,c_fill,w_1920,h_1080"
+  "f_webp,q_auto:eco,c_fill,w_1600,h_900"
 );
 
-/** Preload-sized hero poster for faster first paint. */
+/** Preload-sized hero poster for faster LCP (eco quality, capped width). */
 export const HERO_POSTER_PRELOAD_URL = cloudinaryImage(
   "hydrilla-landing/hero/poster",
-  "f_webp,q_auto,c_fill,w_1280,h_720"
+  "f_webp,q_auto:eco,c_fill,w_1280,h_720"
 );
 
 /** Hero background video — deferred after idle in Hero.tsx. */
