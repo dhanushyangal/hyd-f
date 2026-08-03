@@ -174,25 +174,7 @@ function AssetDetailModal({ job, onClose }: { job: BackendJob; onClose: () => vo
                 </a>
               </Button>
             )}
-            {code && factoryCode && (
-              <Button
-                type="button"
-                size="sm"
-                className="h-9 rounded-full px-4"
-                onClick={() => {
-                  const blob = new Blob([factoryCode], { type: "text/typescript" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "createModel.ts";
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                <Download className="w-3.5 h-3.5" />
-                .ts
-              </Button>
-            )}
+            {/* Water: use Download menu inside WaterViewer (GLB / OBJ / STL / .ts) */}
             <Button
               type="button"
               variant="ghost"

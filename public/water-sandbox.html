@@ -56,6 +56,9 @@
       import * as THREE from "three";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+      import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+      import { OBJExporter } from "three/addons/exporters/OBJExporter.js";
+      import { STLExporter } from "three/addons/exporters/STLExporter.js";
 
       const canvas = document.getElementById("c");
       const errEl = document.getElementById("err");
@@ -301,11 +304,128 @@ const {
         return preamble + "\n" + body;
       }
 
+      function bufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(binary);
+      }
+
+      /** Clone the live model so exporters never mutate the preview scene. */
+      function cloneForExport() {
+        if (!root) throw new Error("Nothing to export yet — wait for the preview to finish loading.");
+        const clone = root.clone(true);
+        clone.traverse((obj) => {
+          if (obj.isMesh) {
+            if (obj.geometry) obj.geometry = obj.geometry.clone();
+            if (Array.isArray(obj.material)) {
+              obj.material = obj.material.map((m) => (m && m.clone ? m.clone() : m));
+            } else if (obj.material && obj.material.clone) {
+              obj.material = obj.material.clone();
+            }
+          }
+        });
+        clone.updateMatrixWorld(true);
+        return clone;
+      }
+
+      async function exportModel(format, requestId) {
+        const reply = (payload) => {
+          parent.postMessage(
+            { type: "code-sculpt-export-result", requestId, format, ...payload },
+            "*"
+          );
+        };
+        try {
+          const object = cloneForExport();
+          const baseName = "hydrilla-water-model";
+
+          if (format === "glb" || format === "gltf") {
+            const exporter = new GLTFExporter();
+            const binary = format === "glb";
+            const result = await exporter.parseAsync(object, {
+              binary,
+              onlyVisible: true,
+              truncateDrawRange: true,
+            });
+            if (binary) {
+              const ab = result instanceof ArrayBuffer ? result : result.buffer;
+              reply({
+                ok: true,
+                filename: `${baseName}.glb`,
+                mime: "model/gltf-binary",
+                base64: bufferToBase64(ab),
+              });
+            } else {
+              const text = typeof result === "string" ? result : JSON.stringify(result);
+              reply({
+                ok: true,
+                filename: `${baseName}.gltf`,
+                mime: "model/gltf+json",
+                text,
+              });
+            }
+            return;
+          }
+
+          if (format === "obj") {
+            const text = new OBJExporter().parse(object);
+            reply({
+              ok: true,
+              filename: `${baseName}.obj`,
+              mime: "text/plain",
+              text,
+            });
+            return;
+          }
+
+          if (format === "stl") {
+            const result = new STLExporter().parse(object, { binary: true });
+            const ab = result instanceof ArrayBuffer ? result : new TextEncoder().encode(String(result)).buffer;
+            reply({
+              ok: true,
+              filename: `${baseName}.stl`,
+              mime: "model/stl",
+              base64: bufferToBase64(ab),
+            });
+            return;
+          }
+
+          if (format === "png") {
+            interactive = false;
+            controls.enableDamping = false;
+            controls.update();
+            renderer.render(scene, camera);
+            const dataUrl = canvas.toDataURL("image/png");
+            controls.enableDamping = true;
+            interactive = true;
+            const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+            reply({
+              ok: true,
+              filename: `${baseName}.png`,
+              mime: "image/png",
+              base64,
+            });
+            return;
+          }
+
+          reply({ ok: false, error: `Unsupported export format: ${format}` });
+        } catch (e) {
+          reply({ ok: false, error: e?.message || String(e) });
+        }
+      }
+
       window.addEventListener("message", (ev) => {
         const data = ev.data;
         if (!data || typeof data !== "object") return;
         if (data.type === "code-sculpt-load" && typeof data.code === "string") {
           loadFactory(data.code);
+        }
+        if (data.type === "code-sculpt-export" && data.format && data.requestId) {
+          void exportModel(String(data.format), data.requestId);
         }
       });
 

@@ -252,4 +252,5 @@ Internal filenames `codeSculpt*.ts` remain for history; they implement **Water**
 2. Engine → Claude / free model → badge **Water**, cost **0 credits**.  
 3. Generate → job `engine=water`, `credits_used=0`, no GPU sync.  
 4. Preview in WaterViewer; library thumbnail appears.  
-5. Switch to **Trilles** → badge **Cloud**, credits path unchanged.
+5. **Download** → GLB (primary), GLTF, OBJ, STL, PNG, or TypeScript (from live preview).  
+6. Switch to **Trilles** → badge **Cloud**, credits path unchanged.
