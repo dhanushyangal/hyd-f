@@ -132,13 +132,16 @@ export function WaterViewer({
           const rawName = String(data.filename || "model.bin");
           const ext = rawName.includes(".") ? rawName.slice(rawName.lastIndexOf(".")) : ".bin";
           const filename = `${fileBase(jobId)}${ext}`;
-          if (typeof data.base64 === "string") {
-            downloadBlob(base64ToBlob(data.base64, String(data.mime || "application/octet-stream")), filename);
+          const mime = String(data.mime || "application/octet-stream");
+          // Prefer transferred ArrayBuffer (fast path) over base64.
+          if (data.buffer instanceof ArrayBuffer) {
+            downloadBlob(new Blob([data.buffer], { type: mime }), filename);
+          } else if (ArrayBuffer.isView(data.buffer)) {
+            downloadBlob(new Blob([data.buffer as BlobPart], { type: mime }), filename);
+          } else if (typeof data.base64 === "string") {
+            downloadBlob(base64ToBlob(data.base64, mime), filename);
           } else if (typeof data.text === "string") {
-            downloadBlob(
-              new Blob([data.text], { type: String(data.mime || "text/plain") }),
-              filename
-            );
+            downloadBlob(new Blob([data.text], { type: mime || "text/plain" }), filename);
           } else {
             pending.resolve({ ok: false, error: "Export returned empty data" });
             return;
@@ -188,7 +191,7 @@ export function WaterViewer({
           pendingExport.current = null;
           resolve({ ok: false, error: "Export timed out — try again" });
         }
-      }, 45000);
+      }, format === "glb" ? 20000 : 45000);
       pendingExport.current = {
         requestId,
         resolve: (v) => {
@@ -254,28 +257,41 @@ export function WaterViewer({
         </span>
       </div>
       {factoryCode && (
-        <div className="absolute right-3 top-3 z-10">
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
+          <button
+            type="button"
+            disabled={!canExportMesh}
+            onClick={() => void handleExport("glb")}
+            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-900 bg-neutral-900 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-neutral-800 disabled:opacity-50"
+            title="Download GLB (fast)"
+          >
+            {exporting === "glb" ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
+            GLB
+          </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 disabled={Boolean(exporting)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium text-neutral-800 shadow-sm backdrop-blur hover:bg-white disabled:opacity-60"
+                className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 bg-white/90 px-2 py-1 text-[11px] font-medium text-neutral-800 shadow-sm backdrop-blur hover:bg-white disabled:opacity-60"
+                title="More formats"
               >
-                {exporting ? (
+                {exporting && exporting !== "glb" ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Download className="h-3 w-3" />
+                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
                 )}
-                {exporting ? `Exporting ${exporting.toUpperCase()}…` : "Download"}
-                <ChevronDown className="h-3 w-3 opacity-60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[220px]">
               <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-neutral-400">
-                3D mesh
+                More formats
               </DropdownMenuLabel>
-              {MESH_FORMATS.map((fmt) => (
+              {MESH_FORMATS.filter((f) => f.id !== "glb").map((fmt) => (
                 <DropdownMenuItem
                   key={fmt.id}
                   disabled={!canExportMesh}

@@ -176,6 +176,8 @@
 
       async function loadFactory(code) {
         clearError();
+        glbCache = null;
+        glbWarmToken += 1;
         if (root) {
           scene.remove(root);
           root = null;
@@ -232,6 +234,8 @@
           if (!root || !root.isObject3D) {
             throw new Error("createModel() did not return a THREE.Object3D");
           }
+          glbCache = null;
+          glbWarmToken += 1;
           scene.add(root);
           const box = new THREE.Box3().setFromObject(root);
           const size = box.getSize(new THREE.Vector3()).length() || 1;
@@ -253,8 +257,11 @@
                 "*"
               );
             }
+            // Warm GLB in idle time so Download GLB is near-instant.
+            scheduleGlbWarm();
           });
         } catch (e) {
+          glbCache = null;
           showError(e?.message || String(e));
         }
       }
@@ -304,76 +311,97 @@ const {
         return preamble + "\n" + body;
       }
 
-      function bufferToBase64(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = "";
-        const chunk = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunk) {
-          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-        }
-        return btoa(binary);
+      const gltfExporter = new GLTFExporter();
+      const objExporter = new OBJExporter();
+      const stlExporter = new STLExporter();
+
+      /** Cached GLB so the common download path is instant after first build / idle warm. */
+      let glbCache = null; // ArrayBuffer | null
+      let glbWarmToken = 0;
+
+      function replyExport(requestId, format, payload, transfer = []) {
+        parent.postMessage(
+          { type: "code-sculpt-export-result", requestId, format, ...payload },
+          "*",
+          transfer
+        );
       }
 
-      /** Clone the live model so exporters never mutate the preview scene. */
-      function cloneForExport() {
+      /** Shallow hierarchy clone — share geometry/materials for speed (exporters are read-only). */
+      function objectForExport() {
         if (!root) throw new Error("Nothing to export yet — wait for the preview to finish loading.");
-        const clone = root.clone(true);
-        clone.traverse((obj) => {
-          if (obj.isMesh) {
-            if (obj.geometry) obj.geometry = obj.geometry.clone();
-            if (Array.isArray(obj.material)) {
-              obj.material = obj.material.map((m) => (m && m.clone ? m.clone() : m));
-            } else if (obj.material && obj.material.clone) {
-              obj.material = obj.material.clone();
-            }
-          }
+        root.updateMatrixWorld(true);
+        return root;
+      }
+
+      async function buildGlbBuffer() {
+        const object = objectForExport();
+        const result = await gltfExporter.parseAsync(object, {
+          binary: true,
+          onlyVisible: true,
+          truncateDrawRange: true,
         });
-        clone.updateMatrixWorld(true);
-        return clone;
+        const ab = result instanceof ArrayBuffer ? result : result.buffer;
+        // Copy so we can keep a cache AND transfer a slice to the parent.
+        const copy = ab.slice(0);
+        glbCache = ab.slice(0);
+        return copy;
+      }
+
+      function scheduleGlbWarm() {
+        const token = ++glbWarmToken;
+        const run = () => {
+          if (token !== glbWarmToken || !root) return;
+          void buildGlbBuffer().catch(() => {});
+        };
+        if (typeof requestIdleCallback === "function") {
+          requestIdleCallback(run, { timeout: 1200 });
+        } else {
+          setTimeout(run, 280);
+        }
       }
 
       async function exportModel(format, requestId) {
-        const reply = (payload) => {
-          parent.postMessage(
-            { type: "code-sculpt-export-result", requestId, format, ...payload },
-            "*"
-          );
-        };
         try {
-          const object = cloneForExport();
           const baseName = "hydrilla-water-model";
 
-          if (format === "glb" || format === "gltf") {
-            const exporter = new GLTFExporter();
-            const binary = format === "glb";
-            const result = await exporter.parseAsync(object, {
-              binary,
-              onlyVisible: true,
-              truncateDrawRange: true,
-            });
-            if (binary) {
-              const ab = result instanceof ArrayBuffer ? result : result.buffer;
-              reply({
+          if (format === "glb") {
+            let ab = glbCache ? glbCache.slice(0) : null;
+            if (!ab) ab = await buildGlbBuffer();
+            replyExport(
+              requestId,
+              format,
+              {
                 ok: true,
                 filename: `${baseName}.glb`,
                 mime: "model/gltf-binary",
-                base64: bufferToBase64(ab),
-              });
-            } else {
-              const text = typeof result === "string" ? result : JSON.stringify(result);
-              reply({
-                ok: true,
-                filename: `${baseName}.gltf`,
-                mime: "model/gltf+json",
-                text,
-              });
-            }
+                buffer: ab,
+              },
+              [ab]
+            );
+            return;
+          }
+
+          if (format === "gltf") {
+            const object = objectForExport();
+            const result = await gltfExporter.parseAsync(object, {
+              binary: false,
+              onlyVisible: true,
+              truncateDrawRange: true,
+            });
+            const text = typeof result === "string" ? result : JSON.stringify(result);
+            replyExport(requestId, format, {
+              ok: true,
+              filename: `${baseName}.gltf`,
+              mime: "model/gltf+json",
+              text,
+            });
             return;
           }
 
           if (format === "obj") {
-            const text = new OBJExporter().parse(object);
-            reply({
+            const text = objExporter.parse(objectForExport());
+            replyExport(requestId, format, {
               ok: true,
               filename: `${baseName}.obj`,
               mime: "text/plain",
@@ -383,14 +411,23 @@ const {
           }
 
           if (format === "stl") {
-            const result = new STLExporter().parse(object, { binary: true });
-            const ab = result instanceof ArrayBuffer ? result : new TextEncoder().encode(String(result)).buffer;
-            reply({
-              ok: true,
-              filename: `${baseName}.stl`,
-              mime: "model/stl",
-              base64: bufferToBase64(ab),
-            });
+            const result = stlExporter.parse(objectForExport(), { binary: true });
+            const ab =
+              result instanceof ArrayBuffer
+                ? result
+                : new TextEncoder().encode(String(result)).buffer;
+            const transferAb = ab instanceof ArrayBuffer ? ab : ab.slice(0);
+            replyExport(
+              requestId,
+              format,
+              {
+                ok: true,
+                filename: `${baseName}.stl`,
+                mime: "model/stl",
+                buffer: transferAb,
+              },
+              transferAb instanceof ArrayBuffer ? [transferAb] : []
+            );
             return;
           }
 
@@ -399,22 +436,38 @@ const {
             controls.enableDamping = false;
             controls.update();
             renderer.render(scene, camera);
-            const dataUrl = canvas.toDataURL("image/png");
+            const blob = await new Promise((resolve, reject) => {
+              canvas.toBlob(
+                (b) => (b ? resolve(b) : reject(new Error("PNG capture failed"))),
+                "image/png"
+              );
+            });
             controls.enableDamping = true;
             interactive = true;
-            const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-            reply({
-              ok: true,
-              filename: `${baseName}.png`,
-              mime: "image/png",
-              base64,
-            });
+            const ab = await blob.arrayBuffer();
+            replyExport(
+              requestId,
+              format,
+              {
+                ok: true,
+                filename: `${baseName}.png`,
+                mime: "image/png",
+                buffer: ab,
+              },
+              [ab]
+            );
             return;
           }
 
-          reply({ ok: false, error: `Unsupported export format: ${format}` });
+          replyExport(requestId, format, {
+            ok: false,
+            error: `Unsupported export format: ${format}`,
+          });
         } catch (e) {
-          reply({ ok: false, error: e?.message || String(e) });
+          replyExport(requestId, format, {
+            ok: false,
+            error: e?.message || String(e),
+          });
         }
       }
 
