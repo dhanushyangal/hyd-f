@@ -178,9 +178,33 @@ export interface BackendJob {
   parentJobId?: string | null;
   parentJobIds?: string[];       // All parent IDs (multi-parent merges)
   sourceImages?: string[] | null; // Actual source image URLs used as input
+  engine?: string | null;
+  resultKind?: string | null;
+  llmModel?: string | null;
+  llmProvider?: string | null;
+  factoryCode?: string | null;
+  /** Library list may set this instead of shipping full factoryCode */
+  hasFactoryCode?: boolean;
+  sculptPass?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type UserApiKeyMeta = {
+  provider: "anthropic" | "openai" | "gemini" | "openrouter";
+  label?: string;
+  configured: boolean;
+  last4: string | null;
+  status: "unchecked" | "valid" | "invalid";
+  lastError: string | null;
+  verifiedAt: string | null;
+  updatedAt: string | null;
+};
+
+export type UserModelPrefs = {
+  defaultMeshModel: string;
+  defaultCodeModel: string | null;
+};
 
 /**
  * Get authorization header with Clerk token
@@ -2153,3 +2177,231 @@ export async function deleteWorkspaceApi(workspaceId: string, getToken?: () => P
     throw new Error(`Failed to delete workspace: ${response.statusText}`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// BYOK / Water (user keys + procedural Three.js)
+// ---------------------------------------------------------------------------
+
+async function authHeaders(getToken?: () => Promise<string | null>): Promise<HeadersInit> {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (getToken) {
+    const token = await getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function fetchUserApiKeys(
+  getToken?: () => Promise<string | null>
+): Promise<{ keys: UserApiKeyMeta[]; prefs: UserModelPrefs }> {
+  const res = await fetch(`${backendBase}/api/user/api-keys`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || "Failed to load API keys");
+  }
+  return res.json();
+}
+
+export async function saveUserApiKey(
+  provider: string,
+  apiKey: string,
+  getToken?: () => Promise<string | null>
+): Promise<UserApiKeyMeta> {
+  const res = await fetch(`${backendBase}/api/user/api-keys/${provider}`, {
+    method: "PUT",
+    headers: await authHeaders(getToken),
+    body: JSON.stringify({ apiKey }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to save API key");
+  }
+  return (body as { key: UserApiKeyMeta }).key;
+}
+
+export async function verifyUserApiKey(
+  provider: string,
+  getToken?: () => Promise<string | null>
+): Promise<{ ok: boolean; status: string; error: string | null }> {
+  const res = await fetch(`${backendBase}/api/user/api-keys/${provider}/verify`, {
+    method: "POST",
+    headers: await authHeaders(getToken),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Verification failed");
+  }
+  return body as { ok: boolean; status: string; error: string | null };
+}
+
+export async function deleteUserApiKey(
+  provider: string,
+  getToken?: () => Promise<string | null>
+): Promise<void> {
+  const res = await fetch(`${backendBase}/api/user/api-keys/${provider}`, {
+    method: "DELETE",
+    headers: await authHeaders(getToken),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || "Failed to remove key");
+  }
+}
+
+export async function saveUserModelPrefs(
+  prefs: { defaultMeshModel?: string; defaultCodeModel?: string | null },
+  getToken?: () => Promise<string | null>
+): Promise<UserModelPrefs> {
+  const res = await fetch(`${backendBase}/api/user/model-prefs`, {
+    method: "PATCH",
+    headers: await authHeaders(getToken),
+    body: JSON.stringify(prefs),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to save model preference");
+  }
+  return (body as { prefs: UserModelPrefs }).prefs;
+}
+
+export type OpenRouterFreeModelRow = {
+  id: string;
+  name: string;
+  vision: boolean;
+  contextLength: number | null;
+};
+
+export async function fetchOpenRouterFreeModels(
+  getToken?: () => Promise<string | null>
+): Promise<{ models: OpenRouterFreeModelRow[]; syncedAt: string; note?: string }> {
+  const res = await fetch(`${backendBase}/api/user/openrouter/free-models`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to sync OpenRouter free models");
+  }
+  return body as { models: OpenRouterFreeModelRow[]; syncedAt: string; note?: string };
+}
+
+export async function fetchOpenRouterKeyStatus(
+  getToken?: () => Promise<string | null>
+): Promise<{
+  label: string | null;
+  limit: number | null;
+  usage: number | null;
+  isFreeTier: boolean | null;
+}> {
+  const res = await fetch(`${backendBase}/api/user/openrouter/key-status`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to load OpenRouter key status");
+  }
+  return (body as { status: any }).status;
+}
+
+/**
+ * Water engine: text → procedural Three.js (bring-your-own-key, no GPU).
+ * `imageUrl` is an optional extra reference — prompt alone is enough.
+ * Calls `/api/water/*` (legacy `/api/code-sculpt/*` remains mounted on the backend).
+ */
+export async function submitWater(params: {
+  prompt: string;
+  modelId: string;
+  imageUrl?: string | null;
+  workspaceId?: string | null;
+  parentJobId?: string | null;
+  getToken?: () => Promise<string | null>;
+}): Promise<{ job_id: string; mode: "text_to_code" | "image_to_code" }> {
+  const res = await fetch(`${backendBase}/api/water/generate`, {
+    method: "POST",
+    headers: await authHeaders(params.getToken),
+    body: JSON.stringify({
+      prompt: params.prompt,
+      modelId: params.modelId,
+      imageUrl: params.imageUrl || undefined,
+      workspaceId: params.workspaceId || undefined,
+      parentJobId: params.parentJobId || undefined,
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      (body as { message?: string; error?: string }).message ||
+        (body as { error?: string }).error ||
+        "Water failed"
+    );
+  }
+  return {
+    job_id: (body as { jobId?: string }).jobId || "",
+    mode: (body as { mode?: "text_to_code" | "image_to_code" }).mode || "text_to_code",
+  };
+}
+
+/** @deprecated Use submitWater */
+export const submitCodeSculpt = submitWater;
+
+export async function fetchWaterJob(
+  jobId: string,
+  getToken?: () => Promise<string | null>
+): Promise<{
+  id: string;
+  status: BackendJobStatus;
+  factoryCode: string | null;
+  sculptPass: string | null;
+  errorMessage: string | null;
+  previewImageUrl: string | null;
+  imageUrl: string | null;
+  llmModel: string | null;
+}> {
+  const res = await fetch(`${backendBase}/api/water/jobs/${jobId}`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to load Water job");
+  }
+  const job = (body as { job: any }).job;
+  return {
+    id: job.id,
+    status: job.status,
+    factoryCode: job.factoryCode ?? null,
+    sculptPass: job.sculptPass ?? null,
+    errorMessage: job.errorMessage ?? null,
+    previewImageUrl: job.previewImageUrl ?? null,
+    imageUrl: job.imageUrl ?? null,
+    llmModel: job.llmModel ?? null,
+  };
+}
+
+/** @deprecated Use fetchWaterJob */
+export const fetchCodeSculptJob = fetchWaterJob;
+
+/** Persist a canvas screenshot as the Water library thumbnail. */
+export async function saveWaterThumbnail(
+  jobId: string,
+  dataUrl: string,
+  getToken?: () => Promise<string | null>
+): Promise<string> {
+  const res = await fetch(`${backendBase}/api/water/jobs/${jobId}/thumbnail`, {
+    method: "POST",
+    headers: await authHeaders(getToken),
+    body: JSON.stringify({ dataUrl }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to save thumbnail");
+  }
+  return (body as { previewImageUrl?: string }).previewImageUrl || dataUrl;
+}
+
+/** @deprecated Use saveWaterThumbnail */
+export const saveCodeSculptThumbnail = saveWaterThumbnail;

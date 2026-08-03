@@ -50,7 +50,7 @@ const teamMembers: TeamMember[] = [
   {
     id: "5",
     name: "Rishik Kalyan",
-    role: "Assistant Lead Developer",
+    role: "Creative Director",
     image: "/WhatsApp Image 2025-08-30 at 1.26.51 AM.jpeg",
     connect: "https://www.linkedin.com/in/rishik-kalyan-078ab631a/"
   },

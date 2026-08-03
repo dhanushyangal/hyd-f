@@ -10,6 +10,7 @@ import {
   ImageIcon,
   BarChart3,
   CreditCard,
+  Settings,
   PanelLeftClose,
   PanelLeft,
   Sparkles,
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/app/assets", label: "Assets", icon: FolderOpen },
   { href: "/app/image", label: "Image", icon: ImageIcon },
   { href: "/app/usage", label: "Usage", icon: BarChart3 },
+  { href: "/app/settings", label: "Settings", icon: Settings },
   { href: "/app/pricing", label: "Pricing", icon: CreditCard },
 ];
 

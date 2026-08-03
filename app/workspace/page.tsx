@@ -9,6 +9,15 @@ import { motion } from "motion/react";
 import { Slider } from "../../components/ui/slider";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 import { Input } from "../../components/ui/input";
 import { Progress } from "../../components/ui/progress";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -16,6 +25,11 @@ import { Switch } from "../../components/ui/switch";
 import { Textarea } from "../../components/ui/textarea";
 import {
   submitImageTo3D,
+  submitWater,
+  fetchWaterJob,
+  saveWaterThumbnail,
+  fetchUserApiKeys,
+  fetchOpenRouterFreeModels,
   generatePreviewImage,
   registerJobWithPreview,
   editImage,
@@ -41,6 +55,7 @@ import {
   BackendJob,
   QueueInfo,
   LineageItem,
+  UserApiKeyMeta,
 } from "../../lib/api";
 import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
 import { track, isPaywallError } from "../../lib/analytics";
@@ -49,12 +64,44 @@ import {
   consumeWorkspacePrefill,
   peekPendingHeroPrompt,
 } from "../../lib/pendingHeroPrompt";
+import {
+  MODEL_CATALOG,
+  MODEL_GROUPS,
+  getCatalogModel,
+  isCodeModel,
+  mergeFreeModels,
+  providerForModelId,
+  type CatalogModel,
+  type ModelId,
+  type OpenRouterFreeModel,
+} from "../../lib/models";
+import { ENGINE, formatEngineLabel, isWaterJob } from "../../lib/engines";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const CREDITS_IMAGE = 2;
 const CREDITS_3D = 10;
 
 const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
+
+// Human labels for the Water pipeline passes (img2threejs-style transparency).
+const SCULPT_PASS_LABELS: Record<string, string> = {
+  intake: "Checking the brief…",
+  assessment: "Mapping the parts…",
+  spec: "Writing the build plan…",
+  blockout: "Building the blockout in code…",
+  review: "Checking structure…",
+  done: "Blockout ready",
+};
+
+const SCULPT_PASS_STEPS = ["assessment", "spec", "blockout", "review", "done"] as const;
+
+const sculptPassLabel = (pass?: string | null): string =>
+  SCULPT_PASS_LABELS[pass || ""] || "Building…";
+
+const sculptPassIndex = (pass?: string | null): number => {
+  const i = SCULPT_PASS_STEPS.indexOf((pass as (typeof SCULPT_PASS_STEPS)[number]) || "assessment");
+  return i >= 0 ? i : 0;
+};
 
 // Lazy-load ThreeViewer (Three.js is heavy; load only when 3D is shown)
 const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m) => ({ default: m.ThreeViewer })), {
@@ -68,6 +115,18 @@ const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m
     </div>
   ),
 });
+
+const WaterViewer = dynamic(
+  () => import("../../components/WaterViewer").then((m) => ({ default: m.WaterViewer })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex-1 min-h-0 flex items-center justify-center bg-[#f4f4f5]">
+        <div className="w-9 h-9 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
+      </div>
+    ),
+  }
+);
 
 type InputMode = "text" | "image" | "text_1img" | "text_2img";
 
@@ -94,6 +153,7 @@ type CenterView =
   | { type: "preview"; imageUrl: string; previewId?: string }
   | { type: "generating"; progress: number; message: string }
   | { type: "3d"; glbUrl: string; jobId: string }
+  | { type: "code"; factoryCode: string; jobId: string }
   | { type: "error"; message: string };
 
 /** Show "GPU is unavailable" when both APIs have failed (fetch/network errors). */
@@ -221,7 +281,7 @@ function WorkspacePage() {
       void fetchWorkspaceJobs(bootstrap.workspaceId, tokenGetter)
         .then((jobs) => {
           setLibraryImages(jobs.filter(shouldShowInImageLibrary).slice(0, 50));
-          setLibrary3DAssets(jobs.filter(shouldShowIn3DLibrary).slice(0, 50));
+          setLibrary3DAssets(applyCodeThumbs(jobs.filter(shouldShowIn3DLibrary).slice(0, 50)));
         })
         .catch(() => {});
       return;
@@ -251,7 +311,7 @@ function WorkspacePage() {
 
         setWorkspaceName(ws.name ?? "");
         setLibraryImages(jobs.filter(shouldShowInImageLibrary).slice(0, 50));
-        setLibrary3DAssets(jobs.filter(shouldShowIn3DLibrary).slice(0, 50));
+        setLibrary3DAssets(applyCodeThumbs(jobs.filter(shouldShowIn3DLibrary).slice(0, 50)));
         applyWorkspacePrefill();
         setResolvingWorkspace(false);
       } finally {
@@ -344,6 +404,22 @@ function WorkspacePage() {
   const [libraryImages, setLibraryImages] = useState<BackendJob[]>([]);
   const [library3DAssets, setLibrary3DAssets] = useState<BackendJob[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  // Client-captured Water thumbnails (instant left-card preview before S3 round-trip).
+  // Survives refreshLibrary overwrites until the server returns a real preview URL.
+  const codeThumbCacheRef = useRef<Record<string, string>>({});
+
+  const applyCodeThumbs = useCallback((jobs: BackendJob[]): BackendJob[] => {
+    const cache = codeThumbCacheRef.current;
+    return jobs.map((j) => {
+      const cached = cache[j.id];
+      if (!cached) return j;
+      if (j.previewImageUrl && !j.previewImageUrl.startsWith("data:")) {
+        delete cache[j.id];
+        return j;
+      }
+      return { ...j, previewImageUrl: j.previewImageUrl || cached };
+    });
+  }, []);
 
   // Optimistic pending entries for immediate loader feedback in the left library.
   // Each pending has an id like `pending-<ts>-<rand>` and status "WAIT".
@@ -388,6 +464,8 @@ function WorkspacePage() {
   // Generation tracking (for 3D jobs)
   const [currentGenerating, setCurrentGenerating] = useState<GeneratingJob | null>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  /** Bumps on each new Water run so stale polls cannot overwrite a newer job. */
+  const waterPollGenRef = useRef(0);
 
   // Track the last generated preview so we can use it for 3D
   const [lastPreviewImageUrl, setLastPreviewImageUrl] = useState<string | null>(null);
@@ -406,6 +484,57 @@ function WorkspacePage() {
   const mobileGeneratedToastRef = useRef<NodeJS.Timeout | null>(null);
   /** Mobile-only: timestamp when user-started generation began (for minimum GPU-offline overlay duration). */
   const mobileGenStartedAtRef = useRef<number | null>(null);
+
+  const rememberCodeThumb = useCallback(
+    (jobId: string, dataUrl: string, prompt?: string | null) => {
+      codeThumbCacheRef.current[jobId] = dataUrl;
+      setLibrary3DAssets((prev) => {
+        const exists = prev.some((j) => j.id === jobId);
+        if (exists) {
+          return prev.map((j) =>
+            j.id === jobId
+              ? {
+                  ...j,
+                  previewImageUrl: dataUrl,
+                  status: j.status === "FAIL" ? j.status : ("DONE" as const),
+                  hasFactoryCode: true,
+                }
+              : j
+          );
+        }
+        return [
+          {
+            id: jobId,
+            userId: null,
+            status: "DONE" as const,
+            prompt: prompt ?? null,
+            imageUrl: null,
+            generateType: "Water",
+            enablePBR: false,
+            resultGlbUrl: null,
+            previewImageUrl: dataUrl,
+            errorCode: null,
+            errorMessage: null,
+            workspaceId: workspaceId ?? null,
+            parentJobId: null,
+            parentJobIds: [],
+            sourceImages: [],
+            engine: "water",
+            resultKind: "three_factory",
+            hasFactoryCode: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          } satisfies BackendJob,
+          ...prev,
+        ].slice(0, 50);
+      });
+      setSelectedJobInfo((prev) =>
+        prev && prev.id === jobId ? { ...prev, previewImageUrl: dataUrl, hasFactoryCode: true } : prev
+      );
+      setLeftLibraryTab("3d");
+    },
+    [workspaceId]
+  );
 
   const markMobileGenerationStart = useCallback(() => {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
@@ -449,24 +578,95 @@ function WorkspacePage() {
     }
   }, [isSignedIn, getToken]);
 
-  // AI Model selection for 3D generation (Trilles only selectable; Hunyuan 3D and Hanuman coming soon)
-  type ModelId = "trilles" | "hunyuan3d" ;
+  // AI Model selection — Hydrilla mesh engines + Bring-your-own Water models
   const [selectedModel, setSelectedModel] = useState<ModelId>("trilles");
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const modelOptions: { id: ModelId; label: string; comingSoon?: boolean }[] = [
-    { id: "trilles", label: "Trilles" },
-    { id: "hunyuan3d", label: "Hunyuan 3D", comingSoon: true },
-  ];
-  const modelTypeLabel: Record<ModelId, string> = {
-    trilles: "Trilles",
-    hunyuan3d: "Hunyuan 3D",
-  };
-  const formatGenerationType = useCallback((value?: string | null): string => {
-    if (!value) return "Image";
-    const normalized = value.replace(/_/g, " ").trim();
-    if (/hunyuan\s*3d/i.test(normalized)) return "Trilles";
-    if (/trellis|trilles/i.test(normalized)) return "Trilles";
-    return normalized;
+  const [apiKeys, setApiKeys] = useState<UserApiKeyMeta[]>([]);
+  const [liveFreeModels, setLiveFreeModels] = useState<OpenRouterFreeModel[]>([]);
+  const [codeFactoryCode, setCodeFactoryCode] = useState<string | null>(null);
+  const [codeSculptPass, setCodeSculptPass] = useState<string | null>(null);
+  const freePickerModels = mergeFreeModels(liveFreeModels);
+  const selectedCatalog =
+    getCatalogModel(selectedModel) ||
+    freePickerModels.find((m) => m.id === selectedModel) ||
+    undefined;
+  const selectedProvider = providerForModelId(selectedModel);
+  const selectedIsCode =
+    selectedProvider !== null && selectedProvider !== "hydrilla";
+
+  // Bring-your-own models are text → 3D only; the image tabs don't apply to them.
+  useEffect(() => {
+    if (selectedIsCode && inputMode !== "text") setInputMode("text");
+  }, [selectedIsCode, inputMode]);
+
+  // A failed mesh/GPU job must not remain as the active canvas when the user
+  // switches to Water. It is unrelated to the Water engine.
+  useEffect(() => {
+    if (
+      selectedIsCode &&
+      centerView.type === "error" &&
+      isGpuOfflineFailure(centerView.message)
+    ) {
+      setCenterView({ type: "empty" });
+      setSelectedJobInfo(null);
+      setCurrentGenerating(null);
+      setError(null);
+    }
+  }, [selectedIsCode, centerView]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    void (async () => {
+      try {
+        const tokenGetter = async () => (await getToken()) ?? null;
+        const data = await fetchUserApiKeys(tokenGetter);
+        setApiKeys(data.keys);
+        // Prefer saved Water default when user already configured BYOK
+        const preferred = data.prefs?.defaultCodeModel;
+        if (preferred && isCodeModel(preferred)) {
+          const provider = providerForModelId(preferred);
+          const keyOk =
+            !provider ||
+            provider === "hydrilla" ||
+            data.keys.some((k) => k.provider === provider && k.configured && k.status !== "invalid");
+          if (keyOk) setSelectedModel(preferred as ModelId);
+        }
+        // Live-sync OpenRouter free models for the picker
+        try {
+          const free = await fetchOpenRouterFreeModels(tokenGetter);
+          setLiveFreeModels(free.models);
+        } catch {
+          // Curated free list still works offline
+        }
+      } catch {
+        // Settings migration may not be deployed yet — picker still works for Trilles
+      }
+    })();
+  }, [isSignedIn, getToken]);
+
+  const providerKeyOk = useCallback(
+    (provider: string) => {
+      if (provider === "hydrilla") return true;
+      const k = apiKeys.find((x) => x.provider === provider);
+      return Boolean(k?.configured && k.status !== "invalid");
+    },
+    [apiKeys]
+  );
+
+  const pickerItemsForGroup = useCallback(
+    (group: CatalogModel["group"]): CatalogModel[] => {
+      if (group === "OpenRouter Free") return freePickerModels;
+      return MODEL_CATALOG.filter((m) => m.group === group);
+    },
+    [freePickerModels]
+  );
+
+  const modelTypeLabel: Record<string, string> = Object.fromEntries([
+    ...MODEL_CATALOG.map((m) => [m.id, m.label] as const),
+    ...freePickerModels.map((m) => [m.id, m.label] as const),
+  ]);
+    const formatGenerationType = useCallback((value?: string | null): string => {
+    return formatEngineLabel(value);
   }, []);
   const is3DGenerationType = useCallback((value?: string | null): boolean => {
     if (!value) return false;
@@ -475,7 +675,19 @@ function WorkspacePage() {
       normalized.includes("3d") ||
       normalized.includes("trellis") ||
       normalized.includes("trilles") ||
-      normalized.includes("hunyuan")
+            normalized.includes("hunyuan") ||
+      normalized.includes("water") ||
+      normalized.includes("codesculpt") ||
+      normalized.includes("code sculpt")
+    );
+  }, []);
+    const isWaterJobFn = useCallback((job: BackendJob): boolean => {
+    return isWaterJob(job);
+  }, []);
+  const hasRealFactoryCode = useCallback((job: BackendJob): boolean => {
+    return Boolean(
+      job.hasFactoryCode ||
+        (job.factoryCode && job.factoryCode !== "__present__")
     );
   }, []);
   const shouldShowInImageLibrary = useCallback((job: BackendJob): boolean => {
@@ -487,12 +699,12 @@ function WorkspacePage() {
     return job.status === "RUN" || job.status === "WAIT";
   }, [is3DGenerationType]);
   const shouldShowIn3DLibrary = useCallback((job: BackendJob): boolean => {
-    // Show completed 3D outputs and in-progress 3D jobs.
+    // Show completed 3D outputs and in-progress 3D jobs (mesh + Water).
     if (job.status === "FAIL") return false;
-    if (job.resultGlbUrl) return true;
+    if (job.resultGlbUrl || hasRealFactoryCode(job) || isWaterJobFn(job)) return true;
     if (!is3DGenerationType(job.generateType)) return false;
     return job.status === "RUN" || job.status === "WAIT";
-  }, [is3DGenerationType]);
+  }, [is3DGenerationType, isWaterJobFn, hasRealFactoryCode]);
 
   // 3D viewer options (Environment, Material, lighting intensity/brightness)
   const [envLighting, setEnvLighting] = useState<"studio" | "outdoor" | "neutral">("studio");
@@ -513,7 +725,6 @@ function WorkspacePage() {
   const PROMPT_HISTORY_KEY = "hydrilla-prompt-history";
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [historyDropdownOpen, setHistoryDropdownOpen] = useState(false);
-  const historyButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     try {
@@ -730,7 +941,7 @@ function WorkspacePage() {
       const tokenGetter = async () => await getToken();
       const jobs = await fetchWorkspaceJobs(workspaceId, tokenGetter);
       setLibraryImages(jobs.filter(shouldShowInImageLibrary).slice(0, 50));
-      setLibrary3DAssets(jobs.filter(shouldShowIn3DLibrary).slice(0, 50));
+      setLibrary3DAssets(applyCodeThumbs(jobs.filter(shouldShowIn3DLibrary).slice(0, 50)));
       restoreRunning3DJobIfAny(jobs);
 
       // Prune optimistic pending entries whose corresponding real job now exists on the server.
@@ -759,7 +970,7 @@ function WorkspacePage() {
         });
       });
     } catch { /* ignore */ }
-  }, [getToken, workspaceId, restoreRunning3DJobIfAny, shouldShowInImageLibrary, shouldShowIn3DLibrary, is3DGenerationType]);
+  }, [getToken, workspaceId, restoreRunning3DJobIfAny, shouldShowInImageLibrary, shouldShowIn3DLibrary, is3DGenerationType, applyCodeThumbs]);
 
   // When workspace is created/changed, refresh credits + library immediately.
   useEffect(() => {
@@ -802,6 +1013,13 @@ function WorkspacePage() {
   // ──────────── Poll for generating 3D job ────────────
   useEffect(() => {
     if (!currentGenerating || currentGenerating.status !== "generating") return;
+    // Water jobs poll via fetchWaterJob in start3DFromImage / handle3DClick — skip GPU status poll.
+    if (
+      currentGenerating.jobId.startsWith("cs_") ||
+      centerView.type === "code"
+    ) {
+      return;
+    }
 
     let consecutiveFailures = 0;
     const MAX_FAILURES = 5;
@@ -820,7 +1038,8 @@ function WorkspacePage() {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
-        setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
+        setCurrentGenerating(null);
+        setLoading(false);
         setCenterView({
           type: "error",
           message:
@@ -888,9 +1107,8 @@ function WorkspacePage() {
             model: selectedModel,
           });
           const glbUrl = getGlbUrl(status);
-          setCurrentGenerating((prev) =>
-            prev ? { ...prev, status: "completed", progress: 100, glbUrl: glbUrl || undefined } : null
-          );
+          setCurrentGenerating(null);
+          setLoading(false);
           setCenterView({
             type: "3d",
             glbUrl: glbUrl || getProxyGlbUrl(currentGenerating.jobId),
@@ -925,7 +1143,8 @@ function WorkspacePage() {
             reason: "job_failed",
           });
           const userFacing = toUserFacingGpuError(status.error || "Generation failed");
-          setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
+          setCurrentGenerating(null);
+          setLoading(false);
           void (async () => {
             await waitMobileGpuOfflineMinimum(status.error, userFacing);
             mobileGenStartedAtRef.current = null;
@@ -941,6 +1160,7 @@ function WorkspacePage() {
             reason: "cancelled",
           });
           setCurrentGenerating(null);
+          setLoading(false);
           setCenterView({ type: "error", message: "Job cancelled" });
         }
       } catch {
@@ -954,7 +1174,8 @@ function WorkspacePage() {
             stage: "polling",
             reason: "connection_lost",
           });
-          setCurrentGenerating((prev) => (prev ? { ...prev, status: "failed" } : null));
+          setCurrentGenerating(null);
+          setLoading(false);
           setCenterView({ type: "error", message: "Lost connection to server" });
         }
       }
@@ -1039,6 +1260,245 @@ function WorkspacePage() {
     [setImage1, setImage2, setFile1, setFile2, setJobId1, setJobId2]
   );
 
+  // ──────────── Water (bring-your-own model): text → procedural Three.js ────────────
+  // No GPU, no credits, no image required. The backend runs the img2threejs-style pipeline
+  // (intake gate → spec → blockout codegen → code gate) and we just poll the pass names.
+  const runWater = useCallback(
+    async (options: { referenceImageUrl?: string | null; parentId?: string | null } = {}) => {
+      if (!hasWorkspaceContext) {
+        setForcedWorkspaceModal(true);
+        setShowNewWorkspaceModal(true);
+        setError("Please create a workspace first");
+        return;
+      }
+
+      const provider = providerForModelId(selectedModel);
+      if (!provider || provider === "hydrilla") {
+        setError("Pick a bring-your-own model to generate code");
+        return;
+      }
+      if (!providerKeyOk(provider)) {
+        setError("Add and verify your API key in Settings → Models & API Keys");
+        setCenterView({
+          type: "error",
+          message: "API key required. Open Settings to add your provider key, then try again.",
+        });
+        return;
+      }
+
+      const description = prompt.trim();
+      if (!description) {
+        setError("Describe the object you want to build");
+        setCenterView({
+          type: "error",
+          message:
+            "Code models build straight from text. Describe the object — e.g. \"a vintage folding camera\" — then Generate.",
+        });
+        return;
+      }
+
+      const referenceImageUrl =
+        options.referenceImageUrl &&
+        !options.referenceImageUrl.startsWith("blob:") &&
+        !options.referenceImageUrl.startsWith("data:")
+          ? options.referenceImageUrl
+          : null;
+      const parentId = options.parentId ?? null;
+      const tokenGetter = async () => await getToken();
+
+      track("water_started", {
+        model: selectedModel,
+        provider,
+        mode: referenceImageUrl ? "image_to_code" : "text_to_code",
+      });
+      // Legacy event name kept for historical PostHog charts
+      track("code_sculpt_started", {
+        model: selectedModel,
+        provider,
+        mode: referenceImageUrl ? "image_to_code" : "text_to_code",
+      });
+
+      setError(null);
+      setLeftLibraryTab("3d");
+      markMobileGenerationStart();
+      setLoading(true);
+      setCodeFactoryCode(null);
+      setCodeSculptPass("assessment");
+      setCenterView({
+        type: "generating",
+        progress: 8,
+        message: sculptPassLabel("assessment"),
+      });
+
+      const pendingId = addPendingJob({
+        generateType: "Water",
+        previewImageUrl: referenceImageUrl,
+        imageUrl: referenceImageUrl,
+        parentJobId: parentId,
+        parentJobIds: parentId ? [parentId] : [],
+      });
+
+      // Invalidate any previous Water poll loop
+      const pollGen = ++waterPollGenRef.current;
+
+      try {
+        const result = await submitWater({
+          prompt: description,
+          modelId: selectedModel,
+          imageUrl: referenceImageUrl,
+          workspaceId,
+          parentJobId: parentId,
+          getToken: tokenGetter,
+        });
+
+        if (pollGen !== waterPollGenRef.current) {
+          setLoading(false);
+          return;
+        }
+
+        mobileGenStartedAtRef.current = null;
+        setCurrentGenerating({
+          jobId: result.job_id,
+          status: "generating",
+          progress: 20,
+          estimatedTotalSeconds: 120,
+          startTime: Date.now(),
+        });
+        loadJobInfo({
+          id: result.job_id,
+          userId: null,
+          status: "RUN",
+          prompt: description,
+          imageUrl: referenceImageUrl,
+          generateType: "Water",
+          enablePBR: false,
+          resultGlbUrl: null,
+          previewImageUrl: referenceImageUrl,
+          errorCode: null,
+          errorMessage: null,
+          workspaceId: workspaceId ?? null,
+          parentJobId: parentId,
+          parentJobIds: parentId ? [parentId] : [],
+          sourceImages: referenceImageUrl ? [referenceImageUrl] : [],
+          engine: "water",
+          resultKind: "three_factory",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        removePendingJob(pendingId);
+        setLeftLibraryTab("3d");
+        refreshLibrary();
+
+        const poll = async () => {
+          for (let i = 0; i < 150; i++) {
+            if (pollGen !== waterPollGenRef.current) return;
+            await new Promise((r) => setTimeout(r, 2000));
+            if (pollGen !== waterPollGenRef.current) return;
+            try {
+              const job = await fetchWaterJob(result.job_id, tokenGetter);
+              if (pollGen !== waterPollGenRef.current) return;
+
+              if (job.status === "DONE" && job.factoryCode) {
+                setCodeFactoryCode(job.factoryCode);
+                setCodeSculptPass(job.sculptPass || "done");
+                setCurrentGenerating(null);
+                setCenterView({ type: "code", factoryCode: job.factoryCode, jobId: result.job_id });
+                setMobileTab("canvas");
+                setMobileGeneratedToast(true);
+                setSelectedJobInfo((prev) =>
+                  prev && prev.id === result.job_id
+                    ? { ...prev, status: "DONE", sculptPass: job.sculptPass || "done", hasFactoryCode: true }
+                    : prev
+                );
+                setLibrary3DAssets((prev) =>
+                  applyCodeThumbs(
+                    prev.map((j) =>
+                      j.id === result.job_id
+                        ? { ...j, status: "DONE" as const, hasFactoryCode: true, sculptPass: job.sculptPass || "done" }
+                        : j
+                    )
+                  )
+                );
+                refreshLibrary();
+                setLoading(false);
+                return;
+              }
+              if (job.status === "FAIL") {
+                setCurrentGenerating(null);
+                setCenterView({
+                  type: "error",
+                  message: job.errorMessage || "Water failed",
+                });
+                setSelectedJobInfo((prev) =>
+                  prev && prev.id === result.job_id ? { ...prev, status: "FAIL", errorMessage: job.errorMessage } : prev
+                );
+                setLibrary3DAssets((prev) =>
+                  prev.map((j) => (j.id === result.job_id ? { ...j, status: "FAIL" as const } : j))
+                );
+                setLoading(false);
+                return;
+              }
+              const progress = Math.min(92, 20 + i * 1.5);
+              setCodeSculptPass(job.sculptPass || "assessment");
+              setSelectedJobInfo((prev) =>
+                prev && prev.id === result.job_id
+                  ? { ...prev, status: "RUN", sculptPass: job.sculptPass || "assessment" }
+                  : prev
+              );
+              setCurrentGenerating((prev) =>
+                prev && prev.jobId === result.job_id
+                  ? { ...prev, progress, status: "generating" }
+                  : prev
+              );
+              setCenterView((prev) => {
+                if (prev.type !== "generating") return prev;
+                return {
+                  type: "generating",
+                  progress,
+                  message: sculptPassLabel(job.sculptPass),
+                };
+              });
+            } catch {
+              // transient — keep polling
+            }
+          }
+          if (pollGen !== waterPollGenRef.current) return;
+          setCurrentGenerating(null);
+          setCenterView({
+            type: "error",
+            message: "Water timed out. Open the job from the library later.",
+          });
+          setLoading(false);
+        };
+        void poll();
+        // Keep loading=true while currentGenerating drives the button/spinner.
+        // poll() clears both when DONE / FAIL / timeout.
+      } catch (err: unknown) {
+        const msg =
+          err && typeof err === "object" && "message" in err
+            ? String((err as { message?: string }).message)
+            : "Water failed";
+        removePendingJob(pendingId);
+        mobileGenStartedAtRef.current = null;
+        setCurrentGenerating(null);
+        setCenterView({ type: "error", message: msg });
+        setLoading(false);
+      }
+    },
+    [
+      hasWorkspaceContext,
+      selectedModel,
+      providerKeyOk,
+      prompt,
+      getToken,
+      workspaceId,
+      markMobileGenerationStart,
+      addPendingJob,
+      removePendingJob,
+      refreshLibrary,
+    ]
+  );
+
   // Helper: start 3D generation from image URL (used after image gen or when we already have preview).
   // When `localFile` is set (user picked a file from disk), pass it straight into `submitImageTo3D` so
   // the client upload path matches /generate page — avoids relying on a separate pre-upload + URL that
@@ -1051,6 +1511,21 @@ function WorkspacePage() {
         setError("Please create a workspace first");
         return;
       }
+
+      // Water engine. The image is only ever an extra reference.
+      if (isCodeModel(selectedModel)) {
+        let reference: string | null = imageUrl || null;
+        if (localFile) {
+          try {
+            reference = await uploadImage(localFile, async () => await getToken());
+          } catch {
+            reference = null;
+          }
+        }
+        await runWater({ referenceImageUrl: reference, parentId: previewId });
+        return;
+      }
+
       track("image_to_3d_started", {
         model: selectedModel,
         has_local_file: !!localFile,
@@ -1172,13 +1647,21 @@ function WorkspacePage() {
       }
       setLoading(false);
     },
-    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, modelTypeLabel, selectedModel, waitMobileGpuOfflineMinimum, addPendingJob, removePendingJob, refreshLibrary]
+    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, selectedModel, waitMobileGpuOfflineMinimum, addPendingJob, removePendingJob, refreshLibrary, runWater]
   );
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
   const handleGenerateImage = async (thenGenerate3D?: boolean) => {
     if (loading || generatingPreview) return;
     setError(null);
+
+    // Architectural guard: no caller can accidentally send a bring-your-own
+    // model through TextToImage, FLUX, Trellis, credits, or the GPU queue.
+    if (selectedIsCode) {
+      await runWater();
+      return;
+    }
+
     if (!hasWorkspaceContext) {
       setForcedWorkspaceModal(true);
       setShowNewWorkspaceModal(true);
@@ -1635,6 +2118,13 @@ function WorkspacePage() {
       return;
     }
 
+    // Water engine writes Three.js straight from the prompt.
+    // Never touches FLUX, Trellis, the queue, or credits.
+    if (selectedIsCode) {
+      await runWater();
+      return;
+    }
+
     // image mode (or text_1img with no prompt): pass disk `File` straight into
     // `submitImageTo3D` (via start3DFromImage) instead of a separate upload step,
     // so behavior matches the working /generate flow and the GPU always receives
@@ -1679,7 +2169,7 @@ function WorkspacePage() {
     }
 
     // No image and no preview: generate image first (using current text mode),
-    // then chain straight into 3D.
+    // then chain straight into 3D. (Hydrilla cloud / Trilles only — Water returns earlier.)
     await handleGenerateImage(true);
   };
 
@@ -1788,6 +2278,145 @@ function WorkspacePage() {
   };
 
   const handle3DClick = (job: BackendJob) => {
+    if (isWaterJobFn(job)) {
+      setLeftLibraryTab("3d");
+      if (job.status === "RUN" || job.status === "WAIT") {
+        const pollGen = ++waterPollGenRef.current;
+        setCurrentGenerating({
+          jobId: job.id,
+          status: "generating",
+          progress: 20,
+          estimatedTotalSeconds: 90,
+          startTime: Number.isFinite(Date.parse(job.createdAt)) ? Date.parse(job.createdAt) : Date.now(),
+        });
+        setLoading(true);
+        setCenterView({
+          type: "generating",
+          progress: 20,
+          message: "Water · building…",
+        });
+        loadJobInfo(job);
+        // Resume poll
+        void (async () => {
+          const tokenGetter = async () => (await getToken()) ?? null;
+          for (let i = 0; i < 150; i++) {
+            if (pollGen !== waterPollGenRef.current) return;
+            await new Promise((r) => setTimeout(r, 2000));
+            if (pollGen !== waterPollGenRef.current) return;
+            try {
+              const cs = await fetchWaterJob(job.id, tokenGetter);
+              if (pollGen !== waterPollGenRef.current) return;
+              if (cs.status === "DONE" && cs.factoryCode) {
+                setCodeFactoryCode(cs.factoryCode);
+                setCodeSculptPass(cs.sculptPass);
+                setCurrentGenerating(null);
+                setLoading(false);
+                setCenterView({ type: "code", factoryCode: cs.factoryCode, jobId: job.id });
+                setMobileTab("canvas");
+                setMobileGeneratedToast(true);
+                setSelectedJobInfo((prev) =>
+                  prev && prev.id === job.id
+                    ? { ...prev, status: "DONE", sculptPass: cs.sculptPass, hasFactoryCode: true }
+                    : prev
+                );
+                setLibrary3DAssets((prev) =>
+                  prev.map((j) =>
+                    j.id === job.id
+                      ? { ...j, status: "DONE" as const, hasFactoryCode: true, sculptPass: cs.sculptPass }
+                      : j
+                  )
+                );
+                return;
+              }
+              if (cs.status === "FAIL") {
+                setCurrentGenerating(null);
+                setLoading(false);
+                setCenterView({ type: "error", message: cs.errorMessage || "Water failed" });
+                setSelectedJobInfo((prev) =>
+                  prev && prev.id === job.id ? { ...prev, status: "FAIL" } : prev
+                );
+                return;
+              }
+              const progress = Math.min(92, 20 + i * 1.5);
+              setCodeSculptPass(cs.sculptPass);
+              setSelectedJobInfo((prev) =>
+                prev && prev.id === job.id
+                  ? { ...prev, status: "RUN", sculptPass: cs.sculptPass }
+                  : prev
+              );
+              setCurrentGenerating((prev) =>
+                prev && prev.jobId === job.id ? { ...prev, progress, status: "generating" } : prev
+              );
+              setCenterView((prev) => {
+                if (prev.type !== "generating") return prev;
+                return {
+                  type: "generating",
+                  progress,
+                  message: sculptPassLabel(cs.sculptPass),
+                };
+              });
+            } catch {
+              // continue
+            }
+          }
+          if (pollGen !== waterPollGenRef.current) return;
+          setCurrentGenerating(null);
+          setLoading(false);
+          setCenterView({
+            type: "error",
+            message: "Water timed out. Try opening the job again from the library.",
+          });
+        })();
+        return;
+      }
+      const inlineCode =
+        job.factoryCode && job.factoryCode !== "__present__" ? job.factoryCode : null;
+      if (inlineCode) {
+        setCodeFactoryCode(inlineCode);
+        setCurrentGenerating(null);
+        setLoading(false);
+        setCenterView({ type: "code", factoryCode: inlineCode, jobId: job.id });
+        loadJobInfo(job);
+        return;
+      }
+      // Fetch factory if not on job payload yet (list API only signals hasFactoryCode)
+      setCenterView({
+        type: "generating",
+        progress: 40,
+        message: "Loading Water preview…",
+      });
+      void (async () => {
+        try {
+          const tokenGetter = async () => (await getToken()) ?? null;
+          const cs = await fetchWaterJob(job.id, tokenGetter);
+          if (cs.factoryCode) {
+            setCodeFactoryCode(cs.factoryCode);
+            setCodeSculptPass(cs.sculptPass);
+            setCurrentGenerating(null);
+            setLoading(false);
+            setCenterView({ type: "code", factoryCode: cs.factoryCode, jobId: job.id });
+          } else if (cs.status === "FAIL") {
+            setCurrentGenerating(null);
+            setLoading(false);
+            setCenterView({ type: "error", message: cs.errorMessage || "Water failed" });
+          } else {
+            setCurrentGenerating(null);
+            setLoading(false);
+            setCenterView({
+              type: "error",
+              message: "Code is not ready yet. Wait a moment and try again.",
+            });
+          }
+        } catch {
+          setCurrentGenerating(null);
+          setLoading(false);
+          setCenterView({ type: "error", message: "Could not load Water result" });
+        }
+      })();
+      loadJobInfo(job);
+      return;
+    }
+
     if ((job.status === "RUN" || job.status === "WAIT") && !job.resultGlbUrl) {
       setLeftLibraryTab("3d");
       setCurrentGenerating({
@@ -2350,24 +2979,56 @@ function WorkspacePage() {
                     </div>
                   ) : (
                     filtered3DAssets.map((item) => (
-                      <div key={item.id} onClick={() => handle3DClick(item)} className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center justify-center">
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handle3DClick(item)}
+                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer bg-neutral-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-left"
+                      >
                         {item.previewImageUrl ? (
-                          <img src={displayImageUrl(item.previewImageUrl)} alt={item.prompt || "3D Asset"} className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-[1.03]" />
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={displayImageUrl(item.previewImageUrl)}
+                            alt={item.prompt || "3D Asset"}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-[1.03]"
+                          />
+                        ) : isWaterJobFn(item) ? (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-neutral-50 to-neutral-100 text-neutral-300">
+                            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                            </svg>
+                          </div>
                         ) : (
-                          <div className="flex flex-col items-center text-neutral-400">
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                            <span className="text-[10px] mt-1 font-medium">3D</span>
+                          <div className="flex h-full w-full items-center justify-center text-neutral-300">
+                            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
                           </div>
                         )}
-                        {(item.status === "RUN" || item.status === "WAIT") && (
-                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1.5">
-                            <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                            <span className="text-[10px] font-medium text-white">
-                              {item.status === "WAIT" ? "Queued" : "Generating"}
-                            </span>
+                        {/* Status: only in-progress (amber) or failed (red) — no Done / Code labels */}
+                        {(item.status === "RUN" || item.status === "WAIT" || item.status === "FAIL") && (
+                          <span
+                            className={cn(
+                              "absolute left-2 top-2 h-2 w-2 rounded-full ring-2 ring-white shadow-sm",
+                              item.status === "FAIL"
+                                ? "bg-red-500"
+                                : "bg-amber-400 animate-pulse"
+                            )}
+                            title={
+                              item.status === "FAIL"
+                                ? "Failed"
+                                : item.status === "WAIT"
+                                  ? "Queued"
+                                  : "Generating"
+                            }
+                          />
+                        )}
+                        {(item.status === "RUN" || item.status === "WAIT") && !item.previewImageUrl && (
+                          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                            <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                           </div>
                         )}
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>
@@ -2438,7 +3099,7 @@ function WorkspacePage() {
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
-                    Generate 3D Model
+                    Generate {selectedIsCode ? "Water" : "3D Model"}
                   </Button>
                 ) : (
                   <span className="text-sm text-neutral-500">Image preview</span>
@@ -2447,44 +3108,156 @@ function WorkspacePage() {
             </div>
           )}
 
-          {(centerView.type === "generating" || (centerView.type === "preview" && currentGenerating && centerView.previewId === currentGenerating.jobId)) && (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-full max-w-sm rounded-[28px] border border-neutral-200/70 bg-white px-8 py-10 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.12)]">
-                <div className="w-12 h-12 mx-auto mb-5 border-2 border-neutral-200 border-t-neutral-900 rounded-full animate-spin" />
-                <p className="text-[15px] font-semibold tracking-tight text-neutral-900 mb-1">{centerView.type === "generating" ? centerView.message : "Generating 3D model…"}</p>
-                {currentGenerating?.queueInfo && (currentGenerating.queueInfo.jobs_ahead > 0 || (currentGenerating.queueInfo.estimated_total_seconds ?? 0) > 0) && (
-                  <p className="text-[13px] text-neutral-500 mb-4">
-                    {currentGenerating.queueInfo.jobs_ahead > 0 && (
-                      <span>Position {currentGenerating.queueInfo.position + 1} in queue</span>
-                    )}
-                    {currentGenerating.queueInfo.estimated_total_seconds != null && currentGenerating.queueInfo.estimated_total_seconds > 0 && (
-                      <span>{currentGenerating.queueInfo.jobs_ahead > 0 ? " · " : ""}Est. ~{Math.round(currentGenerating.queueInfo.estimated_total_seconds / 60)} min total</span>
-                    )}
+          {(centerView.type === "generating" ||
+            (centerView.type === "preview" &&
+              currentGenerating?.status === "generating" &&
+              centerView.previewId === currentGenerating.jobId)) && (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 text-center">
+              <Card className="w-full max-w-md border-neutral-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_20px_48px_-20px_rgba(0,0,0,0.14)]">
+                <CardContent className="px-7 py-9 sm:px-9">
+                  <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50">
+                    <div className="h-6 w-6 rounded-full border-2 border-neutral-300 border-t-neutral-900 animate-spin" />
+                  </div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400 mb-2">
+                    {currentGenerating?.jobId?.startsWith("cs_") || selectedIsCode
+                      ? "Water"
+                      : "Hydrilla"}
                   </p>
-                )}
-                <Progress className="w-full h-1.5" value={centerView.type === "generating" ? centerView.progress : 0} />
-                <p className="text-[13px] text-neutral-500 mt-2.5 tabular-nums">{Math.round(centerView.type === "generating" ? centerView.progress : 0)}%</p>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!currentGenerating?.jobId) return;
-                    try {
-                      await cancelJob(currentGenerating.jobId, () => getToken());
-                      if (progressIntervalRef.current) {
-                        clearInterval(progressIntervalRef.current);
-                        progressIntervalRef.current = null;
+                  <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-neutral-900 leading-snug">
+                    {centerView.type === "generating" ? centerView.message : "Generating 3D model…"}
+                  </h2>
+                  {(currentGenerating?.jobId?.startsWith("cs_") || selectedIsCode) && (
+                    <div className="mt-5 flex items-center justify-center gap-1.5">
+                      {SCULPT_PASS_STEPS.map((step, idx) => {
+                        const activeIdx = sculptPassIndex(codeSculptPass);
+                        const done = idx < activeIdx;
+                        const active = idx === activeIdx;
+                        return (
+                          <div
+                            key={step}
+                            className={cn(
+                              "h-1.5 rounded-full transition-all duration-500",
+                              active ? "w-8 bg-neutral-900" : done ? "w-4 bg-neutral-400" : "w-4 bg-neutral-200"
+                            )}
+                            title={SCULPT_PASS_LABELS[step]}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  {currentGenerating?.status === "generating" &&
+                    currentGenerating?.queueInfo &&
+                    (currentGenerating.queueInfo.jobs_ahead > 0 ||
+                      (currentGenerating.queueInfo.estimated_total_seconds ?? 0) > 0) && (
+                      <p className="mt-3 text-[13px] text-neutral-500">
+                        {currentGenerating.queueInfo.jobs_ahead > 0 && (
+                          <span>
+                            Position {currentGenerating.queueInfo.position + 1} in queue
+                          </span>
+                        )}
+                        {currentGenerating.queueInfo.estimated_total_seconds != null &&
+                          currentGenerating.queueInfo.estimated_total_seconds > 0 && (
+                            <span>
+                              {currentGenerating.queueInfo.jobs_ahead > 0 ? " · " : ""}
+                              Est. ~{Math.round(currentGenerating.queueInfo.estimated_total_seconds / 60)} min
+                            </span>
+                          )}
+                      </p>
+                    )}
+                  <div className="mt-6 space-y-2">
+                    <Progress
+                      className="h-1.5 w-full"
+                      value={
+                        centerView.type === "generating"
+                          ? centerView.progress
+                          : currentGenerating?.progress ?? 0
                       }
-                      setCurrentGenerating(null);
-                      setCenterView({ type: "error", message: "Job cancelled" });
-                    } catch (e: any) {
-                      setCenterView({ type: "error", message: toUserFacingGpuError(e?.message || "Failed to cancel") });
+                    />
+                    <p className="text-[12px] tabular-nums text-neutral-500">
+                      {Math.round(
+                        centerView.type === "generating"
+                          ? centerView.progress
+                          : currentGenerating?.progress ?? 0
+                      )}
+                      %
+                    </p>
+                  </div>
+                  {currentGenerating?.jobId && !currentGenerating.jobId.startsWith("cs_") && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!currentGenerating?.jobId) return;
+                        try {
+                          await cancelJob(currentGenerating.jobId, () => getToken());
+                          if (progressIntervalRef.current) {
+                            clearInterval(progressIntervalRef.current);
+                            progressIntervalRef.current = null;
+                          }
+                          setCurrentGenerating(null);
+                          setLoading(false);
+                          setCenterView({ type: "error", message: "Job cancelled" });
+                        } catch (e: any) {
+                          setCenterView({
+                            type: "error",
+                            message: toUserFacingGpuError(e?.message || "Failed to cancel"),
+                          });
+                        }
+                      }}
+                      className="mt-6 h-9 px-4 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
+                    >
+                      Cancel generation
+                    </button>
+                  )}
+                  {currentGenerating?.jobId?.startsWith("cs_") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        waterPollGenRef.current += 1;
+                        setCurrentGenerating(null);
+                        setLoading(false);
+                        setCenterView({ type: "empty" });
+                      }}
+                      className="mt-6 h-9 px-4 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {centerView.type === "code" && (
+            <div className="flex-1 flex flex-col min-h-0 max-lg:min-h-[50vh]">
+              <WaterViewer
+                factoryCode={centerView.factoryCode || codeFactoryCode}
+                passLabel={codeSculptPass}
+                jobId={centerView.jobId}
+                className="flex-1 min-h-0"
+                onThumbnail={(dataUrl) => {
+                  const jobId = centerView.type === "code" ? centerView.jobId : null;
+                  if (!jobId) return;
+                  const prompt =
+                    selectedJobInfo?.id === jobId ? selectedJobInfo.prompt : null;
+                  rememberCodeThumb(jobId, dataUrl, prompt);
+                  void (async () => {
+                    try {
+                      const tokenGetter = async () => (await getToken()) ?? null;
+                      const saved = await saveWaterThumbnail(jobId, dataUrl, tokenGetter);
+                      if (saved && !saved.startsWith("data:")) {
+                        codeThumbCacheRef.current[jobId] = saved;
+                      }
+                      setLibrary3DAssets((prev) =>
+                        prev.map((j) =>
+                          j.id === jobId ? { ...j, previewImageUrl: saved } : j
+                        )
+                      );
+                    } catch {
+                      // local data URL still shows on the card via cache
                     }
-                  }}
-                  className="mt-5 h-9 px-4 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
-                >
-                  Cancel generation
-                </button>
-              </div>
+                  })();
+                }}
+              />
             </div>
           )}
 
@@ -2669,9 +3442,21 @@ function WorkspacePage() {
                         <div className="text-neutral-400 font-medium">Type</div>
                         <div className="text-neutral-700">{formatGenerationType(selectedJobInfo.generateType)}</div>
                         <div className="text-neutral-400 font-medium">Status</div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-1.5 h-1.5 rounded-full ${selectedJobInfo.status === "DONE" ? "bg-green-500" : selectedJobInfo.status === "FAIL" ? "bg-red-500" : "bg-yellow-500"}`} />
-                          <span className="text-neutral-700 capitalize">{{ DONE: "Completed", FAIL: "Failed", RUN: "Processing", WAIT: "Pending" }[selectedJobInfo.status] || selectedJobInfo.status || "Unknown"}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${selectedJobInfo.status === "DONE" ? "bg-emerald-500" : selectedJobInfo.status === "FAIL" ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
+                            <span className="text-neutral-700 font-medium">
+                              {{ DONE: "Completed", FAIL: "Failed", RUN: "Processing", WAIT: "Pending" }[selectedJobInfo.status] || selectedJobInfo.status || "Unknown"}
+                            </span>
+                          </div>
+                          {isWaterJobFn(selectedJobInfo) && (selectedJobInfo.sculptPass || codeSculptPass) && selectedJobInfo.status !== "DONE" && (
+                            <span className="text-[10px] text-neutral-500 pl-3">
+                              {sculptPassLabel(selectedJobInfo.sculptPass || codeSculptPass)}
+                            </span>
+                          )}
+                          {isWaterJobFn(selectedJobInfo) && selectedJobInfo.status === "DONE" && (
+                            <span className="text-[10px] text-neutral-500 pl-3">Blockout ready</span>
+                          )}
                         </div>
                         {selectedJobInfo.resultGlbUrl && selectedJobInfo.sourceImages?.[0] && (
                           <>
@@ -2794,145 +3579,114 @@ function WorkspacePage() {
             </div>
           )}
 
-          {/* ──────────── Generation Info Panel (header always visible when job selected; content toggles) — hidden on mobile; use info icon + popover there ──────────── */}
+          {/* ──────────── Generation Info — compact, minimal ──────────── */}
           {selectedJobInfo && centerView.type !== "empty" && (
-            <div className="flex-shrink-0 border-t border-neutral-200/70 bg-white/95 backdrop-blur-xl min-h-[44px] max-lg:hidden">
-              {/* Toggle header - always visible so user can expand again */}
+            <div className="flex-shrink-0 border-t border-neutral-200/70 bg-white/95 backdrop-blur-xl max-lg:hidden">
               <button
                 type="button"
                 onClick={() => setGenInfoExpanded((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400 hover:bg-neutral-50/80 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400 hover:bg-neutral-50/80 transition-colors"
               >
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Generation Info
-                  {jobLineage.length >= 1 && (
-                    <span className="normal-case font-medium text-neutral-400">
-                      · {jobLineage.length} step{jobLineage.length !== 1 ? "s" : ""}
-                    </span>
+                <span className="flex items-center gap-2 normal-case tracking-normal">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+                    Details
+                  </span>
+                  <span className="text-[12px] font-medium text-neutral-700">
+                    {formatGenerationType(selectedJobInfo.generateType)}
+                  </span>
+                  {(selectedJobInfo.status === "RUN" ||
+                    selectedJobInfo.status === "WAIT" ||
+                    selectedJobInfo.status === "FAIL") && (
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        selectedJobInfo.status === "FAIL"
+                          ? "bg-red-500"
+                          : "bg-amber-400 animate-pulse"
+                      )}
+                    />
                   )}
                 </span>
-                <svg className={`w-4 h-4 transition-transform ${genInfoExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                <svg
+                  className={`w-3.5 h-3.5 transition-transform ${genInfoExpanded ? "rotate-180" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
 
-              {/* Collapsible content */}
               {genInfoExpanded && (
-              <div className="px-4 pb-4 space-y-3 max-h-[200px] overflow-y-auto">
-                {/* Current job details */}
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                  <div className="text-neutral-400 font-medium">Type</div>
-                  <div className="text-neutral-700">{formatGenerationType(selectedJobInfo.generateType)}</div>
-
-                  <div className="text-neutral-400 font-medium">Status</div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${selectedJobInfo.status === "DONE" ? "bg-green-500" : selectedJobInfo.status === "FAIL" ? "bg-red-500" : "bg-yellow-500"}`} />
-                    <span className="text-neutral-700 capitalize">{{ DONE: "Completed", FAIL: "Failed", RUN: "Processing", WAIT: "Pending" }[selectedJobInfo.status] || selectedJobInfo.status || "Unknown"}</span>
-                  </div>
-
-                  {selectedJobInfo.resultGlbUrl && selectedJobInfo.sourceImages?.[0] && (
-                    <>
-                      <div className="text-neutral-400 font-medium">Source image</div>
-                      <div className="flex items-center gap-1.5">
-                        <img src={displayImageUrl(selectedJobInfo.sourceImages[0])} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
-                      </div>
-                    </>
-                  )}
-
-                  {selectedJobInfo.prompt && (
-                    <>
-                      <div className="text-neutral-400 font-medium">Prompt</div>
-                      <div className="text-neutral-700 truncate" title={selectedJobInfo.prompt}>{selectedJobInfo.prompt}</div>
-                    </>
-                  )}
-
-                  <div className="text-neutral-400 font-medium">Created</div>
-                  <div className="text-neutral-700">{selectedJobInfo.createdAt ? new Date(selectedJobInfo.createdAt).toLocaleString() : "—"}</div>
-
-                  <div className="text-neutral-400 font-medium">Job ID</div>
-                  <div className="text-neutral-700 font-mono text-[10px] truncate" title={selectedJobInfo.id}>{selectedJobInfo.id}</div>
-                </div>
-
-                {/* Iterative Lineage DAG — show when we have lineage or when selected job is Combined (so first-time combine shows Step 1 + 2 sources) */}
-                {jobLineage.length >= 1 && (
-                  <div className="pt-2 border-t border-neutral-100">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">Creation Lineage</p>
-                    <div className="relative pl-4">
-                      {/* Vertical line */}
-                      <div className="absolute left-[7px] top-1 bottom-1 w-px bg-neutral-200" />
-                      {jobLineage.map((item, idx) => {
-                        const isCurrent = item.id === selectedJobInfo.id;
-                        const parentCount = (item.parentJobIds && item.parentJobIds.length > 0) ? item.parentJobIds.length : (item.parentJobId ? 1 : 0);
-                        const sourceCount = item.sourceImages?.length ?? 0;
-                        // Combined with 2 sources: show merge UI whether 2 parents (both from library) or 1/0 parents (one/both from laptop)
-                        const isMerge = parentCount > 1 || (item.generateType === "Combined" && sourceCount >= 2);
-                        const showSourceImages = isMerge && sourceCount > 0;
-                        // 3D step with one source image: show "Source image" thumbnail
-                        const show3DSourceImage = item.resultGlbUrl && sourceCount >= 1 && item.sourceImages?.[0];
-                        const mergeLabel = parentCount > 1 ? `${parentCount} parents` : sourceCount >= 2 ? "2 sources" : null;
-                        const isSingleCombined = jobLineage.length === 1 && item.generateType === "Combined";
-                        const stepLabel = isSingleCombined ? "Step 1" : idx === 0 ? "Origin" : `Step ${idx}`;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => setLineagePreviewItem(item)}
-                            className={`relative flex items-start gap-2.5 pb-2.5 last:pb-0 w-full text-left cursor-pointer rounded px-1 -mx-1 hover:bg-neutral-50 transition-colors ${isCurrent ? "opacity-100" : "opacity-70"}`}
-                          >
-                            {/* Dot — diamond for merge nodes, circle for single-parent */}
-                            {isMerge ? (
-                              <div className={`absolute -left-[18px] top-0 w-3.5 h-3.5 rotate-45 border-2 flex-shrink-0 ${isCurrent ? "border-black bg-black" : "border-neutral-400 bg-white"}`} />
-                            ) : (
-                              <div className={`absolute -left-4 top-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 ${isCurrent ? "border-black bg-black" : "border-neutral-300 bg-white"}`} />
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className={`text-[10px] font-semibold ${isCurrent ? "text-black" : "text-neutral-500"}`}>
-                                  {stepLabel}
-                                </span>
-                                <span className="text-[10px] text-neutral-400">{formatGenerationType(item.generateType)}</span>
-                                {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{mergeLabel}</span>}
-                                {item.resultGlbUrl && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-500">3D</span>}
-                              </div>
-                              {item.prompt && (
-                                <p className="text-[10px] text-neutral-500 truncate mt-0.5" title={item.prompt}>{item.prompt}</p>
-                              )}
-                              {/* Show source images for Combined (2 sources) */}
-                              {showSourceImages && item.sourceImages && (
-                                <div className="flex gap-1 mt-1">
-                                  {item.sourceImages.map((src, i) => (
-                                    <img key={i} src={displayImageUrl(src)} alt={`Source ${i + 1}`} className="w-5 h-5 rounded object-cover border border-neutral-200" />
-                                  ))}
-                                </div>
-                              )}
-                              {/* 3D step: show single source image thumbnail when available */}
-                              {show3DSourceImage && (
-                                <div className="flex items-center gap-1 mt-1">
-                                  <span className="text-[10px] text-neutral-400">Source image</span>
-                                  <img src={displayImageUrl(item.sourceImages![0])} alt="Source" className="w-5 h-5 rounded object-cover border border-neutral-200" />
-                                </div>
-                              )}
-                            </div>
-                            {/* Thumbnail */}
-                            {item.previewImageUrl ? (
-                              <img src={displayImageUrl(item.previewImageUrl)} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-neutral-200" />
-                            ) : item.resultGlbUrl ? (
-                              <div className="w-7 h-7 rounded flex-shrink-0 border border-neutral-200 bg-neutral-100 flex items-center justify-center">
-                                <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                              </div>
-                            ) : null}
-                          </button>
-                        );
-                      })}
+                <div className="px-4 pb-3.5 space-y-3 max-h-[180px] overflow-y-auto">
+                  <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2 text-[12px]">
+                    {selectedJobInfo.prompt && (
+                      <p className="min-w-0 flex-[1_1_100%] text-neutral-800 leading-snug line-clamp-2" title={selectedJobInfo.prompt}>
+                        {selectedJobInfo.prompt}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-1.5 text-neutral-500">
+                      <span className="text-neutral-400">Status</span>
+                      <span className="font-medium text-neutral-700">
+                        {selectedJobInfo.status === "DONE"
+                          ? isWaterJobFn(selectedJobInfo)
+                            ? "Ready"
+                            : "Done"
+                          : selectedJobInfo.status === "FAIL"
+                            ? "Failed"
+                            : selectedJobInfo.status === "WAIT"
+                              ? "Queued"
+                              : sculptPassLabel(selectedJobInfo.sculptPass || codeSculptPass)}
+                      </span>
                     </div>
+                    {selectedJobInfo.createdAt && (
+                      <div className="flex items-center gap-1.5 text-neutral-500">
+                        <span className="text-neutral-400">Created</span>
+                        <span className="font-medium text-neutral-700 tabular-nums">
+                          {new Date(selectedJobInfo.createdAt).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                {jobLineage.length === 0 && (
-                  <div className="pt-2 border-t border-neutral-100">
-                    <p className="text-[10px] text-neutral-400 italic">No iterative history — this is an original generation.</p>
-                  </div>
-                )}
-              </div>
+                  {jobLineage.length > 1 && (
+                    <div className="pt-2 border-t border-neutral-100">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400 mb-2">
+                        Lineage
+                      </p>
+                      <div className="flex gap-2 overflow-x-auto pb-0.5">
+                        {jobLineage.map((item, idx) => {
+                          const isCurrent = item.id === selectedJobInfo.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setLineagePreviewItem(item)}
+                              className={cn(
+                                "shrink-0 rounded-xl border px-2.5 py-2 text-left transition-colors min-w-[112px] max-w-[140px]",
+                                isCurrent
+                                  ? "border-neutral-900 bg-neutral-950 text-white"
+                                  : "border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700"
+                              )}
+                            >
+                              <p className={cn("text-[10px] font-semibold", isCurrent ? "text-white/70" : "text-neutral-400")}>
+                                {idx === 0 ? "Origin" : `Step ${idx}`}
+                              </p>
+                              <p className="text-[11px] truncate mt-0.5">
+                                {formatGenerationType(item.generateType)}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -3045,8 +3799,13 @@ function WorkspacePage() {
                 role="tab"
                 size="sm"
                 variant={inputMode === "image" ? "outline" : "ghost"}
-                onClick={() => setInputMode("image")}
-                title="Upload an image to generate a 3D model"
+                disabled={selectedIsCode}
+                onClick={() => !selectedIsCode && setInputMode("image")}
+                title={
+                  selectedIsCode
+                    ? "Code models build from text only"
+                    : "Upload an image to generate a 3D model"
+                }
                 className={cn(
                   "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
                   inputMode === "image" && "border-transparent bg-white text-neutral-950 shadow-sm"
@@ -3060,9 +3819,15 @@ function WorkspacePage() {
                 role="tab"
                 size="sm"
                 variant={inputMode === "text_1img" ? "outline" : "ghost"}
-                disabled={!primaryApiUp}
-                onClick={() => primaryApiUp && setInputMode("text_1img")}
-                title={primaryApiUp ? "Text + 1 image" : "Edit requires the primary API (currently unavailable)"}
+                disabled={!primaryApiUp || selectedIsCode}
+                onClick={() => primaryApiUp && !selectedIsCode && setInputMode("text_1img")}
+                title={
+                  selectedIsCode
+                    ? "Code models build from text only"
+                    : primaryApiUp
+                      ? "Text + 1 image"
+                      : "Edit requires the primary API (currently unavailable)"
+                }
                 className={cn(
                   "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
                   inputMode === "text_1img" && "border-transparent bg-white text-neutral-950 shadow-sm"
@@ -3076,9 +3841,15 @@ function WorkspacePage() {
                 role="tab"
                 size="sm"
                 variant={inputMode === "text_2img" ? "outline" : "ghost"}
-                disabled={!primaryApiUp}
-                onClick={() => primaryApiUp && setInputMode("text_2img")}
-                title={primaryApiUp ? "Text + 2 images" : "Combine requires the primary API (currently unavailable)"}
+                disabled={!primaryApiUp || selectedIsCode}
+                onClick={() => primaryApiUp && !selectedIsCode && setInputMode("text_2img")}
+                title={
+                  selectedIsCode
+                    ? "Code models build from text only"
+                    : primaryApiUp
+                      ? "Text + 2 images"
+                      : "Combine requires the primary API (currently unavailable)"
+                }
                 className={cn(
                   "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
                   inputMode === "text_2img" && "border-transparent bg-white text-neutral-950 shadow-sm"
@@ -3120,45 +3891,74 @@ function WorkspacePage() {
                 <div className="flex items-center gap-1 text-neutral-400">
                   <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Redo"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
                   <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Suggestions"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></button>
-                  <div className="relative">
-                    <button
-                      ref={historyButtonRef}
-                      type="button"
-                      onClick={() => setHistoryDropdownOpen((o) => !o)}
-                      className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
-                      title="Prompt history"
+                  <DropdownMenu open={historyDropdownOpen} onOpenChange={setHistoryDropdownOpen}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-neutral-500 hover:text-neutral-900"
+                        title="Prompt history"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      sideOffset={8}
+                      className="w-[min(340px,calc(100vw-2rem))] max-h-[min(320px,70vh)] overflow-y-auto p-0"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </button>
-                    {historyDropdownOpen && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setHistoryDropdownOpen(false)} aria-hidden />
-                        <div className="absolute top-full right-0 mt-1 z-20 w-[min(100vw,320px)] max-h-[280px] overflow-y-auto rounded-xl bg-white border border-neutral-200 shadow-xl py-1">
-                          {promptHistory.length === 0 ? (
-                            <div className="px-3 py-4 text-sm text-neutral-500 text-center">No prompt history yet</div>
-                          ) : (
-                            <ul className="py-0.5">
-                              {promptHistory.map((item, i) => (
-                                <li key={i}>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPrompt(item.slice(0, 800));
-                                      setHistoryDropdownOpen(false);
-                                      promptTextareaRef.current?.focus();
-                                    }}
-                                    className="w-full text-left px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-100 transition-colors line-clamp-2"
-                                  >
-                                    {item || "(empty)"}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-100 bg-white px-3.5 py-2.5">
+                        <DropdownMenuLabel className="p-0">Prompt history</DropdownMenuLabel>
+                        {promptHistory.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setPromptHistory([]);
+                              try {
+                                localStorage.removeItem(PROMPT_HISTORY_KEY);
+                              } catch {
+                                // ignore
+                              }
+                            }}
+                            className="text-[11px] font-medium text-neutral-400 hover:text-red-600"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      {promptHistory.length === 0 ? (
+                        <div className="px-4 py-8 text-center">
+                          <p className="text-sm font-medium text-neutral-600">No prompts yet</p>
+                          <p className="mt-1 text-xs text-neutral-400">
+                            Your recent generations will appear here.
+                          </p>
                         </div>
-                      </>
-                    )}
-                  </div>
+                      ) : (
+                        <DropdownMenuGroup className="py-1.5">
+                          {promptHistory.map((item, i) => (
+                            <DropdownMenuItem
+                              key={i}
+                              onSelect={() => {
+                                setPrompt(item.slice(0, 800));
+                                promptTextareaRef.current?.focus();
+                              }}
+                              className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left cursor-pointer"
+                            >
+                              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-[10px] font-semibold text-neutral-500">
+                                {i + 1}
+                              </span>
+                              <span className="min-w-0 flex-1 text-[13px] leading-snug text-neutral-700 line-clamp-2">
+                                {item || "(empty)"}
+                              </span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuGroup>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
               <div className="relative">
@@ -3167,7 +3967,7 @@ function WorkspacePage() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value.slice(0, 800))}
                   maxLength={800}
-                  placeholder={inputMode === "text" ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe." : inputMode === "text_1img" ? "Describe how to edit this image..." : "Describe how to combine these images..."}
+                  placeholder={selectedIsCode ? "Describe the object to build in Three.js, e.g., a vintage folding camera with a leather body and chrome dials." : inputMode === "text" ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe." : inputMode === "text_1img" ? "Describe how to edit this image..." : "Describe how to combine these images..."}
                   className="min-h-[132px] sm:min-h-[148px] resize-none rounded-2xl border-neutral-200 bg-neutral-50 pb-8 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/10"
                   rows={4}
                 />
@@ -3207,59 +4007,140 @@ function WorkspacePage() {
               </div>
             )}
 
-            {/* AI Model — reference style: label + (i) left, white rounded dropdown right */}
+            {/* Engine — Hydrilla cloud (our models / credits) vs Water (BYOK) */}
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-              <div className="flex items-center gap-1.5">
-                <label className="text-sm font-semibold text-neutral-800">AI Model</label>
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600" title="3D generation model" aria-label="Info">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <label className="text-sm font-semibold text-neutral-800">Engine</label>
+                <span
+                  className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600"
+                  title="Cloud = models we provide (credits → GLB). Water = your API key (0 credits → Three.js)."
+                  aria-label="Info"
+                >
                   <span className="text-[10px] font-bold leading-none">i</span>
                 </span>
               </div>
-              <div className="relative min-w-[80px]">
-                <button
-                  type="button"
-                  onClick={() => setModelDropdownOpen((o) => !o)}
-                  className="w-full flex items-center justify-between gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-full bg-white border border-neutral-200 text-left text-xs text-neutral-800 hover:bg-neutral-50 transition-colors duration-150"
-                >
-                  <span className="truncate">{modelOptions.find((m) => m.id === selectedModel)?.label ?? selectedModel}</span>
-                  <svg className={`w-3.5 h-3.5 shrink-0 text-neutral-500 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                {modelDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setModelDropdownOpen(false)} aria-hidden />
-                    <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden transition-opacity duration-150">
-                      {modelOptions.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          disabled={opt.comingSoon}
-                          onClick={() => {
-                            if (!opt.comingSoon) {
-                              setSelectedModel(opt.id);
-                              setModelDropdownOpen(false);
-                            }
-                          }}
-                          className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 text-xs text-left transition-colors duration-200 ${opt.comingSoon ? "text-neutral-400 cursor-not-allowed" : selectedModel === opt.id ? "bg-neutral-100 text-neutral-800 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}
+              <div className="relative min-w-[160px] max-w-[220px]">
+                <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto w-full justify-between gap-1.5 rounded-full px-3 py-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-50"
+                    >
+                      <span className="truncate flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={
+                            selectedIsCode
+                              ? "shrink-0 rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800"
+                              : "shrink-0 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-600"
+                          }
                         >
-                          <span className="flex items-center gap-2">
-                            {opt.label}
-                            {opt.comingSoon && (
-                              <span title="Locked"><svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></span>
-                            )}
-                          </span>
-                          {!opt.comingSoon && selectedModel === opt.id && (
-                            <svg className="w-3.5 h-3.5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                          )}
-                        </button>
-                      ))}
+                          {selectedIsCode ? "Water" : "Cloud"}
+                        </span>
+                        {selectedCatalog?.kind === "code" && !providerKeyOk(selectedCatalog.provider) && (
+                          <span className="text-red-500 shrink-0" title="API key missing">!</span>
+                        )}
+                        <span className="truncate">{selectedCatalog?.label ?? selectedModel}</span>
+                      </span>
+                      <svg className={`w-3.5 h-3.5 shrink-0 text-neutral-500 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={8}
+                    className="w-[280px] max-h-[min(420px,70vh)] overflow-y-auto p-1.5"
+                  >
+                    {MODEL_GROUPS.map((group, gi) => {
+                      const items = pickerItemsForGroup(group);
+                      if (!items.length) return null;
+                      return (
+                        <DropdownMenuGroup key={group}>
+                          {gi > 0 && <DropdownMenuSeparator />}
+                          <DropdownMenuLabel>
+                            {group === "Hydrilla"
+                              ? "Hydrilla cloud · credits"
+                              : group === "OpenRouter Free"
+                                ? "Water · free keys"
+                                : `Water · ${group}`}
+                          </DropdownMenuLabel>
+                          {items.map((opt) => {
+                            const needsKey = opt.provider !== "hydrilla";
+                            const keyOk = !needsKey || providerKeyOk(opt.provider);
+                            const disabled = Boolean(opt.comingSoon);
+                            return (
+                              <DropdownMenuItem
+                                key={opt.id}
+                                disabled={disabled}
+                                onSelect={() => {
+                                  if (disabled) return;
+                                  if (needsKey && !keyOk) {
+                                    setError("Add your API key in Settings first");
+                                    window.location.href = "/app/settings";
+                                    return;
+                                  }
+                                  setSelectedModel(opt.id);
+                                }}
+                                className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs cursor-pointer ${
+                                  disabled
+                                    ? "text-neutral-400"
+                                    : selectedModel === opt.id
+                                      ? "bg-neutral-100 text-neutral-800 font-semibold"
+                                      : "text-neutral-700"
+                                }`}
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <span className={`truncate ${!keyOk && !disabled ? "text-neutral-400" : ""}`}>
+                                    {opt.label}
+                                  </span>
+                                  {opt.free && opt.vision && (
+                                    <span className="text-[9px] uppercase tracking-wide text-emerald-600 shrink-0">
+                                      vision
+                                    </span>
+                                  )}
+                                  {opt.comingSoon && (
+                                    <span title="Locked">
+                                      <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                      </svg>
+                                    </span>
+                                  )}
+                                  {!opt.comingSoon && needsKey && !keyOk && (
+                                    <span className="text-[10px] text-red-500 shrink-0">key</span>
+                                  )}
+                                </span>
+                                {!disabled && selectedModel === opt.id && keyOk && (
+                                  <svg className="w-3.5 h-3.5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </DropdownMenuItem>
+                            );
+                          })}
+                        </DropdownMenuGroup>
+                      );
+                    })}
+                    <DropdownMenuSeparator />
+                    <div className="px-2.5 py-2">
+                      <a
+                        href="/app/settings"
+                        className="text-[11px] font-medium text-neutral-700 hover:text-neutral-900 underline-offset-2 hover:underline"
+                        onClick={() => setModelDropdownOpen(false)}
+                      >
+                        Manage API keys →
+                      </a>
                     </div>
-                  </>
-                )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
-            {/* Number of Generations — reference style row */}
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+            {/* Number of Generations — Hydrilla cloud only; Water always builds one model */}
+            <div
+              className={cn(
+                "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]",
+                selectedIsCode && "hidden"
+              )}
+            >
               <div className="flex items-center gap-1.5">
                 <label className="text-sm font-semibold text-neutral-800">Number of Generations</label>
                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600" title="How many variants to generate" aria-label="Info">
@@ -3277,12 +4158,28 @@ function WorkspacePage() {
               </div>
             </div>
 
-            {/* Credits — cost per action: image 2, 3D 10; show total */}
+            {/* Cost line — Hydrilla cloud uses credits; Water is BYOK */}
             {(() => {
+              if (selectedIsCode) {
+                return (
+                  <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200/80 bg-white px-3 py-2 text-[12px] text-neutral-600">
+                    <span className="tabular-nums text-neutral-500">~1–3 min</span>
+                    <span className="h-1 w-1 rounded-full bg-neutral-300" aria-hidden />
+                    <span className="font-semibold tracking-tight text-neutral-800">Water · 0 credits</span>
+                  </div>
+                );
+              }
               const isImageOrEdit =
                 inputMode === "text" ||
                 (inputMode !== "image" && prompt.trim().length > 0 && (image1 || image2));
-              const cost = isImageOrEdit ? CREDITS_IMAGE : CREDITS_3D;
+              const cost =
+                inputMode === "text_2img" && prompt.trim()
+                  ? 4
+                  : inputMode === "text_1img" && prompt.trim()
+                    ? 3
+                    : isImageOrEdit
+                      ? CREDITS_IMAGE
+                      : CREDITS_3D;
               const total = creditsLoading ? 0 : creditsTotal;
               return (
                 <div className="flex items-center justify-center gap-2 text-sm text-neutral-600">
@@ -3307,6 +4204,11 @@ function WorkspacePage() {
             <Button
               type="button"
               onClick={() => {
+                // Water: text → Three.js. Never enters FLUX or the GPU queue.
+                if (selectedIsCode) {
+                  void runWater();
+                  return;
+                }
                 if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
                   void handleGenerate3D();
                 } else {
@@ -3323,7 +4225,13 @@ function WorkspacePage() {
               ) : (
                 <>
                   <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-95 invert brightness-110" />
-                  <span className="tracking-tight font-semibold">{inputMode === "image" ? "Generate 3D" : "Generate"}</span>
+                  <span className="tracking-tight font-semibold">
+                    {selectedIsCode
+                      ? "Generate with Water"
+                      : inputMode === "image"
+                        ? "Generate 3D"
+                        : "Generate"}
+                  </span>
                 </>
               )}
             </Button>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hydrilla Water Preview</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com blob:; connect-src blob: data:; img-src data: blob:; style-src 'unsafe-inline'; worker-src blob:;"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #f4f4f5;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      #c {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #err {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+        color: #991b1b;
+        background: #fef2f2;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="err"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.167.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.167.0/examples/jsm/"
+        }
+      }
+    </script>
+    <!-- Generated factories are TypeScript. Transpile inside the opaque-origin
+         sandbox before importing the resulting JavaScript blob. -->
+    <script src="https://unpkg.com/typescript@5.9.3/lib/typescript.js"></script>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+      const canvas = document.getElementById("c");
+      const errEl = document.getElementById("err");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf4f4f5);
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+      camera.position.set(2.4, 1.6, 2.8);
+
+      const controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.target.set(0, 0.4, 0);
+      let interactive = true;
+
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xb0b0b0, 0.55));
+      const key = new THREE.DirectionalLight(0xffffff, 1.35);
+      key.position.set(4, 8, 5);
+      scene.add(key);
+
+      let root = null;
+      let start = performance.now();
+
+      function showError(msg) {
+        errEl.style.display = "flex";
+        errEl.textContent = msg;
+        parent.postMessage({ type: "code-sculpt-error", message: msg }, "*");
+      }
+
+      function clearError() {
+        errEl.style.display = "none";
+      }
+
+      function resize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / Math.max(h, 1);
+        camera.updateProjectionMatrix();
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      function frame() {
+        const elapsed = (performance.now() - start) / 1000;
+        if (root?.userData?.tick) {
+          try {
+            root.userData.tick(0.016, elapsed);
+          } catch {}
+        }
+        if (interactive) controls.update();
+        renderer.render(scene, camera);
+        requestAnimationFrame(frame);
+      }
+      frame();
+
+      function captureThumbnail() {
+        return new Promise((resolve) => {
+          try {
+            interactive = false;
+            controls.enableDamping = false;
+            controls.update();
+            renderer.render(scene, camera);
+            const raw = canvas.toDataURL("image/jpeg", 0.85);
+            const img = new Image();
+            img.onload = () => {
+              try {
+                const max = 512;
+                const scale = Math.min(1, max / Math.max(img.width, img.height));
+                const w = Math.max(1, Math.round(img.width * scale));
+                const h = Math.max(1, Math.round(img.height * scale));
+                const off = document.createElement("canvas");
+                off.width = w;
+                off.height = h;
+                const ctx = off.getContext("2d");
+                if (!ctx) {
+                  resolve(raw);
+                } else {
+                  ctx.fillStyle = "#f4f4f5";
+                  ctx.fillRect(0, 0, w, h);
+                  ctx.drawImage(img, 0, 0, w, h);
+                  resolve(off.toDataURL("image/jpeg", 0.82));
+                }
+              } catch {
+                resolve(raw);
+              } finally {
+                controls.enableDamping = true;
+                interactive = true;
+              }
+            };
+            img.onerror = () => {
+              controls.enableDamping = true;
+              interactive = true;
+              resolve(raw);
+            };
+            img.src = raw;
+          } catch {
+            controls.enableDamping = true;
+            interactive = true;
+            resolve(null);
+          }
+        });
+      }
+
+      async function loadFactory(code) {
+        clearError();
+        if (root) {
+          scene.remove(root);
+          root = null;
+        }
+        try {
+          if (!window.ts?.transpileModule) {
+            throw new Error("TypeScript preview compiler did not load");
+          }
+
+          // Existing / LLM factories often use bare MeshStandardMaterial even when they
+          // `import * as THREE from "three"`. ES modules have no THREE globals, so inject
+          // local aliases (and strip duplicate three imports) before compile+import.
+          const prepared = prepareFactorySource(code);
+
+          const compiled = window.ts.transpileModule(prepared, {
+            compilerOptions: {
+              target: window.ts.ScriptTarget.ES2022,
+              module: window.ts.ModuleKind.ES2022,
+              isolatedModules: true,
+            },
+            reportDiagnostics: true,
+          });
+          const fatal = (compiled.diagnostics || []).filter(
+            (d) => d.category === window.ts.DiagnosticCategory.Error
+          );
+          // Don't hard-fail on type diagnostics — runtime is what matters for preview.
+          // Only block if transpile produced empty output.
+          if (!compiled.outputText || !String(compiled.outputText).trim()) {
+            const first = fatal[0];
+            throw new Error(
+              "Generated TypeScript is invalid: " +
+                (first
+                  ? window.ts.flattenDiagnosticMessageText(first.messageText, "\n")
+                  : "empty compile output")
+            );
+          }
+          const blob = new Blob([compiled.outputText], { type: "text/javascript" });
+          const url = URL.createObjectURL(blob);
+          let mod;
+          try {
+            mod = await import(/* @vite-ignore */ url);
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+          const factory =
+            mod.createModel ||
+            mod.default ||
+            mod.createObjectModel ||
+            Object.values(mod).find((v) => typeof v === "function");
+          if (typeof factory !== "function") {
+            throw new Error("No createModel() export found in generated code");
+          }
+          root = factory();
+          if (!root || !root.isObject3D) {
+            throw new Error("createModel() did not return a THREE.Object3D");
+          }
+          scene.add(root);
+          const box = new THREE.Box3().setFromObject(root);
+          const size = box.getSize(new THREE.Vector3()).length() || 1;
+          const center = box.getCenter(new THREE.Vector3());
+          // Deterministic three-quarter framing (img2threejs capture rules)
+          controls.target.copy(center);
+          camera.position.copy(center).add(new THREE.Vector3(size * 0.7, size * 0.45, size * 0.85));
+          controls.update();
+          renderer.render(scene, camera);
+
+          parent.postMessage({ type: "code-sculpt-ready" }, "*");
+
+          // One stable frame later → thumbnail for library cards
+          requestAnimationFrame(async () => {
+            const dataUrl = await captureThumbnail();
+            if (dataUrl) {
+              parent.postMessage(
+                { type: "code-sculpt-thumbnail", dataUrl, cameraView: "three-quarter" },
+                "*"
+              );
+            }
+          });
+        } catch (e) {
+          showError(e?.message || String(e));
+        }
+      }
+
+      /**
+       * Make LLM factories resilient in an ES-module sandbox:
+       * - ensure `import * as THREE from "three"`
+       * - bind common constructors as locals (MeshStandardMaterial, Mesh, Group, …)
+       * so bare `new MeshStandardMaterial()` works on refresh/reopen.
+       */
+      function prepareFactorySource(raw) {
+        let body = String(raw || "");
+        // Drop existing three imports — we inject a single canonical one.
+        body = body.replace(
+          /^\s*import\s+\*\s+as\s+THREE\s+from\s+['"]three['"]\s*;?\s*/gm,
+          ""
+        );
+        body = body.replace(
+          /^\s*import\s+\{[^}]*\}\s+from\s+['"]three['"]\s*;?\s*/gm,
+          ""
+        );
+        body = body.replace(
+          /^\s*import\s+THREE\s+from\s+['"]three['"]\s*;?\s*/gm,
+          ""
+        );
+
+        const preamble = `import * as THREE from "three";
+const {
+  MeshStandardMaterial, MeshPhysicalMaterial, MeshBasicMaterial, MeshLambertMaterial,
+  MeshPhongMaterial, MeshToonMaterial, MeshNormalMaterial, MeshDepthMaterial,
+  MeshMatcapMaterial, LineBasicMaterial, LineDashedMaterial, PointsMaterial,
+  ShaderMaterial, RawShaderMaterial, ShadowMaterial, SpriteMaterial,
+  BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry, TorusGeometry,
+  PlaneGeometry, CircleGeometry, RingGeometry, TorusKnotGeometry, CapsuleGeometry,
+  LatheGeometry, ExtrudeGeometry, ShapeGeometry, TubeGeometry, BufferGeometry,
+  Mesh, Group, Object3D, Color, Vector2, Vector3, Vector4, Euler, Quaternion,
+  Matrix3, Matrix4, Box3, Sphere, Ray, Triangle, MathUtils,
+  BufferAttribute, Float32BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute,
+  CanvasTexture, DataTexture, Texture, Shape, Path, CurvePath,
+  CatmullRomCurve3, QuadraticBezierCurve3, CubicBezierCurve3,
+  DoubleSide, FrontSide, BackSide, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping,
+  SRGBColorSpace, LinearSRGBColorSpace, NoColorSpace,
+  AdditiveBlending, NormalBlending, MultiplyBlending, SubtractiveBlending,
+  LoopOnce, LoopRepeat, LoopPingPong
+} = THREE;
+`;
+        return preamble + "\n" + body;
+      }
+
+      window.addEventListener("message", (ev) => {
+        const data = ev.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type === "code-sculpt-load" && typeof data.code === "string") {
+          loadFactory(data.code);
+        }
+      });
+
+      parent.postMessage({ type: "code-sculpt-boot" }, "*");
+    </script>
+  </body>
+</html>

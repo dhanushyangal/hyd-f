@@ -209,9 +209,6 @@ The frontend uses the API client in `lib/api.ts` to communicate with:
 // Generate preview image
 generatePreviewImage(prompt: string)
 
-// Submit text-to-3D job
-submitTextTo3D(prompt: string)
-
 // Submit image-to-3D job
 submitImageTo3D(imageUrl: string)
 
