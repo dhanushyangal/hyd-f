@@ -1,105 +1,69 @@
-# Water & cloud orchestration
+# Water orchestration
 
-How Hydrilla builds 3D — prompts, gates, skills, and which docs matter.
-
----
-
-## Most important docs (read these)
-
-| Doc | Purpose |
-|-----|---------|
-| **[`docs/ENGINES.md`](./ENGINES.md)** | Product truth: Cloud vs Water, BYOK, APIs, job fields, verify checklist |
-| **[`docs/WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md)** (this file) | Water pipeline prompts, gates, Cursor agent usage, skills |
-| **[`docs/GENERATION_FLOWS.md`](./GENERATION_FLOWS.md)** | Deep Trilles / FLUX cloud credit path |
-| **[`skills/water/SKILL.md`](../skills/water/SKILL.md)** | Agent skill: gates + codegen contract |
-| **Backend [`WATER_DEPLOY.md`](../backend/hydrilla_backend/WATER_DEPLOY.md)** | Supabase SQL + Vercel env for Water/BYOK |
-
-Cloud mesh orchestration lives in `threeD.ts` + GPU gateways (no LLM prompts).  
-Water orchestration lives in `codeSculptPipeline.ts` + `llmProviders.ts`.
+How Water builds procedural Three.js from a text prompt (BYOK).  
+Product / model picker / prefs: [`ENGINES.md`](./ENGINES.md).
 
 ---
 
-## Engines at a glance
+## Most important files
 
-| | Hydrilla cloud | Water |
-|---|---|---|
-| Models | Trilles (credits) | BYOK: Anthropic, OpenAI, Gemini, OpenRouter, **Cursor** |
-| Orchestration | FLUX → Trellis GPU | LLM stages + deterministic gates |
-| Output | GLB | Three.js `createModel()` (+ client export GLB/OBJ/…) |
+| Path | Role |
+|------|------|
+| [`docs/ENGINES.md`](./ENGINES.md) | Cloud vs Water, model catalog, prefs, APIs |
+| [`docs/WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md) (this) | Pipeline, prompts, gates, providers |
+| [`docs/GENERATION_FLOWS.md`](./GENERATION_FLOWS.md) | Hydrilla cloud (Trilles) only |
+| [`skills/water/SKILL.md`](../skills/water/SKILL.md) | Agent skill — gates + codegen contract |
+| `backend/.../codeSculptPipeline.ts` | Spec → code → gates |
+| `backend/.../llmProviders.ts` | Claude / OpenAI / Gemini / OpenRouter / Cursor adapters |
+| `backend/.../routes/codeSculpt.ts` | `/api/water/*` |
+| `backend/.../WATER_DEPLOY.md` | SQL + env |
 
 ---
 
-## Water pipeline (orchestration)
+## Pipeline
 
 ```text
 intake (code) → assessment/spec (LLM) → spec gate (code)
   → blockout (LLM) → code gate (code) → optional 1× refine (LLM) → DONE
 ```
 
-Implemented in `backend/hydrilla_backend/src/lib/codeSculptPipeline.ts`.  
-Skill summary: `skills/water/SKILL.md`.
+Cost: **2** model calls on the happy path; up to **4** if both gates repair once.
 
 ### Stage prompts (canonical)
 
-#### 1) Spec system prompt (`SPEC_SYSTEM`)
+1. **Spec (`SPEC_SYSTEM`)** — JSON SculptSpec only: components, parents, materials, sockets, scale. Min depth by complexity (3 / 6 / 10).  
+2. **Code (`CODE_SYSTEM`)** — TypeScript only: `import * as THREE`, `export function createModel(): THREE.Group`, `sculptRuntime` + `tick`, no fetch/eval/loaders.  
+3. **Refine** — same code system + exact gate violations.
 
-Role: technical director for procedural Three.js reconstruction.  
-Output: **JSON only** (SculptSpec): name, subjectClass, complexity, materials, components (hierarchy), animation sockets.  
-Rules: min components by complexity (3 / 6 / 10), valid parents & materials, metres, Y-up, on ground plane.
-
-#### 2) Spec user prompt
-
-Subject text (and optional image). Ask for the JSON spec only.  
-On gate failure: one repair call listing exact violations; else fallback scaffold.
-
-#### 3) Code system prompt (`CODE_SYSTEM`)
-
-Role: senior Three.js engineer, **blockout** pass.  
-Output: **TypeScript only** with:
-
-- `import * as THREE from 'three'`
-- `export function createModel(): THREE.Group`
-- primitives + `MeshStandardMaterial` / `MeshPhysicalMaterial` (THREE. prefix)
-- `root.userData.sculptRuntime` + `root.userData.tick`
-- no fetch / eval / loaders / dynamic import
-
-#### 4) Code user prompt
-
-Subject + full JSON spec; on refine, append gate violations.
-
-### Deterministic gates (no tokens)
+### Deterministic gates
 
 | Gate | Blocks when |
 |------|-------------|
-| Intake | Empty / too short / no word / >2000 chars |
-| Spec | Shallow component tree, bad parents/materials |
-| Code | Missing contract, banned APIs, unbalanced braces, &lt;60% component coverage |
-
-Blocking code failures after one refine → job `FAIL` / `water_failed`.
-
-### Provider adapters (`llmProviders.ts`)
-
-| Provider | How Water calls it |
-|----------|-------------------|
-| Anthropic | Messages API |
-| OpenAI / OpenRouter | Chat completions |
-| Gemini | generateContent |
-| **Cursor** | Cloud Agents API: `POST /v1/agents` (no-repo), poll run until `FINISHED`, read `result`. Not chat-completions. Docs: [endpoints](https://cursor.com/docs/cloud-agent/api/endpoints), [TS SDK](https://cursor.com/docs/sdk/typescript) |
-
-Cursor verify: `GET https://api.cursor.com/v1/me` with Bearer key.  
-Cursor is slower per stage (agent run); expect longer Water jobs.
+| Intake | Empty / no subject / >2000 chars |
+| Spec | Shallow tree, bad parents/materials |
+| Code | Missing contract, banned APIs, brace imbalance, &lt;60% coverage |
 
 ---
 
-## Cloud (Trilles) orchestration
+## Provider adapters
 
-No LLM prompts in-app. Flow:
+| Provider | Selection | Runtime |
+|----------|-----------|---------|
+| Anthropic | Catalog id → Messages API | Pass-through known ids |
+| OpenAI | Catalog id → chat completions | Pass-through known ids |
+| Gemini | Catalog id → generateContent | Pass-through known ids |
+| OpenRouter | Live free + catalog paid | Slug as API model |
+| Cursor | Live `/v1/models` + Auto | Cloud Agents create/poll; omit `model` for Auto |
 
-1. Optional FLUX text/edit/combine → image (credits)  
-2. `POST /api/3d/generate` → Trellis image-to-3D (credits)  
-3. Poll / job sync → GLB  
+Cursor: [API endpoints](https://cursor.com/docs/cloud-agent/api/endpoints). Slower per stage (agent run).
 
-Details: [`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md).
+---
+
+## Frontend
+
+- Preview: `WaterViewer` → `public/water-sandbox.html` (`sandbox="allow-scripts"`).  
+- Job ids `wt_*` / `cs_*` → always Water path, never `/api/3d/glb/...`.  
+- Engine picker: Hydrilla cloud first; unlocked Water groups next; selection persists `defaultCodeModel`.
 
 ---
 
@@ -107,23 +71,6 @@ Details: [`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md).
 
 | Skill | Role |
 |-------|------|
-| `skills/water/SKILL.md` | Water codegen conventions & gates for agents working on Hydrilla |
+| `skills/water/SKILL.md` | Water codegen + gates for agents editing Hydrilla |
 
-There is no separate “cloud skill”; cloud is gateway + credits.
-
----
-
-## Engine picker UX
-
-- **Hydrilla cloud** group always first.  
-- Water provider groups with a **valid/unlocked** API key sort **above** locked groups.  
-- Inside a group, unlocked models sort above locked (lock icon = need key or coming soon).
-
----
-
-## SQL / deploy notes for Cursor
-
-1. Base migration: `sql/add_user_api_keys_and_code_sculpt.sql`  
-2. Cursor provider: `sql/add_cursor_provider.sql` (adds `cursor` to `user_api_keys.provider` check)  
-3. Env: `USER_API_KEYS_ENCRYPTION_SECRET` (unchanged)  
-4. Settings → paste Cursor key from [cursor.com/dashboard/api](https://cursor.com/dashboard/api) (`crsr_…`)
+No separate cloud skill — cloud is gateway + credits ([`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md)).

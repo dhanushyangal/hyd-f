@@ -65,13 +65,21 @@ export function formatEngineLabel(value?: string | null): string {
   return value.replace(/_/g, " ").trim();
 }
 
+/** Water job ids: `wt_` (current) or legacy `cs_`. */
+export function isWaterJobId(id?: string | null): boolean {
+  if (!id) return false;
+  return id.startsWith("wt_") || id.startsWith("cs_");
+}
+
 export function isWaterJob(job: {
+  id?: string | null;
   engine?: string | null;
   generateType?: string | null;
   resultKind?: string | null;
   hasFactoryCode?: boolean | null;
   factoryCode?: string | null;
 }): boolean {
+  if (isWaterJobId(job.id)) return true;
   if (isWaterEngine(job.engine) || isWaterEngine(job.generateType)) return true;
   if (job.resultKind === "three_factory") return true;
   if (job.hasFactoryCode || (job.factoryCode && job.factoryCode !== "__present__")) {

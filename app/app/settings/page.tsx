@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   deleteUserApiKey,
+  fetchCursorModels,
   fetchOpenRouterFreeModels,
   fetchOpenRouterKeyStatus,
   fetchUserApiKeys,
@@ -25,7 +26,9 @@ import {
   type UserModelPrefs,
 } from "@/lib/api";
 import {
+  MODEL_CATALOG,
   OPENROUTER_MODELS,
+  mergeCursorModels,
   mergeFreeModels,
   providerLabel,
   type ApiKeyProvider,
@@ -85,10 +88,11 @@ export default function SettingsPage() {
     void load();
   }, [isLoaded, isSignedIn]);
 
-  const openRouterOk = Boolean(
-    keys.find((k) => k.provider === "openrouter")?.configured &&
-      keys.find((k) => k.provider === "openrouter")?.status === "valid"
-  );
+  const keyOk = (provider: ApiKeyProvider) =>
+    Boolean(
+      keys.find((k) => k.provider === provider)?.configured &&
+        keys.find((k) => k.provider === provider)?.status === "valid"
+    );
 
   return (
     <div className="app-content-page font-dm-sans bg-[#fafafa]">
@@ -143,16 +147,14 @@ export default function SettingsPage() {
               ))}
             </section>
 
-            <OpenRouterDefaults
-              enabled={openRouterOk}
-              value={(prefs?.defaultCodeModel as ModelId) || "openrouter/free"}
+            <WaterDefaultModel
+              keys={keys}
+              keyOk={keyOk}
+              value={(prefs?.defaultCodeModel as ModelId) || null}
               onSaved={async (id) => {
                 const tokenGetter = async () => (await getToken()) ?? null;
                 const next = await saveUserModelPrefs(
-                  {
-                    defaultCodeModel: id,
-                    defaultMeshModel: prefs?.defaultMeshModel || "trilles",
-                  },
+                  { defaultCodeModel: id },
                   tokenGetter
                 );
                 setPrefs(next);
@@ -416,72 +418,130 @@ function StatusPill({
   );
 }
 
-function OpenRouterDefaults({
-  enabled,
+/**
+ * Single Water default: one `defaultCodeModel` for Claude / OpenAI / Gemini /
+ * OpenRouter / Cursor. Live-sync OpenRouter Free + Cursor when keys are valid.
+ */
+function WaterDefaultModel({
+  keys: _keys,
+  keyOk,
   value,
   onSaved,
 }: {
-  enabled: boolean;
-  value: ModelId;
+  keys: UserApiKeyMeta[];
+  keyOk: (provider: ApiKeyProvider) => boolean;
+  value: ModelId | null;
   onSaved: (id: ModelId) => Promise<void>;
 }) {
   const { getToken } = useAuth();
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [local, setLocal] = useState<ModelId>(value);
-  const [freeModels, setFreeModels] = useState<CatalogModel[]>([]);
+  const [local, setLocal] = useState<ModelId | null>(value);
+  const [freeModels, setFreeModels] = useState<CatalogModel[]>(() => mergeFreeModels([]));
+  const [cursorModels, setCursorModels] = useState<CatalogModel[]>(() =>
+    mergeCursorModels([])
+  );
   const [keyUsage, setKeyUsage] = useState<string | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
 
   useEffect(() => {
     setLocal(value);
   }, [value]);
 
-  const syncFree = async () => {
+  const anyKey =
+    keyOk("anthropic") ||
+    keyOk("openai") ||
+    keyOk("gemini") ||
+    keyOk("openrouter") ||
+    keyOk("cursor");
+
+  const syncLive = async () => {
     setSyncing(true);
-    setSyncError(null);
-    try {
-      const tokenGetter = async () => (await getToken()) ?? null;
-      const data = await fetchOpenRouterFreeModels(tokenGetter);
-      setFreeModels(mergeFreeModels(data.models as OpenRouterFreeModelRow[]));
+    setSyncNote(null);
+    const tokenGetter = async () => (await getToken()) ?? null;
+    const notes: string[] = [];
+    if (keyOk("openrouter")) {
       try {
-        const status = await fetchOpenRouterKeyStatus(tokenGetter);
-        if (status.usage != null || status.limit != null) {
-          setKeyUsage(
-            `${status.usage ?? "—"}` +
-              (status.limit != null ? ` / ${status.limit}` : "") +
-              (status.isFreeTier ? " · free tier" : "")
-          );
-        } else if (status.isFreeTier != null) {
-          setKeyUsage(status.isFreeTier ? "Free tier" : "Credits enabled");
+        const data = await fetchOpenRouterFreeModels(tokenGetter);
+        setFreeModels(mergeFreeModels(data.models as OpenRouterFreeModelRow[]));
+        try {
+          const status = await fetchOpenRouterKeyStatus(tokenGetter);
+          if (status.usage != null || status.limit != null) {
+            setKeyUsage(
+              `${status.usage ?? "—"}` +
+                (status.limit != null ? ` / ${status.limit}` : "") +
+                (status.isFreeTier ? " · free tier" : "")
+            );
+          }
+        } catch {
+          // optional
         }
-      } catch {
-        // optional
+      } catch (err: unknown) {
+        notes.push(err instanceof Error ? err.message : "OpenRouter sync failed");
+        setFreeModels(mergeFreeModels([]));
       }
-    } catch (err: unknown) {
-      setSyncError(err instanceof Error ? err.message : "Sync failed");
-      setFreeModels(mergeFreeModels([]));
-    } finally {
-      setSyncing(false);
     }
+    if (keyOk("cursor")) {
+      try {
+        const data = await fetchCursorModels(tokenGetter);
+        setCursorModels(mergeCursorModels(data.models));
+      } catch (err: unknown) {
+        notes.push(err instanceof Error ? err.message : "Cursor sync failed");
+        setCursorModels(mergeCursorModels([]));
+      }
+    }
+    setSyncNote(notes.length ? notes.join(" · ") : null);
+    setSyncing(false);
   };
 
   useEffect(() => {
-    if (!enabled) return;
-    void syncFree();
-  }, [enabled]);
+    if (!anyKey) return;
+    void syncLive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    keyOk("anthropic"),
+    keyOk("openai"),
+    keyOk("gemini"),
+    keyOk("openrouter"),
+    keyOk("cursor"),
+  ]);
 
-  if (!enabled) {
+  if (!anyKey) {
     return (
       <Card className="border-dashed bg-white/70">
         <CardContent className="p-5 text-sm text-neutral-500">
-          Add a valid OpenRouter key to choose a default free or paid model.
+          Add a valid API key above to choose a default Water model.
         </CardContent>
       </Card>
     );
   }
 
-  const freeList = freeModels.length ? freeModels : mergeFreeModels([]);
+  const staticBy = (provider: ApiKeyProvider) =>
+    MODEL_CATALOG.filter((m) => m.kind === "code" && m.provider === provider && !m.comingSoon);
+
+  const sections: { title: string; models: CatalogModel[]; showVision?: boolean }[] = [];
+  if (keyOk("cursor")) {
+    sections.push({ title: "Cursor", models: cursorModels });
+  }
+  if (keyOk("openrouter")) {
+    sections.push({
+      title: "OpenRouter Free",
+      models: freeModels.length ? freeModels : mergeFreeModels([]),
+      showVision: true,
+    });
+    sections.push({ title: "OpenRouter Paid", models: OPENROUTER_MODELS });
+  }
+  if (keyOk("anthropic")) {
+    sections.push({ title: "Anthropic", models: staticBy("anthropic") });
+  }
+  if (keyOk("openai")) {
+    sections.push({ title: "OpenAI", models: staticBy("openai") });
+  }
+  if (keyOk("gemini")) {
+    sections.push({ title: "Google", models: staticBy("gemini") });
+  }
+
+  const selected = local || sections[0]?.models[0]?.id || "cursor-auto";
 
   return (
     <Card>
@@ -489,62 +549,62 @@ function OpenRouterDefaults({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-[15px] font-semibold tracking-tight text-neutral-900">
-              Default OpenRouter model
+              Default Water model
             </h2>
             <p className="mt-0.5 text-[12px] text-neutral-500">
-              Used when Water opens. Change anytime in the workspace picker.
+              Used when the workspace opens. The Engine picker saves the same preference.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 shrink-0 rounded-lg gap-1.5 text-xs"
-            disabled={syncing}
-            onClick={() => void syncFree()}
-          >
-            {syncing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            Sync
-          </Button>
+          {(keyOk("openrouter") || keyOk("cursor")) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 rounded-lg gap-1.5 text-xs"
+              disabled={syncing}
+              onClick={() => void syncLive()}
+            >
+              {syncing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Sync
+            </Button>
+          )}
         </div>
 
-        {(keyUsage || syncError) && (
+        {(keyUsage || syncNote) && (
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
             {keyUsage && (
               <span className="rounded-md bg-neutral-100 px-2 py-1 font-medium text-neutral-700">
-                Usage {keyUsage}
+                OpenRouter {keyUsage}
               </span>
             )}
-            {syncError && <span className="text-amber-700">Curated list · {syncError}</span>}
+            {syncNote && <span className="text-amber-700">{syncNote}</span>}
           </div>
         )}
 
-        <ModelGrid
-          title="Free"
-          models={freeList}
-          selected={local}
-          onSelect={setLocal}
-          showVision
-        />
-        <ModelGrid
-          title="Paid"
-          models={OPENROUTER_MODELS}
-          selected={local}
-          onSelect={setLocal}
-        />
+        {sections.map((s) => (
+          <ModelGrid
+            key={s.title}
+            title={s.title}
+            models={s.models}
+            selected={selected}
+            onSelect={setLocal}
+            showVision={s.showVision}
+          />
+        ))}
 
         <Button
           type="button"
           className="h-10 rounded-xl"
-          disabled={saving || local === value}
+          disabled={saving || !selected || selected === value}
           onClick={async () => {
+            if (!selected) return;
             setSaving(true);
             try {
-              await onSaved(local);
+              await onSaved(selected);
             } finally {
               setSaving(false);
             }
@@ -609,7 +669,7 @@ function ModelGrid({
                   active ? "text-white/65" : "text-neutral-400"
                 )}
               >
-                {m.openRouterSlug || m.id}
+                {m.cursorModelId || m.openRouterSlug || m.id}
               </span>
             </button>
           );

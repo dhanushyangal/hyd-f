@@ -30,6 +30,8 @@ import {
   saveWaterThumbnail,
   fetchUserApiKeys,
   fetchOpenRouterFreeModels,
+  fetchCursorModels,
+  saveUserModelPrefs,
   generatePreviewImage,
   registerJobWithPreview,
   editImage,
@@ -70,12 +72,14 @@ import {
   getCatalogModel,
   isCodeModel,
   mergeFreeModels,
+  mergeCursorModels,
   providerForModelId,
   type CatalogModel,
+  type CursorLiveModel,
   type ModelId,
   type OpenRouterFreeModel,
 } from "../../lib/models";
-import { ENGINE, formatEngineLabel, isWaterJob } from "../../lib/engines";
+import { ENGINE, formatEngineLabel, isWaterJob, isWaterJobId } from "../../lib/engines";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const CREDITS_IMAGE = 2;
@@ -583,12 +587,15 @@ function WorkspacePage() {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState<UserApiKeyMeta[]>([]);
   const [liveFreeModels, setLiveFreeModels] = useState<OpenRouterFreeModel[]>([]);
+  const [liveCursorModels, setLiveCursorModels] = useState<CursorLiveModel[]>([]);
   const [codeFactoryCode, setCodeFactoryCode] = useState<string | null>(null);
   const [codeSculptPass, setCodeSculptPass] = useState<string | null>(null);
   const freePickerModels = mergeFreeModels(liveFreeModels);
+  const cursorPickerModels = mergeCursorModels(liveCursorModels);
   const selectedCatalog =
     getCatalogModel(selectedModel) ||
     freePickerModels.find((m) => m.id === selectedModel) ||
+    cursorPickerModels.find((m) => m.id === selectedModel) ||
     undefined;
   const selectedProvider = providerForModelId(selectedModel);
   const selectedIsCode =
@@ -638,6 +645,18 @@ function WorkspacePage() {
         } catch {
           // Curated free list still works offline
         }
+        // Live-sync Cursor Cloud Agents models when a key is configured
+        const cursorOk = data.keys.some(
+          (k) => k.provider === "cursor" && k.configured && k.status !== "invalid"
+        );
+        if (cursorOk) {
+          try {
+            const cursor = await fetchCursorModels(tokenGetter);
+            setLiveCursorModels(cursor.models);
+          } catch {
+            // Cursor Auto still available without live list
+          }
+        }
       } catch {
         // Settings migration may not be deployed yet — picker still works for Trilles
       }
@@ -658,7 +677,9 @@ function WorkspacePage() {
       const items =
         group === "OpenRouter Free"
           ? freePickerModels
-          : MODEL_CATALOG.filter((m) => m.group === group);
+          : group === "Cursor"
+            ? cursorPickerModels
+            : MODEL_CATALOG.filter((m) => m.group === group);
       // Unlocked models first within the group; locked / coming-soon below.
       return [...items].sort((a, b) => {
         const aUnlocked =
@@ -669,7 +690,7 @@ function WorkspacePage() {
         return 0;
       });
     },
-    [freePickerModels, providerKeyOk]
+    [freePickerModels, cursorPickerModels, providerKeyOk]
   );
 
   /** Hydrilla cloud first, then Water groups with a valid key, then locked groups. */
@@ -691,6 +712,7 @@ function WorkspacePage() {
   const modelTypeLabel: Record<string, string> = Object.fromEntries([
     ...MODEL_CATALOG.map((m) => [m.id, m.label] as const),
     ...freePickerModels.map((m) => [m.id, m.label] as const),
+    ...cursorPickerModels.map((m) => [m.id, m.label] as const),
   ]);
     const formatGenerationType = useCallback((value?: string | null): string => {
     return formatEngineLabel(value);
@@ -728,7 +750,14 @@ function WorkspacePage() {
   const shouldShowIn3DLibrary = useCallback((job: BackendJob): boolean => {
     // Show completed 3D outputs and in-progress 3D jobs (mesh + Water).
     if (job.status === "FAIL") return false;
-    if (job.resultGlbUrl || hasRealFactoryCode(job) || isWaterJobFn(job)) return true;
+    if (
+      job.resultGlbUrl ||
+      hasRealFactoryCode(job) ||
+      isWaterJobFn(job) ||
+      isWaterJobId(job.id)
+    ) {
+      return true;
+    }
     if (!is3DGenerationType(job.generateType)) return false;
     return job.status === "RUN" || job.status === "WAIT";
   }, [is3DGenerationType, isWaterJobFn, hasRealFactoryCode]);
@@ -1040,9 +1069,9 @@ function WorkspacePage() {
   // ──────────── Poll for generating 3D job ────────────
   useEffect(() => {
     if (!currentGenerating || currentGenerating.status !== "generating") return;
-    // Water jobs poll via fetchWaterJob in start3DFromImage / handle3DClick — skip GPU status poll.
+    // Water jobs poll via fetchWaterJob in runWater / handle3DClick — never use GPU/GLB status.
     if (
-      currentGenerating.jobId.startsWith("cs_") ||
+      isWaterJobId(currentGenerating.jobId) ||
       centerView.type === "code"
     ) {
       return;
@@ -1126,6 +1155,10 @@ function WorkspacePage() {
         }
 
         if (status.status === "completed") {
+          // Belt-and-suspenders: Water DONE must never open the GLB viewer (404).
+          if (isWaterJobId(currentGenerating.jobId)) {
+            return;
+          }
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
@@ -2305,7 +2338,8 @@ function WorkspacePage() {
   };
 
   const handle3DClick = (job: BackendJob) => {
-    if (isWaterJobFn(job)) {
+    // Prefer Water path for wt_/cs_ even if list payload omitted engine fields.
+    if (isWaterJobFn(job) || isWaterJobId(job.id)) {
       setLeftLibraryTab("3d");
       if (job.status === "RUN" || job.status === "WAIT") {
         const pollGen = ++waterPollGenRef.current;
@@ -2444,6 +2478,11 @@ function WorkspacePage() {
       return;
     }
 
+    if (isWaterJobId(job.id)) {
+      // Should have been handled above; never fall through to GLB proxy.
+      return;
+    }
+
     if ((job.status === "RUN" || job.status === "WAIT") && !job.resultGlbUrl) {
       setLeftLibraryTab("3d");
       setCurrentGenerating({
@@ -2571,7 +2610,14 @@ function WorkspacePage() {
     const open3dId = searchParams.get("open3d");
     if (!open3dId || libraryLoading) return;
     const job = library3DAssets.find((j) => j.id === open3dId);
-    if (job?.resultGlbUrl) {
+    if (!job) return;
+    if (isWaterJob(job) || isWaterJobId(job.id)) {
+      handle3DClick(job);
+      setMobileTab("canvas");
+      window.history.replaceState(null, "", workspaceId ? `/workspace/${workspaceId}` : "/workspace");
+      return;
+    }
+    if (job.resultGlbUrl) {
       setLeftLibraryTab("3d");
       setCenterView({ type: "3d", glbUrl: getProxyGlbUrl(job.id), jobId: job.id });
       loadJobInfo(job);
@@ -4110,6 +4156,21 @@ function WorkspacePage() {
                                     return;
                                   }
                                   setSelectedModel(opt.id);
+                                  // Persist Water default so Settings + next session match the picker
+                                  if (opt.provider !== "hydrilla") {
+                                    void (async () => {
+                                      try {
+                                        const tokenGetter = async () =>
+                                          (await getToken()) ?? null;
+                                        await saveUserModelPrefs(
+                                          { defaultCodeModel: opt.id },
+                                          tokenGetter
+                                        );
+                                      } catch {
+                                        // session selection still works
+                                      }
+                                    })();
+                                  }
                                 }}
                                 className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs cursor-pointer ${
                                   locked

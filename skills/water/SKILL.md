@@ -1,46 +1,68 @@
+---
+name: water
+description: Hydrilla Water engine — BYOK procedural Three.js (Claude, OpenAI, Gemini, OpenRouter, Cursor). Use when editing Water generation, gates, sandbox, or model picker.
+---
+
 # Water — Hydrilla skill
 
-Build a **code-only**, gated, animation-ready procedural Three.js model from a text description (an image is an optional extra reference).
+Build a **code-only**, gated, animation-ready procedural Three.js model from a text description (image optional).
 
-Product / API / BYOK docs: [`docs/ENGINES.md`](../../docs/ENGINES.md).  
-Prompts & orchestration: [`docs/WATER_ORCHESTRATION.md`](../../docs/WATER_ORCHESTRATION.md).
+| Doc | Use |
+|-----|-----|
+| [`docs/ENGINES.md`](../../docs/ENGINES.md) | Cloud vs Water, model catalog, prefs, Cursor live sync |
+| [`docs/WATER_ORCHESTRATION.md`](../../docs/WATER_ORCHESTRATION.md) | Pipeline prompts & gates |
 
-Workflow adapted from [img2threejs](https://github.com/img2threejs/img2threejs): reconstruction-by-code, deterministic gates, model tokens spent only on judgement.
+Adapted from [img2threejs](https://github.com/img2threejs/img2threejs): reconstruction-by-code, deterministic gates.
 
 ## When it runs
 
-The user selects a **bring-your-own model** (OpenRouter Free / Claude / GPT / Gemini) in the workspace **Engine** picker and clicks **Generate with Water**. Hydrilla cloud (Trilles mesh / credits) is untouched.
+User picks a **Water** model in the Engine picker (unlocked BYOK key) and clicks Generate.
+
+| Provider | Models |
+|----------|--------|
+| Anthropic | Claude Sonnet / Opus (catalog) |
+| OpenAI | GPT-4.1 / Mini (catalog) |
+| Gemini | 2.5 Flash / Pro (catalog) |
+| OpenRouter | Free (live) + paid (catalog) |
+| Cursor | Auto + live Cloud Agents `/v1/models` |
+
+Hydrilla cloud (Trilles / credits) is untouched.
 
 ## Pipeline
 
 ```
-intake gate → assessment + spec → spec gate → blockout codegen → code gate → (one refine) → done
+intake → assessment+spec → spec gate → blockout → code gate → (one refine) → done
 ```
 
-| Stage | Who does it | What it produces |
-|---|---|---|
-| `intake` | code | Prompt suitability — blocks empty/no-subject requests before spending a token |
-| `assessment` + `spec` | model | `SculptSpec` JSON: components, parents, materials, sockets, scale |
-| spec gate | code | Depth check (simple ≥ 3, moderate ≥ 6, complex ≥ 10 components), parent + material integrity |
-| `blockout` | model | TypeScript `createModel(): THREE.Group` built from the spec |
-| code gate | code | Contract, banned APIs, brace balance, ≥ 60% planned-component coverage |
-| refine | model | One corrective pass with the exact violations, best attempt wins |
+| Stage | Who | Output |
+|-------|-----|--------|
+| intake | code | Suitability before tokens |
+| assessment + spec | LLM | SculptSpec JSON |
+| spec gate | code | Depth / parent / material integrity |
+| blockout | LLM | `createModel(): THREE.Group` |
+| code gate | code | Contract, banned APIs, coverage ≥ 60% |
+| refine | LLM | One corrective pass |
 
-Cost: 2 model calls on the happy path; up to 4 when the spec and code gates each request one repair.
+Happy path: **2** LLM calls; up to **4** with repairs.
 
-## Gates
+## Gates (must hold)
 
-- **Intake** — a describable subject, ≤ 2000 chars
-- **Spec depth** — no single-blob spec for a compound object
-- **Code contract** — `import * as THREE from 'three'`, one `export function createModel(): THREE.Group`, `THREE.Group` root
-- **Sandbox safety** — no `fetch`, `XMLHttpRequest`, `eval`, `new Function`, dynamic `import`, `require`, or asset loaders
-- **Coverage** — the blockout must actually build the planned parts
-- **Runtime** — `root.userData.sculptRuntime` (nodes, sockets) and `root.userData.tick(dt, elapsed)`
+- Intake — describable subject, ≤ 2000 chars  
+- Spec depth — simple ≥ 3 / moderate ≥ 6 / complex ≥ 10 components  
+- Code contract — `import * as THREE from 'three'`, one `export function createModel(): THREE.Group`  
+- Sandbox — no `fetch`, `eval`, `new Function`, dynamic `import`, `require`, asset loaders  
+- Runtime — `root.userData.sculptRuntime` + `root.userData.tick(dt, elapsed)`  
 
-Preview runs in a **browser** iframe (`public/water-sandbox.html`, `sandbox="allow-scripts"`). This is not a Vercel Sandbox product.
+Preview: browser iframe `public/water-sandbox.html` (`sandbox="allow-scripts"`).
 
-## Later passes
+## Model ids (do not invent Cursor ids)
 
-`blockout → structural → form → material → surface → lighting → interaction → optimization`
+- Static: catalog ids as listed in `lib/models.ts` / backend `llmProviders.ts`  
+- OpenRouter Free: live slug ids  
+- Cursor: `cursor-auto` (omit `model`) or `cursor/<nativeId>` from that key’s `/v1/models` only  
+- Persist: `user_model_prefs.default_code_model` (Settings + workspace picker)
 
-v1 ships **blockout**. Each later pass reuses the same orchestrator: unlock only after the previous pass clears its gate.
+## Later passes (future)
+
+`blockout → structural → form → material → surface → lighting → interaction → optimization`  
+v1 ships **blockout** only.

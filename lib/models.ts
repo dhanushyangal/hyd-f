@@ -38,6 +38,7 @@ export const MODEL_CATALOG: CatalogModel[] = [
     provider: "hydrilla",
     comingSoon: true,
   },
+  // Cursor: only Auto is curated. All other models come from GET /v1/models (live sync).
   {
     id: "cursor-auto",
     label: "Cursor Auto",
@@ -45,15 +46,6 @@ export const MODEL_CATALOG: CatalogModel[] = [
     kind: "code",
     provider: "cursor",
     cursorModelId: null,
-    vision: true,
-  },
-  {
-    id: "cursor-composer-2",
-    label: "Composer 2",
-    group: "Cursor",
-    kind: "code",
-    provider: "cursor",
-    cursorModelId: "composer-2",
     vision: true,
   },
   {
@@ -236,7 +228,8 @@ export function isCodeModel(id: string): boolean {
     id === "openrouter/free" ||
     id.startsWith("openrouter/") ||
     id.startsWith("cursor-") ||
-    id.startsWith("cursor/")
+    id.startsWith("cursor/") ||
+    id === "cursor-composer-2" // legacy prefs
   );
 }
 
@@ -300,6 +293,69 @@ export function mergeFreeModels(
     if (a.id === "openrouter/free") return -1;
     if (b.id === "openrouter/free") return 1;
     if (a.vision !== b.vision) return a.vision ? -1 : 1;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+export type CursorLiveModel = {
+  id: string;
+  displayName: string;
+  isAuto?: boolean;
+  aliases?: string[];
+};
+
+/**
+ * Cursor picker = Auto + every model from GET /v1/models for the user’s key.
+ * Same pattern as OpenRouter Free live sync. Picker ids: `cursor/<nativeId>`.
+ * Docs: https://cursor.com/docs/cloud-agent/api/endpoints#list-models
+ */
+export function mergeCursorModels(live: CursorLiveModel[]): CatalogModel[] {
+  const byId = new Map<string, CatalogModel>();
+  byId.set("cursor-auto", {
+    id: "cursor-auto",
+    label: "Cursor Auto",
+    group: "Cursor",
+    kind: "code",
+    provider: "cursor",
+    cursorModelId: null,
+    vision: true,
+  });
+
+  for (const m of live) {
+    const native = String(m.id || "").trim();
+    if (!native) continue;
+    const lower = native.toLowerCase();
+    const isAuto =
+      m.isAuto ||
+      lower === "default" ||
+      lower === "auto" ||
+      lower === "auto-smart" ||
+      lower.startsWith("auto-");
+
+    if (isAuto) {
+      const prev = byId.get("cursor-auto")!;
+      byId.set("cursor-auto", {
+        ...prev,
+        label: m.displayName?.trim() || prev.label,
+      });
+      continue;
+    }
+
+    const id = `cursor/${native}`;
+    byId.set(id, {
+      id,
+      label: m.displayName?.trim() || native,
+      group: "Cursor",
+      kind: "code",
+      provider: "cursor",
+      cursorModelId: native,
+      vision: true,
+    });
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    if (a.id === "cursor-auto") return -1;
+    if (b.id === "cursor-auto") return 1;
     return a.label.localeCompare(b.label);
   });
 }

@@ -14,12 +14,13 @@ Water is summarized here; do not duplicate Water implementation notes here.
 flowchart TD
     A[User selects Engine model] --> B{Model provider}
     B -->|hydrilla| C[Hydrilla cloud → GLB]
-    B -->|anthropic / openai / gemini / openrouter| D[Water → Three.js]
+    B -->|anthropic / openai / gemini / openrouter / cursor| D[Water → Three.js]
 ```
 
 - Cloud: `selectedIsCode === false` → `/api/3d/*`, credits, GPU.
 - Water: `selectedIsCode === true` → `/api/water/*`, 0 credits, no GPU.
-- Full BYOK / Water docs: [`ENGINES.md`](./ENGINES.md).
+- Water models (catalog + live sync + prefs): [`ENGINES.md`](./ENGINES.md).
+- Water pipeline / gates: [`WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md).
 
 ---
 

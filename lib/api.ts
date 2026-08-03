@@ -2288,6 +2288,27 @@ export async function fetchOpenRouterFreeModels(
   return body as { models: OpenRouterFreeModelRow[]; syncedAt: string; note?: string };
 }
 
+export type CursorModelRow = {
+  id: string;
+  displayName: string;
+  isAuto?: boolean;
+};
+
+/** Live Cursor Cloud Agents models (requires a saved Cursor key). */
+export async function fetchCursorModels(
+  getToken?: () => Promise<string | null>
+): Promise<{ models: CursorModelRow[]; syncedAt: string; note?: string }> {
+  const res = await fetch(`${backendBase}/api/user/cursor/models`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to sync Cursor models");
+  }
+  return body as { models: CursorModelRow[]; syncedAt: string; note?: string };
+}
+
 export async function fetchOpenRouterKeyStatus(
   getToken?: () => Promise<string | null>
 ): Promise<{
