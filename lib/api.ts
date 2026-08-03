@@ -191,7 +191,7 @@ export interface BackendJob {
 }
 
 export type UserApiKeyMeta = {
-  provider: "anthropic" | "openai" | "gemini" | "openrouter";
+  provider: "anthropic" | "openai" | "gemini" | "openrouter" | "cursor";
   label?: string;
   configured: boolean;
   last4: string | null;

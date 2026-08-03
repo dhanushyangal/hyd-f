@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense, useState, useCallback, useEffect, useRef } from "react";
+import { Suspense, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
@@ -655,11 +655,38 @@ function WorkspacePage() {
 
   const pickerItemsForGroup = useCallback(
     (group: CatalogModel["group"]): CatalogModel[] => {
-      if (group === "OpenRouter Free") return freePickerModels;
-      return MODEL_CATALOG.filter((m) => m.group === group);
+      const items =
+        group === "OpenRouter Free"
+          ? freePickerModels
+          : MODEL_CATALOG.filter((m) => m.group === group);
+      // Unlocked models first within the group; locked / coming-soon below.
+      return [...items].sort((a, b) => {
+        const aUnlocked =
+          !a.comingSoon && (a.provider === "hydrilla" || providerKeyOk(a.provider));
+        const bUnlocked =
+          !b.comingSoon && (b.provider === "hydrilla" || providerKeyOk(b.provider));
+        if (aUnlocked !== bUnlocked) return aUnlocked ? -1 : 1;
+        return 0;
+      });
     },
-    [freePickerModels]
+    [freePickerModels, providerKeyOk]
   );
+
+  /** Hydrilla cloud first, then Water groups with a valid key, then locked groups. */
+  const orderedModelGroups = useMemo(() => {
+    const water = MODEL_GROUPS.filter((g) => g !== "Hydrilla");
+    const unlocked: CatalogModel["group"][] = [];
+    const locked: CatalogModel["group"][] = [];
+    for (const group of water) {
+      const items = pickerItemsForGroup(group);
+      const anyUnlocked = items.some(
+        (opt) => !opt.comingSoon && providerKeyOk(opt.provider)
+      );
+      if (anyUnlocked) unlocked.push(group);
+      else locked.push(group);
+    }
+    return ["Hydrilla" as const, ...unlocked, ...locked];
+  }, [pickerItemsForGroup, providerKeyOk]);
 
   const modelTypeLabel: Record<string, string> = Object.fromEntries([
     ...MODEL_CATALOG.map((m) => [m.id, m.label] as const),
@@ -4050,23 +4077,27 @@ function WorkspacePage() {
                     sideOffset={8}
                     className="w-[280px] max-h-[min(420px,70vh)] overflow-y-auto p-1.5"
                   >
-                    {MODEL_GROUPS.map((group, gi) => {
+                    {orderedModelGroups.map((group, gi) => {
                       const items = pickerItemsForGroup(group);
                       if (!items.length) return null;
+                      const groupUnlocked =
+                        group === "Hydrilla" ||
+                        items.some((opt) => !opt.comingSoon && providerKeyOk(opt.provider));
                       return (
                         <DropdownMenuGroup key={group}>
                           {gi > 0 && <DropdownMenuSeparator />}
                           <DropdownMenuLabel>
                             {group === "Hydrilla"
                               ? "Hydrilla cloud · credits"
-                              : group === "OpenRouter Free"
-                                ? "Water · free keys"
-                                : `Water · ${group}`}
+                              : groupUnlocked
+                                ? `Water · ${group === "OpenRouter Free" ? "free keys" : group} · unlocked`
+                                : `Water · ${group === "OpenRouter Free" ? "free keys" : group} · locked`}
                           </DropdownMenuLabel>
                           {items.map((opt) => {
                             const needsKey = opt.provider !== "hydrilla";
                             const keyOk = !needsKey || providerKeyOk(opt.provider);
                             const disabled = Boolean(opt.comingSoon);
+                            const locked = disabled || (needsKey && !keyOk);
                             return (
                               <DropdownMenuItem
                                 key={opt.id}
@@ -4081,7 +4112,7 @@ function WorkspacePage() {
                                   setSelectedModel(opt.id);
                                 }}
                                 className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs cursor-pointer ${
-                                  disabled
+                                  locked
                                     ? "text-neutral-400"
                                     : selectedModel === opt.id
                                       ? "bg-neutral-100 text-neutral-800 font-semibold"
@@ -4089,26 +4120,23 @@ function WorkspacePage() {
                                 }`}
                               >
                                 <span className="flex items-center gap-2 min-w-0">
-                                  <span className={`truncate ${!keyOk && !disabled ? "text-neutral-400" : ""}`}>
+                                  <span className={`truncate ${locked ? "text-neutral-400" : ""}`}>
                                     {opt.label}
                                   </span>
-                                  {opt.free && opt.vision && (
+                                  {opt.free && opt.vision && !locked && (
                                     <span className="text-[9px] uppercase tracking-wide text-emerald-600 shrink-0">
                                       vision
                                     </span>
                                   )}
-                                  {opt.comingSoon && (
-                                    <span title="Locked">
+                                  {locked && (
+                                    <span title={opt.comingSoon ? "Coming soon" : "Add API key in Settings"}>
                                       <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                       </svg>
                                     </span>
                                   )}
-                                  {!opt.comingSoon && needsKey && !keyOk && (
-                                    <span className="text-[10px] text-red-500 shrink-0">key</span>
-                                  )}
                                 </span>
-                                {!disabled && selectedModel === opt.id && keyOk && (
+                                {!locked && selectedModel === opt.id && (
                                   <svg className="w-3.5 h-3.5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                   </svg>

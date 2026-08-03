@@ -3,6 +3,7 @@
 **Source of truth** for the two Studio engines: **Hydrilla cloud** and **Water**.
 
 Related detail for the GPU mesh path (credits, FLUX, Trilles polling): [`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md).  
+Water prompts / gates / Cursor agent flow: [`WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md).  
 Agent skill for Water codegen conventions: [`skills/water/SKILL.md`](../skills/water/SKILL.md).
 
 ---
@@ -27,7 +28,7 @@ Water preview uses a **browser iframe** (`public/water-sandbox.html` + `sandbox=
 | | **Hydrilla cloud** | **Water** |
 |---|---|---|
 | Who pays | Hydrilla credits | User’s LLM provider |
-| Models in picker | Trilles, Hunyuan 3D (soon) | Claude / GPT / Gemini / OpenRouter (incl. free) |
+| Models in picker | Trilles, Hunyuan 3D (soon) | Claude / GPT / Gemini / OpenRouter / **Cursor** (incl. free OR) |
 | Primary input | Image (or text→image then 3D) | Text (optional image = LLM reference only) |
 | Output | GLB mesh | `createModel(): THREE.Group` factory |
 | Credits | 2–12 depending on path | **0** |

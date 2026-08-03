@@ -46,6 +46,11 @@ const PROVIDERS: {
   { id: "openai", placeholder: "sk-...", docs: "https://platform.openai.com/api-keys" },
   { id: "gemini", placeholder: "AIza...", docs: "https://aistudio.google.com/apikey" },
   {
+    id: "cursor",
+    placeholder: "crsr_...",
+    docs: "https://cursor.com/dashboard/api",
+  },
+  {
     id: "openrouter",
     placeholder: "sk-or-v1-...",
     docs: "https://openrouter.ai/settings/keys",

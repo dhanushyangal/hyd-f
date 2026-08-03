@@ -2,7 +2,8 @@
 
 Build a **code-only**, gated, animation-ready procedural Three.js model from a text description (an image is an optional extra reference).
 
-Product / API / BYOK docs: [`docs/ENGINES.md`](../../docs/ENGINES.md).
+Product / API / BYOK docs: [`docs/ENGINES.md`](../../docs/ENGINES.md).  
+Prompts & orchestration: [`docs/WATER_ORCHESTRATION.md`](../../docs/WATER_ORCHESTRATION.md).
 
 Workflow adapted from [img2threejs](https://github.com/img2threejs/img2threejs): reconstruction-by-code, deterministic gates, model tokens spent only on judgement.
 
