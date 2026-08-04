@@ -38,7 +38,6 @@ import {
   combinedEdit,
   uploadImageViaApi,
   uploadImage,
-  fetchHistory,
   fetchWorkspace,
   fetchWorkspaceJobs,
   fetchWorkspaces,
@@ -52,8 +51,9 @@ import {
   getProxiedImageUrl,
   notifyGpuOffline,
   cancelJob,
-  isPrimaryUp,
-  onHealthChange,
+  canEdit,
+  canCombine,
+  onFeaturesChange,
   BackendJob,
   QueueInfo,
   LineageItem,
@@ -353,20 +353,24 @@ function WorkspacePage() {
   const [modeStates, setModeStates] = useState<Record<InputMode, ModeState>>(defaultModeStates);
   const [centerView, setCenterView] = useState<CenterView>({ type: "empty" });
 
-  // Primary API health — Edit & Combine require primary; when down only Text & Image-to-3D are available.
-  // Initialize to true so server and client first paint match (avoids hydration error). Updated after mount.
-  const [primaryApiUp, setPrimaryApiUp] = useState(true);
+  // GPU features — Edit & Combine only when high-mode features.edit_image / combined_edit.
+  // Initialize optimistic so SSR/client first paint match; updated after mount from /api/3d/health.
+  const [editAvailable, setEditAvailable] = useState(false);
+  const [combineAvailable, setCombineAvailable] = useState(false);
   useEffect(() => {
-    setPrimaryApiUp(isPrimaryUp());
-    return onHealthChange(setPrimaryApiUp);
+    setEditAvailable(canEdit());
+    setCombineAvailable(canCombine());
+    return onFeaturesChange((state) => {
+      setEditAvailable(!!state.features.edit_image);
+      setCombineAvailable(!!state.features.combined_edit);
+    });
   }, []);
 
-  // When primary goes down, force back to "text" mode if on Edit/Combine
+  // When features drop to low, force back to "text" if on Edit/Combine
   useEffect(() => {
-    if (!primaryApiUp && (inputMode === "text_1img" || inputMode === "text_2img")) {
-      setInputMode("text");
-    }
-  }, [primaryApiUp, inputMode]);
+    if (!editAvailable && inputMode === "text_1img") setInputMode("text");
+    if (!combineAvailable && inputMode === "text_2img") setInputMode("text");
+  }, [editAvailable, combineAvailable, inputMode]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
@@ -444,10 +448,8 @@ function WorkspacePage() {
         prompt: partial.prompt ?? null,
         imageUrl: partial.imageUrl ?? null,
         generateType: partial.generateType,
-        enablePBR: false,
         resultGlbUrl: null,
         previewImageUrl: partial.previewImageUrl ?? null,
-        errorCode: null,
         errorMessage: null,
         workspaceId: partial.workspaceId ?? workspaceId ?? null,
         parentJobId: partial.parentJobId ?? null,
@@ -514,10 +516,8 @@ function WorkspacePage() {
             prompt: prompt ?? null,
             imageUrl: null,
             generateType: "Water",
-            enablePBR: false,
             resultGlbUrl: null,
             previewImageUrl: dataUrl,
-            errorCode: null,
             errorMessage: null,
             workspaceId: workspaceId ?? null,
             parentJobId: null,
@@ -590,6 +590,16 @@ function WorkspacePage() {
   const [liveCursorModels, setLiveCursorModels] = useState<CursorLiveModel[]>([]);
   const [codeFactoryCode, setCodeFactoryCode] = useState<string | null>(null);
   const [codeSculptPass, setCodeSculptPass] = useState<string | null>(null);
+  const [waterEditMode, setWaterEditMode] = useState(false);
+  const [waterEditTargetJobId, setWaterEditTargetJobId] = useState<string | null>(null);
+  const [waterEditPrompt, setWaterEditPrompt] = useState("");
+  const [waterTokenInfo, setWaterTokenInfo] = useState<{
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+    model: string | null;
+  } | null>(null);
+  const [waterDropHighlight, setWaterDropHighlight] = useState(false);
   const freePickerModels = mergeFreeModels(liveFreeModels);
   const cursorPickerModels = mergeCursorModels(liveCursorModels);
   const selectedCatalog =
@@ -1124,8 +1134,6 @@ function WorkspacePage() {
               ? `Waiting in queue (${jobsAhead} user${jobsAhead !== 1 ? "s" : ""} ahead${waitMin > 0 ? `, ~${waitMin} min` : ""})...`
               : "Starting soon...";
             setCenterView((prev) => {
-              // Do not hijack center view if user clicked another item in workspace.
-              // Keep updating loading UI only when this generating job is currently in focus.
               const followsCurrentJob =
                 prev.type === "generating" ||
                 (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
@@ -1133,13 +1141,21 @@ function WorkspacePage() {
               if (!followsCurrentJob) return prev;
               return { type: "generating", progress: waitProgress, message: msg };
             });
+            setCurrentGenerating((prev) =>
+              prev ? { ...prev, progress: waitProgress } : null
+            );
           } else {
+            const gpuProgress =
+              typeof status.progress === "number" && status.progress > 0 ? status.progress : null;
             const waitTime = status.queue.estimated_wait_seconds || 0;
             const processingElapsed = Math.max(0, elapsedSeconds - waitTime);
-            const processingDuration = estimatedTotal - waitTime;
-            const progress = 50 + (processingElapsed / processingDuration) * 45;
+            const processingDuration = Math.max(1, estimatedTotal - waitTime);
+            const timeProgress = 50 + (processingElapsed / processingDuration) * 45;
+            const progress = gpuProgress != null
+              ? Math.max(gpuProgress, Math.min(95, timeProgress))
+              : Math.max(50, Math.min(95, timeProgress));
+            const msg = status.message || "Generating 3D model...";
             setCenterView((prev) => {
-              // Do not hijack center view if user clicked another item in workspace.
               const followsCurrentJob =
                 prev.type === "generating" ||
                 (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
@@ -1147,11 +1163,48 @@ function WorkspacePage() {
               if (!followsCurrentJob) return prev;
               return {
                 type: "generating",
-                progress: Math.max(50, Math.min(95, progress)),
-                message: "Generating 3D model...",
+                progress,
+                message: msg,
               };
             });
+            setCurrentGenerating((prev) =>
+              prev ? { ...prev, progress } : null
+            );
           }
+        } else if (typeof status.progress === "number") {
+          const progress = Math.min(95, Math.max(5, status.progress));
+          const msg = status.message || "Generating 3D model...";
+          setCenterView((prev) => {
+            const followsCurrentJob =
+              prev.type === "generating" ||
+              (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
+              (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
+            if (!followsCurrentJob) return prev;
+            return { type: "generating", progress, message: msg };
+          });
+          setCurrentGenerating((prev) =>
+            prev ? { ...prev, progress } : null
+          );
+        } else if (status.status === "processing" || status.status === "pending") {
+          const startTime = status.created_at || currentGenerating.startTime || Date.now();
+          const elapsedSeconds = (Date.now() - startTime) / 1000;
+          const estimatedTotal = currentGenerating.estimatedTotalSeconds || 300;
+          const progress = Math.min(90, Math.max(8, (elapsedSeconds / estimatedTotal) * 90));
+          setCenterView((prev) => {
+            const followsCurrentJob =
+              prev.type === "generating" ||
+              (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
+              (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
+            if (!followsCurrentJob) return prev;
+            return {
+              type: "generating",
+              progress,
+              message: status.message || "Generating 3D model...",
+            };
+          });
+          setCurrentGenerating((prev) =>
+            prev ? { ...prev, progress } : null
+          );
         }
 
         if (status.status === "completed") {
@@ -1190,7 +1243,7 @@ function WorkspacePage() {
             generateType: modelTypeLabel[selectedModel],
             parentJobId: lastPreviewId,
             createdAt: new Date().toISOString(),
-            userId: null, imageUrl: null, enablePBR: false, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString(),
+            userId: null, imageUrl: null, errorMessage: null, updatedAt: new Date().toISOString(),
           };
           loadJobInfo(completed3DJob);
         } else if (status.status === "failed") {
@@ -1324,7 +1377,11 @@ function WorkspacePage() {
   // No GPU, no credits, no image required. The backend runs the img2threejs-style pipeline
   // (intake gate → spec → blockout codegen → code gate) and we just poll the pass names.
   const runWater = useCallback(
-    async (options: { referenceImageUrl?: string | null; parentId?: string | null } = {}) => {
+    async (options: {
+      referenceImageUrl?: string | null;
+      parentId?: string | null;
+      promptOverride?: string | null;
+    } = {}) => {
       if (!hasWorkspaceContext) {
         setForcedWorkspaceModal(true);
         setShowNewWorkspaceModal(true);
@@ -1346,7 +1403,7 @@ function WorkspacePage() {
         return;
       }
 
-      const description = prompt.trim();
+      const description = (options.promptOverride ?? prompt).trim();
       if (!description) {
         setError("Describe the object you want to build");
         setCenterView({
@@ -1431,10 +1488,8 @@ function WorkspacePage() {
           prompt: description,
           imageUrl: referenceImageUrl,
           generateType: "Water",
-          enablePBR: false,
           resultGlbUrl: null,
           previewImageUrl: referenceImageUrl,
-          errorCode: null,
           errorMessage: null,
           workspaceId: workspaceId ?? null,
           parentJobId: parentId,
@@ -1461,6 +1516,12 @@ function WorkspacePage() {
               if (job.status === "DONE" && job.factoryCode) {
                 setCodeFactoryCode(job.factoryCode);
                 setCodeSculptPass(job.sculptPass || "done");
+                setWaterTokenInfo({
+                  inputTokens: job.llmInputTokens,
+                  outputTokens: job.llmOutputTokens,
+                  totalTokens: job.llmTotalTokens,
+                  model: job.llmModel,
+                });
                 setCurrentGenerating(null);
                 setCenterView({ type: "code", factoryCode: job.factoryCode, jobId: result.job_id });
                 setMobileTab("canvas");
@@ -1613,10 +1674,8 @@ function WorkspacePage() {
         prompt: prompt.trim() || null,
         imageUrl,
         generateType: "ImageTo3D",
-        enablePBR: false,
         resultGlbUrl: null,
         previewImageUrl: imageUrl,
-        errorCode: null,
         errorMessage: null,
         workspaceId: workspaceId ?? null,
         parentJobId: previewId ?? null,
@@ -1676,10 +1735,8 @@ function WorkspacePage() {
           prompt: prompt.trim() || null,
           imageUrl,
           generateType: "ImageTo3D",
-          enablePBR: false,
           resultGlbUrl: null,
           previewImageUrl: imageUrl,
-          errorCode: null,
           errorMessage: null,
           workspaceId: workspaceId ?? null,
           parentJobId: previewId ?? null,
@@ -1757,10 +1814,8 @@ function WorkspacePage() {
         prompt: prompt.trim(),
         imageUrl: null,
         generateType: "TextToImage",
-        enablePBR: false,
         resultGlbUrl: null,
         previewImageUrl: null,
-        errorCode: null,
         errorMessage: null,
         workspaceId: workspaceId ?? null,
         parentJobId: null,
@@ -1828,7 +1883,7 @@ function WorkspacePage() {
         refreshLibrary();
 
         // Update generation info panel
-        const newJob = { id: result.preview_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "TextToImage", createdAt: new Date().toISOString(), userId: null, imageUrl: null, enablePBR: false, resultGlbUrl: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
+        const newJob = { id: result.preview_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "TextToImage", createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
         loadJobInfo(newJob);
 
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.preview_id);
@@ -1918,10 +1973,8 @@ function WorkspacePage() {
         prompt: prompt.trim(),
         imageUrl: image1 ?? null,
         generateType: "EditImage",
-        enablePBR: false,
         resultGlbUrl: null,
         previewImageUrl: image1 ?? null,
-        errorCode: null,
         errorMessage: null,
         workspaceId: workspaceId ?? null,
         parentJobId: jobId1 ?? currentParentJobId ?? null,
@@ -1987,7 +2040,7 @@ function WorkspacePage() {
         refreshLibrary();
 
         // Update generation info panel
-        const editedJob = { id: result.edit_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "EditImage", parentJobId: editParent, parentJobIds: editParentIds, sourceImages: editSrcImages, createdAt: new Date().toISOString(), userId: null, imageUrl: null, enablePBR: false, resultGlbUrl: null, errorCode: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
+        const editedJob = { id: result.edit_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "EditImage", parentJobId: editParent, parentJobIds: editParentIds, sourceImages: editSrcImages, createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
         loadJobInfo(editedJob);
 
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.edit_id);
@@ -2037,10 +2090,8 @@ function WorkspacePage() {
         prompt: prompt.trim(),
         imageUrl: image1 ?? image2 ?? null,
         generateType: "Combined",
-        enablePBR: false,
         resultGlbUrl: null,
         previewImageUrl: image1 ?? image2 ?? null,
-        errorCode: null,
         errorMessage: null,
         workspaceId: workspaceId ?? null,
         parentJobId: jobId1 ?? jobId2 ?? currentParentJobId ?? null,
@@ -2137,9 +2188,7 @@ function WorkspacePage() {
           id: result.combined_id, previewImageUrl: result.image_url, prompt: prompt.trim(),
           status: "DONE" as const, generateType: "Combined",
           parentJobId: primaryParent, parentJobIds: parentIds, sourceImages: srcImages,
-          createdAt: new Date().toISOString(), userId: null, imageUrl: null,
-          enablePBR: false, resultGlbUrl: null,
-          errorCode: null, errorMessage: null, updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString(),
         } satisfies BackendJob;
         loadJobInfo(combinedJob);
 
@@ -2438,6 +2487,20 @@ function WorkspacePage() {
         setLoading(false);
         setCenterView({ type: "code", factoryCode: inlineCode, jobId: job.id });
         loadJobInfo(job);
+        void (async () => {
+          try {
+            const cs = await fetchWaterJob(job.id, async () => (await getToken()) ?? null);
+            setWaterTokenInfo({
+              inputTokens: cs.llmInputTokens,
+              outputTokens: cs.llmOutputTokens,
+              totalTokens: cs.llmTotalTokens,
+              model: cs.llmModel,
+            });
+            if (cs.sculptPass) setCodeSculptPass(cs.sculptPass);
+          } catch {
+            /* ignore */
+          }
+        })();
         return;
       }
       // Fetch factory if not on job payload yet (list API only signals hasFactoryCode)
@@ -2453,6 +2516,12 @@ function WorkspacePage() {
           if (cs.factoryCode) {
             setCodeFactoryCode(cs.factoryCode);
             setCodeSculptPass(cs.sculptPass);
+            setWaterTokenInfo({
+              inputTokens: cs.llmInputTokens,
+              outputTokens: cs.llmOutputTokens,
+              totalTokens: cs.llmTotalTokens,
+              model: cs.llmModel,
+            });
             setCurrentGenerating(null);
             setLoading(false);
             setCenterView({ type: "code", factoryCode: cs.factoryCode, jobId: job.id });
@@ -2522,10 +2591,8 @@ function WorkspacePage() {
     prompt: item.prompt ?? null,
     imageUrl: null,
     generateType: item.generateType || "Normal",
-    enablePBR: false,
     resultGlbUrl: item.resultGlbUrl ?? null,
     previewImageUrl: item.previewImageUrl ?? null,
-    errorCode: null,
     errorMessage: null,
     createdAt: item.createdAt,
     updatedAt: item.createdAt,
@@ -3055,6 +3122,17 @@ function WorkspacePage() {
                       <button
                         key={item.id}
                         type="button"
+                        draggable={isWaterJobFn(item)}
+                        onDragStart={(e) => {
+                          if (!isWaterJobFn(item)) return;
+                          e.dataTransfer.setData("application/job-id", item.id);
+                          e.dataTransfer.setData("application/water-job", "1");
+                          e.dataTransfer.setData(
+                            "text/uri-list",
+                            item.previewImageUrl || item.imageUrl || ""
+                          );
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
                         onClick={() => handle3DClick(item)}
                         className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer bg-neutral-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-left"
                       >
@@ -3301,7 +3379,167 @@ function WorkspacePage() {
           )}
 
           {centerView.type === "code" && (
-            <div className="flex-1 flex flex-col min-h-0 max-lg:min-h-[50vh]">
+            <div
+              className={cn(
+                "flex-1 flex flex-col min-h-0 max-lg:min-h-[50vh] relative",
+                waterDropHighlight && "ring-2 ring-sky-400/70 ring-inset"
+              )}
+              onDragOver={(e) => {
+                if (![...e.dataTransfer.types].includes("application/job-id")) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+                setWaterDropHighlight(true);
+              }}
+              onDragLeave={() => setWaterDropHighlight(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setWaterDropHighlight(false);
+                const droppedId = e.dataTransfer.getData("application/job-id");
+                if (!droppedId) return;
+                const target = library3DAssets.find((j) => j.id === droppedId);
+                if (!target || !isWaterJobFn(target)) {
+                  setError("Drop a Water job to edit");
+                  return;
+                }
+                setWaterEditTargetJobId(droppedId);
+                setWaterEditMode(true);
+                setWaterEditPrompt("");
+                void handle3DClick(target);
+              }}
+            >
+              {/* Tokens stay top-left; primary Water Edit CTA sits bottom-center */}
+              {waterTokenInfo && (waterTokenInfo.model || waterTokenInfo.totalTokens != null) && (
+                <div className="absolute top-3 left-3 z-[120] pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur border border-neutral-200/70 shadow-sm text-[11px] text-neutral-600 tabular-nums max-w-[min(100%-1.5rem,420px)]">
+                  <span className="font-medium text-neutral-800">Tokens</span>
+                  <span>
+                    in{" "}
+                    {waterTokenInfo.inputTokens && waterTokenInfo.inputTokens > 0
+                      ? waterTokenInfo.inputTokens
+                      : "—"}
+                  </span>
+                  <span>
+                    out{" "}
+                    {waterTokenInfo.outputTokens && waterTokenInfo.outputTokens > 0
+                      ? waterTokenInfo.outputTokens
+                      : "—"}
+                  </span>
+                  <span className="font-semibold text-neutral-900">
+                    Σ{" "}
+                    {waterTokenInfo.totalTokens && waterTokenInfo.totalTokens > 0
+                      ? waterTokenInfo.totalTokens
+                      : "—"}
+                  </span>
+                  {waterTokenInfo.model && (
+                    <span className="max-w-[120px] truncate text-neutral-400" title={waterTokenInfo.model}>
+                      {waterTokenInfo.model}
+                    </span>
+                  )}
+                  <Link
+                    href="/app/usage#water-tokens"
+                    className="text-sky-700 hover:underline font-medium shrink-0"
+                  >
+                    All
+                  </Link>
+                </div>
+              )}
+
+              {!waterEditMode && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[120] pointer-events-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id =
+                        centerView.type === "code" ? centerView.jobId : null;
+                      setWaterEditTargetJobId(id);
+                      setWaterEditPrompt("");
+                      setWaterEditMode(true);
+                    }}
+                    className="h-11 px-6 rounded-full bg-neutral-900 text-white text-[14px] font-semibold shadow-[0_10px_28px_-8px_rgba(0,0,0,0.45)] hover:bg-neutral-800 ring-2 ring-white/90"
+                  >
+                    Edit model
+                  </button>
+                </div>
+              )}
+
+              {waterEditMode && (
+                <div className="absolute bottom-3 left-3 right-3 z-[120] pointer-events-auto">
+                  <div
+                    className={cn(
+                      "rounded-2xl border bg-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] p-3 sm:p-4",
+                      waterDropHighlight ? "border-sky-400 ring-2 ring-sky-200" : "border-neutral-200"
+                    )}
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">
+                          Water edit
+                        </p>
+                        <p className="text-[13px] font-medium text-neutral-800 truncate">
+                          {(() => {
+                            const id = waterEditTargetJobId || (centerView.type === "code" ? centerView.jobId : null);
+                            const t = library3DAssets.find((j) => j.id === id) || selectedJobInfo;
+                            return t?.prompt || id || "Water job";
+                          })()}
+                        </p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">
+                          Drag another Water job here, or type a refine prompt.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWaterEditMode(false);
+                          setWaterEditPrompt("");
+                        }}
+                        className="h-9 px-3.5 shrink-0 rounded-full bg-neutral-900 text-white text-[12px] font-semibold hover:bg-neutral-800"
+                      >
+                        Exit edit
+                      </button>
+                    </div>
+                    <Textarea
+                      value={waterEditPrompt}
+                      onChange={(e) => setWaterEditPrompt(e.target.value)}
+                      placeholder="Describe how to refine this Water model…"
+                      className="min-h-[72px] text-sm resize-none bg-neutral-50 border-neutral-200"
+                    />
+                    <div className="mt-3 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-4 font-semibold"
+                        onClick={() => {
+                          setWaterEditMode(false);
+                          setWaterEditPrompt("");
+                        }}
+                      >
+                        Exit
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-9 px-5 font-semibold flex-1 sm:flex-none"
+                        disabled={!waterEditPrompt.trim() || loading}
+                        onClick={() => {
+                          const parentId =
+                            waterEditTargetJobId ||
+                            (centerView.type === "code" ? centerView.jobId : null);
+                          if (!parentId) return;
+                          setWaterEditMode(false);
+                          void runWater({
+                            parentId,
+                            promptOverride: waterEditPrompt.trim(),
+                          });
+                          setWaterEditPrompt("");
+                        }}
+                      >
+                        Refine
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <WaterViewer
                 factoryCode={centerView.factoryCode || codeFactoryCode}
                 passLabel={codeSculptPass}
@@ -3892,14 +4130,14 @@ function WorkspacePage() {
                 role="tab"
                 size="sm"
                 variant={inputMode === "text_1img" ? "outline" : "ghost"}
-                disabled={!primaryApiUp || selectedIsCode}
-                onClick={() => primaryApiUp && !selectedIsCode && setInputMode("text_1img")}
+                disabled={!editAvailable || selectedIsCode}
+                onClick={() => editAvailable && !selectedIsCode && setInputMode("text_1img")}
                 title={
                   selectedIsCode
                     ? "Code models build from text only"
-                    : primaryApiUp
+                    : editAvailable
                       ? "Text + 1 image"
-                      : "Edit requires the primary API (currently unavailable)"
+                      : "Requires high-GPU mode (Flux)"
                 }
                 className={cn(
                   "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
@@ -3914,14 +4152,14 @@ function WorkspacePage() {
                 role="tab"
                 size="sm"
                 variant={inputMode === "text_2img" ? "outline" : "ghost"}
-                disabled={!primaryApiUp || selectedIsCode}
-                onClick={() => primaryApiUp && !selectedIsCode && setInputMode("text_2img")}
+                disabled={!combineAvailable || selectedIsCode}
+                onClick={() => combineAvailable && !selectedIsCode && setInputMode("text_2img")}
                 title={
                   selectedIsCode
                     ? "Code models build from text only"
-                    : primaryApiUp
+                    : combineAvailable
                       ? "Text + 2 images"
-                      : "Combine requires the primary API (currently unavailable)"
+                      : "Requires high-GPU mode (Flux)"
                 }
                 className={cn(
                   "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
@@ -4460,7 +4698,7 @@ function ImageDropzone({ slot, image, onDrop, onPaste, onFileSelect, onClear, is
       <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" id={inputId} onChange={onFileSelect} />
       {image ? (
         <div className="relative w-full h-full min-h-[108px] rounded-xl overflow-hidden group border border-neutral-200 bg-white">
-          <img src={image} alt="Upload" className="w-full h-full object-cover" />
+          <img src={displayImageUrl(image)} alt="Upload" className="w-full h-full object-cover" />
           <Button type="button" onClick={onClear} size="sm" className="absolute top-1.5 right-1.5 h-7 w-7 rounded-full bg-neutral-950/80 p-0 hover:bg-neutral-950" aria-label="Clear image">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </Button>

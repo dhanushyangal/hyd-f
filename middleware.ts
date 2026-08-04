@@ -12,7 +12,6 @@ const isProtectedRoute = createRouteMatcher([
   "/library(.*)",
   "/checkout(.*)",
   "/rigging(.*)",
-  "/admin(.*)",
 ]);
 
 /** Valid Next.js Server Action IDs are ~40+ hex chars; short values are scanners. */
@@ -78,8 +77,6 @@ export const config = {
     "/checkout/(.*)",
     "/rigging",
     "/rigging/(.*)",
-    "/admin",
-    "/admin/(.*)",
     "/sign-in",
     "/sign-in/(.*)",
     "/sign-up",

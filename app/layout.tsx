@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ClientProviders } from "../components/ClientProviders";
 import { ConditionalNavbar } from "../components/layout/ConditionalNavbar";
+import { CLERK_JS_VERSION, clerkPreconnectHost } from "@/lib/clerkConfig";
 import { DM_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -81,8 +82,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const clerkHost = clerkPreconnectHost();
+
   return (
     <ClerkProvider
+      clerkJSVersion={CLERK_JS_VERSION}
       appearance={{
         elements: {
           footer: "hidden",
@@ -97,9 +101,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={dmSans.variable}>
         <head>
           <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="" />
-          {/* Preconnect only to auth — analytics loads lazily after idle */}
-          <link rel="preconnect" href="https://clerk.hydrilla.ai" />
-          <link rel="dns-prefetch" href="https://clerk.hydrilla.ai" />
+          <link rel="preconnect" href={clerkHost} crossOrigin="" />
+          <link rel="dns-prefetch" href={clerkHost} />
         </head>
         <body className="min-h-screen bg-white">
           <ClientProviders>

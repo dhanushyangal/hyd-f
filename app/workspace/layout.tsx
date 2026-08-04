@@ -3,7 +3,6 @@
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { AccessGate } from "../../components/AccessGate";
 
 export default function WorkspaceLayout({
   children,
@@ -15,9 +14,7 @@ export default function WorkspaceLayout({
       <SignedOut>
         <RedirectToSignIn />
       </SignedOut>
-      <SignedIn>
-        <AccessGate>{children}</AccessGate>
-      </SignedIn>
+      <SignedIn>{children}</SignedIn>
     </>
   );
 }

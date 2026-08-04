@@ -25,12 +25,10 @@ function hasBlackNavbarLogo(pathname: string): boolean {
     "/faq",
     "/contact",
     "/docs",
-    "/access-denied",
   ]);
 
   if (blackLogoPaths.has(pathname)) return true;
   if (pathname.startsWith("/usecase")) return true;
-  if (pathname.startsWith("/invite/")) return true;
 
   return false;
 }

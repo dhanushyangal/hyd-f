@@ -1,15 +1,17 @@
 import {
   getPrimaryUrl,
-  getAlternativeUrl,
-  getFallbackCapableUrl,
   isPrimaryUp,
   markPrimaryDown,
   onHealthChange,
+  canEdit,
+  canCombine,
+  onFeaturesChange,
+  getHealthState,
 } from "./apiHealth";
 
 // Re-export health utilities for UI components
 
-export { isPrimaryUp, onHealthChange };
+export { isPrimaryUp, onHealthChange, canEdit, canCombine, onFeaturesChange, getHealthState };
 
 const apiBase = getPrimaryUrl();
 
@@ -141,16 +143,6 @@ export interface Job {
 // Backend API types
 export type BackendJobStatus = "WAIT" | "RUN" | "FAIL" | "DONE";
 
-export interface Chat {
-  id: string;
-  userId: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  firstJobPreviewImageUrl?: string | null;
-  firstJobPrompt?: string | null;
-}
-
 export interface Workspace {
   id: string;
   userId: string;
@@ -169,10 +161,8 @@ export interface BackendJob {
   prompt: string | null;
   imageUrl: string | null;
   generateType: string;
-  enablePBR: boolean;
   resultGlbUrl: string | null;
   previewImageUrl: string | null;
-  errorCode: string | null;
   errorMessage: string | null;
   workspaceId?: string | null;
   parentJobId?: string | null;
@@ -180,8 +170,6 @@ export interface BackendJob {
   sourceImages?: string[] | null; // Actual source image URLs used as input
   engine?: string | null;
   resultKind?: string | null;
-  llmModel?: string | null;
-  llmProvider?: string | null;
   factoryCode?: string | null;
   /** Library list may set this instead of shipping full factoryCode */
   hasFactoryCode?: boolean;
@@ -206,24 +194,6 @@ export type UserModelPrefs = {
   defaultCodeModel: string | null;
 };
 
-/**
- * Get authorization header with Clerk token
- */
-async function getAuthHeaders(): Promise<HeadersInit> {
-  // Check if we're on the client side
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  try {
-    // Dynamically import to avoid SSR issues
-    const { useAuth } = await import("@clerk/nextjs");
-    // This won't work in regular functions - need to use getToken from Clerk
-    return {};
-  } catch {
-    return {};
-  }
-}
 
 /**
  * Transform backend job format to frontend Job format
@@ -404,7 +374,7 @@ export async function generatePreviewImage(
       return `${base}${url}`;
     };
 
-    if (result.status === "pending" || (result.image_url == null && previewId)) {
+    if (result.status === "pending" || result.status === "queued" || (result.image_url == null && previewId)) {
       const statusData = await pollGatewayStatusUntilCompleted(previewId, baseUrl);
       const imageUrl = statusData.image_url ?? statusData.result?.image_url ?? "";
       return { image_url: resolve(imageUrl), preview_id: previewId, queue: result.queue };
@@ -436,7 +406,7 @@ export async function generatePreviewImage(
         if (!res.ok) throw new Error(await parseErrorResponse(res));
         const result = await res.json();
         // Backend proxies gateway response; polling still uses gateway URL
-        return await handleResult(result, getFallbackCapableUrl());
+        return await handleResult(result, getPrimaryUrl());
       } catch (err: any) {
         if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
         if (isApiUnavailableError(err)) {
@@ -454,7 +424,7 @@ export async function generatePreviewImage(
     fd.append("prompt", prompt);
     return fd;
   };
-  const targetUrl = getFallbackCapableUrl();
+  const targetUrl = getPrimaryUrl();
 
   try {
     const res = await fetch(`${targetUrl}/text-to-image`, {
@@ -466,27 +436,8 @@ export async function generatePreviewImage(
 
     return await handleResult(await res.json(), targetUrl);
   } catch (err: any) {
-    if (isApiUnavailableError(err) && targetUrl === getPrimaryUrl()) {
-      markPrimaryDown();
-
-      try {
-        const altRes = await fetch(`${getAlternativeUrl()}/text-to-image`, {
-          method: "POST",
-          body: buildFormData(),
-        });
-
-        if (!altRes.ok) throw new Error(await parseErrorResponse(altRes));
-
-        return await handleResult(await altRes.json(), getAlternativeUrl());
-      } catch (altErr: any) {
-        if (shouldNotifyGpuOffline(altErr)) {
-          notifyGpuOffline(altErr.message || "Both APIs unavailable", getToken);
-        }
-        throw new Error(getGpuOfflineErrorMessage());
-      }
-    }
-
     if (isApiUnavailableError(err)) {
+      markPrimaryDown();
       if (shouldNotifyGpuOffline(err)) {
         notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
       }
@@ -540,11 +491,16 @@ export async function editImage(
     }
     if (!res.ok) {
       let errorText: string;
+      let code: string | undefined;
       try {
         const errorData = await res.json();
         errorText = errorData.error || "Failed to edit image";
+        code = errorData.code;
       } catch {
         errorText = (await res.text()) || "Failed to edit image";
+      }
+      if (res.status === 403 || code === "FEATURE_UNAVAILABLE") {
+        throw new Error(errorText || "Edit is not available on this GPU tier.");
       }
       throw new Error(errorText);
     }
@@ -560,7 +516,7 @@ export async function editImage(
           Authorization: `Bearer ${token}`,
         });
         const editId = result.edit_id ?? result.job_id;
-        if (result.status === "pending" || (result.image_url == null && editId)) {
+        if (result.status === "pending" || result.status === "queued" || (result.image_url == null && editId)) {
           const statusData = await pollGatewayStatusUntilCompleted(editId);
           const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
           return {
@@ -582,7 +538,7 @@ export async function editImage(
     const result = await doRequest(`${apiBase}/edit-image`, {});
     const editId = result.edit_id ?? result.job_id;
 
-    if (result.status === "pending" || (result.image_url == null && editId)) {
+    if (result.status === "pending" || result.status === "queued" || (result.image_url == null && editId)) {
       const statusData = await pollGatewayStatusUntilCompleted(editId);
       const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
       return {
@@ -688,11 +644,16 @@ export async function combinedEdit(
     }
     if (!res.ok) {
       let errorText: string;
+      let code: string | undefined;
       try {
         const errorData = await res.json();
         errorText = errorData.error || "Failed to combine images";
+        code = errorData.code;
       } catch {
         errorText = (await res.text()) || "Failed to combine images";
+      }
+      if (res.status === 403 || code === "FEATURE_UNAVAILABLE") {
+        throw new Error(errorText || "Combine is not available on this GPU tier.");
       }
       throw new Error(errorText);
     }
@@ -716,7 +677,7 @@ export async function combinedEdit(
     const combinedId = result.combined_id ?? result.job_id;
 
     // Async gateway: status "pending" → poll until completed
-    if (result.status === "pending" || (result.image_url == null && combinedId)) {
+    if (result.status === "pending" || result.status === "queued" || (result.image_url == null && combinedId)) {
       const statusData = await pollGatewayStatusUntilCompleted(combinedId);
       const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
       return {
@@ -733,75 +694,6 @@ export async function combinedEdit(
       prompt: result.prompt || prompt,
       prompt_used: result.prompt_used || prompt,
     };
-  } catch (err: any) {
-    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
-    if (isApiUnavailableError(err)) {
-      markPrimaryDown();
-      if (shouldNotifyGpuOffline(err)) {
-        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
-      }
-      throw new Error(getGpuOfflineErrorMessage());
-    }
-    throw err;
-  }
-}
-
-/**
- * Submit text-to-3D job via backend (deducts credits, then submits to Python API).
- * Returns job_id. Throws on 402 (insufficient credits) with error message.
- */
-export async function submitTextTo3D(prompt: string, getToken?: () => Promise<string | null>, chatId?: string | null, workspaceId?: string | null): Promise<{ job_id: string }> {
-  try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      const token = await getToken();
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${backendBase}/api/3d/generate`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        prompt,
-        chatId: chatId || undefined,
-        workspaceId: workspaceId || undefined,
-      }),
-    });
-
-    if (res.status === 402) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
-    }
-
-    if (!res.ok) {
-      let errorText: string;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || "Failed to submit job";
-      } catch {
-        errorText = (await res.text()) || "Failed to submit job";
-      }
-      throw new Error(errorText);
-    }
-
-    const data = (await res.json()) as { jobId?: string };
-    const jobId = data.jobId;
-
-    // Attach chat/workspace by registering the job (backend already created it with user_id and credits)
-    if (jobId && (chatId || workspaceId)) {
-      try {
-        const registerBody: Record<string, unknown> = { job_id: jobId, prompt, generateType: "TextTo3D" };
-        if (chatId) registerBody.chatId = chatId;
-        if (workspaceId) registerBody.workspaceId = workspaceId;
-        await fetch(`${backendBase}/api/3d/register-job`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(registerBody),
-        }).catch(() => {});
-      } catch {}
-    }
-
-    return { job_id: jobId ?? "" };
   } catch (err: any) {
     if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
     if (isApiUnavailableError(err)) {
@@ -1147,7 +1039,7 @@ async function submitImageTo3DViaGateway(
     } catch {}
   };
 
-  const targetUrl = getFallbackCapableUrl();
+  const targetUrl = getPrimaryUrl();
   const res = await fetch(`${targetUrl}/image-to-3d`, { method: "POST", body: buildFormData() });
   if (!res.ok) throw new Error(await parseErrorResponse(res));
   const result = await res.json();
@@ -1155,55 +1047,6 @@ async function submitImageTo3DViaGateway(
   return result;
 }
 
-function _submitImageTo3DGatewayFallback(
-  imageUrl: string | null,
-  imageFile: File | null,
-  getToken?: () => Promise<string | null>,
-  previewJobId?: string | null,
-  chatId?: string | null,
-  workspaceId?: string | null,
-  parentJobId?: string | null
-): Promise<{ job_id: string }> {
-  return submitImageTo3DViaGateway(imageUrl, imageFile, getToken, previewJobId, chatId, workspaceId, parentJobId);
-}
-
-export async function _unusedSubmitImageTo3DGateway(
-  imageUrl: string | null,
-  imageFile: File | null,
-  getToken?: () => Promise<string | null>,
-  previewJobId?: string | null,
-  chatId?: string | null,
-  workspaceId?: string | null,
-  parentJobId?: string | null
-): Promise<{ job_id: string }> {
-  try {
-    const altRes = await fetch(`${getAlternativeUrl()}/image-to-3d`, {
-      method: "POST",
-      body: (() => {
-        const fd = new FormData();
-        if (imageUrl) fd.append("image_url", imageUrl);
-        else if (imageFile) fd.append("image_file", imageFile);
-        return fd;
-      })(),
-    });
-    if (!altRes.ok) throw new Error(await altRes.json().then((d: any) => d.error).catch(() => "Failed"));
-    const result = await altRes.json();
-    if (getToken) {
-      const token = await getToken();
-      await fetch(`${backendBase}/api/3d/register-job`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ job_id: result.job_id, imageUrl: imageUrl || "uploaded_file", generateType: "ImageTo3D", chatId, workspaceId, parentJobId: parentJobId || previewJobId }),
-      }).catch(() => {});
-    }
-    return result;
-  } catch (altErr: any) {
-    if (shouldNotifyGpuOffline(altErr)) {
-      notifyGpuOffline(altErr.message || "Both APIs unavailable", getToken);
-    }
-    throw new Error(getGpuOfflineErrorMessage());
-  }
-}
 
 /**
  * Fetch job lineage (iterative prompting chain from root to the given job)
@@ -1256,12 +1099,20 @@ export async function fetchStatus(jobId: string): Promise<Job> {
   // Backend returns { job: BackendJob, queue?: QueueInfo }, we need to transform it to Job format
   const data = await res.json();
   const job = transformBackendJobToJob(data.job || data);
-  
-  // Include queue info if available
+
+  if (typeof data.progress === "number") {
+    job.progress = data.progress;
+  }
+  if (typeof data.message === "string" && data.message.trim()) {
+    job.message = data.message;
+  }
+  if (typeof data.created_at === "number") {
+    job.created_at = data.created_at;
+  }
   if (data.queue) {
     job.queue = data.queue;
   }
-  
+
   return job;
 }
 
@@ -1364,74 +1215,9 @@ export function getProxyGlbUrl(jobId: string): string {
 }
 
 /**
- * Snapshot of the GPU pipeline health (FLUX, Trellis, worker, queues).
- * Returned by `GET /api/3d/health`.
- */
-export interface PipelineHealth {
-  status: "ok" | "degraded" | "down" | string;
-  gateway?: string;
-  redis?: string;
-  flux: {
-    reachable: boolean;
-    model_loaded: boolean;
-    n_gpu?: number;
-    gpu_mem_allocated_gb?: number;
-    latency_ms?: number;
-    error?: string;
-  };
-  trellis: {
-    reachable: boolean;
-    model_loaded: boolean;
-    gpu_mem_allocated_gb?: number;
-    image_size?: number;
-    latency_ms?: number;
-    error?: string;
-  };
-  worker: {
-    alive: boolean;
-    last_heartbeat_seconds_ago?: number;
-    currently_processing_3d?: string | null;
-    currently_processing_preview?: string | null;
-  };
-  queues: { "3d": number; preview: number; edit: number; combined: number };
-  error?: string;
-}
-
-/**
- * Fetch a quick snapshot of the GPU pipeline state. Useful for an
- * "are the models loaded?" indicator. Always resolves (never throws)
- * so the UI can render an offline state gracefully.
- */
-export async function fetchPipelineHealth(): Promise<PipelineHealth> {
-  try {
-    const res = await fetch(`${backendBase}/api/3d/health`, {
-      cache: "no-store",
-    });
-    const data = await res.json();
-    return data as PipelineHealth;
-  } catch (err) {
-    return {
-      status: "down",
-      flux: { reachable: false, model_loaded: false },
-      trellis: { reachable: false, model_loaded: false },
-      worker: { alive: false },
-      queues: { "3d": 0, preview: 0, edit: 0, combined: 0 },
-      error: (err as Error)?.message || "Network error",
-    };
-  }
-}
-
-/**
- * Wrap an S3 image URL in the backend image-proxy so we never serve direct
- * URLs that can return <AccessDenied> (expired presigned URLs or unsigned
- * URLs to a private bucket). The backend image-proxy uses IAM credentials
- * to fetch the object fresh on every request and stream the bytes back.
- *
- * - Empty / null / undefined → null
- * - Already a backend or proxy URL → returned as-is
- * - Data URL or blob URL → returned as-is
- * - S3 / amazonaws.com / gateway output URL → wrapped with the image-proxy
- * - Anything else → returned as-is (won't be proxied)
+ * Proxy S3 / gateway image URLs through the backend to avoid CORS.
+ * - data:/blob:/already-proxied → returned as-is
+ * - Anything else → returned as-is (won't be proxied) unless S3/gateway
  */
 export function getProxiedImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -1466,238 +1252,15 @@ export function getPreviewImageUrl(job: Job): string | null {
   // If we have a URL, proxy it so private S3 and gateway output URLs load reliably.
   if (url) return getProxiedImageUrl(url);
   
-  // If no URL but we have a job_id, try to construct preview path
-  // This handles cases where preview images are in preview/{jobId}/preview_image.png
+  // If no URL but we have a job_id, try gateway output path (file may not be on public S3).
   if (job.job_id) {
-    const bucket = "hydrilla-outputs-1";
-    const region = "us-east-1";
-    return getProxiedImageUrl(`https://${bucket}.s3.${region}.amazonaws.com/preview/${job.job_id}/preview_image.png`);
+    const base = getPrimaryUrl().replace(/\/$/, "");
+    return getProxiedImageUrl(`${base}/outputs/preview/${job.job_id}/preview_image.png`);
   }
   
   return null;
 }
 
-/**
- * Fetch job history from backend (requires auth for user-specific jobs)
- */
-/**
- * Fetch all chats for the current user
- */
-export async function fetchChats(getToken?: () => Promise<string | null>): Promise<Chat[]> {
-  try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      const token = await getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    const response = await fetch(`${backendBase}/api/3d/chats?t=${Date.now()}`, {
-      method: "GET",
-      headers,
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      // If table doesn't exist yet, return empty array instead of throwing
-      if (response.status === 500) {
-        const errorData = await response.json().catch(() => ({}));
-        if (errorData.error?.includes("relation") || errorData.error?.includes("does not exist")) {
-          console.warn("Chats table not found, returning empty array. Please run the migration.");
-          return [];
-        }
-      }
-      throw new Error(`Failed to fetch chats: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.chats || [];
-  } catch (err: any) {
-    console.error("Failed to fetch chats:", err);
-    // Return empty array on error to prevent app crash
-    return [];
-  }
-}
-
-/**
- * Fetch a specific chat with its jobs
- */
-export async function fetchChat(chatId: string, getToken?: () => Promise<string | null>): Promise<{ chat: Chat; jobs: BackendJob[] }> {
-  try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      const token = await getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    const response = await fetch(`${backendBase}/api/3d/chats/${chatId}`, {
-      method: "GET",
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch chat: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return { chat: data.chat, jobs: data.jobs || [] };
-  } catch (err: any) {
-    console.error("Failed to fetch chat:", err);
-    throw err;
-  }
-}
-
-/**
- * Create a new chat
- */
-export async function createChat(name?: string, getToken?: () => Promise<string | null>): Promise<Chat> {
-  try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      const token = await getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    const response = await fetch(`${backendBase}/api/3d/chats`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ name: name || "New Chat" }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to create chat: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.chat;
-  } catch (err: any) {
-    console.error("Failed to create chat:", err);
-    throw err;
-  }
-}
-
-/**
- * Get or create active chat (most recent chat, or create new one)
- */
-export async function getOrCreateActiveChat(getToken?: () => Promise<string | null>): Promise<Chat | null> {
-  try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      try {
-        const token = await getToken();
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-      } catch (tokenErr) {
-        console.warn("Failed to get token for active chat:", tokenErr);
-        // Continue without token - backend will handle auth
-      }
-    }
-
-    let response: Response;
-    try {
-      response = await fetch(`${backendBase}/api/3d/chats/active`, {
-        method: "GET",
-        headers,
-      });
-    } catch (fetchErr: any) {
-      console.warn("Failed to fetch active chat:", fetchErr);
-      return null;
-    }
-
-    if (!response.ok) {
-      // For any error status, try to get error details but always return null
-      if (response.status === 500 || response.status >= 500) {
-        try {
-          const errorData = await response.json().catch(() => ({}));
-          if (errorData.error?.includes("relation") || errorData.error?.includes("does not exist")) {
-            console.warn("Chats table not found. Please run the migration.");
-          } else {
-            console.warn("Server error getting active chat:", errorData.error || response.statusText);
-          }
-        } catch {
-          // If we can't parse the error, still return null gracefully
-          console.warn("Failed to get active chat (server error). Please run the migration.");
-        }
-      } else {
-        console.warn(`Failed to get active chat: ${response.status} ${response.statusText}`);
-      }
-      return null;
-    }
-
-    try {
-      const data = await response.json();
-      return data.chat || null;
-    } catch (parseErr) {
-      console.warn("Failed to parse active chat response:", parseErr);
-      return null;
-    }
-  } catch (err: any) {
-    // Catch any unexpected errors and return null instead of throwing
-    console.warn("Unexpected error getting active chat:", err?.message || err);
-    return null;
-  }
-}
-
-/**
- * Update chat name
- */
-export async function updateChatName(chatId: string, name: string, getToken?: () => Promise<string | null>): Promise<void> {
-  try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      const token = await getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    const response = await fetch(`${backendBase}/api/3d/chats/${chatId}/name`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({ name }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update chat name: ${response.statusText}`);
-    }
-  } catch (err: any) {
-    console.error("Failed to update chat name:", err);
-    throw err;
-  }
-}
-
-/**
- * Delete a chat
- */
-export async function deleteChat(chatId: string, getToken?: () => Promise<string | null>): Promise<void> {
-  try {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (getToken) {
-      const token = await getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    const response = await fetch(`${backendBase}/api/3d/chats/${chatId}`, {
-      method: "DELETE",
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to delete chat: ${response.statusText}`);
-    }
-  } catch (err: any) {
-    console.error("Failed to delete chat:", err);
-    throw err;
-  }
-}
 
 export async function fetchHistory(getToken?: () => Promise<string | null>): Promise<BackendJob[]> {
   const headers: HeadersInit = {
@@ -1857,99 +1420,6 @@ export async function syncUser(getToken: () => Promise<string | null>): Promise<
   }
 }
 
-// ============================================
-// INVITE & ACCESS API
-// ============================================
-
-export type InviteValidation = {
-  valid: boolean;
-  expired: boolean;
-  used: boolean;
-};
-
-export async function validateInvite(token: string): Promise<InviteValidation> {
-  try {
-    const res = await fetch(`${backendBase}/api/invites/${encodeURIComponent(token)}/validate`);
-    if (!res.ok) return { valid: false, expired: false, used: false };
-    return await res.json();
-  } catch {
-    return { valid: false, expired: false, used: false };
-  }
-}
-
-export async function redeemInvite(
-  token: string,
-  email: string
-): Promise<{ success: boolean; message?: string; email?: string; error?: string }> {
-  try {
-    const res = await fetch(`${backendBase}/api/invites/${encodeURIComponent(token)}/redeem`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { success: false, error: data.error || "Failed to redeem invite" };
-    }
-    return { success: true, message: data.message, email: data.email };
-  } catch {
-    return { success: false, error: "Failed to redeem invite" };
-  }
-}
-
-export type AdminInvite = {
-  id: string;
-  inviteUrl: string;
-  createdAt: string;
-  expiresAt: string;
-  usedAt: string | null;
-  usedByEmail: string | null;
-  status: "active" | "used" | "expired";
-};
-
-export async function createInvite(
-  getToken: () => Promise<string | null>
-): Promise<{ inviteUrl: string; expiresAt: string } | { error: string } | null> {
-  const token = await getToken();
-  if (!token) return { error: "Not signed in" };
-
-  try {
-    const res = await fetch(`${backendBase}/api/admin/invites`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { error: data.error || "Failed to create invite" };
-    }
-    return data;
-  } catch {
-    return { error: "Failed to create invite" };
-  }
-}
-
-export async function listInvites(
-  getToken: () => Promise<string | null>
-): Promise<{ invites: AdminInvite[]; error?: string }> {
-  const token = await getToken();
-  if (!token) return { invites: [] };
-
-  try {
-    const res = await fetch(`${backendBase}/api/admin/invites`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { invites: data.invites || [], error: data.error || "Failed to list invites" };
-    }
-    return { invites: data.invites || [] };
-  } catch {
-    return { invites: [], error: "Failed to list invites" };
-  }
-}
 
 export type CurrentUserResult =
   | { ok: true; user: any; stats: any }
@@ -1957,8 +1427,7 @@ export type CurrentUserResult =
 
 /**
  * Get current user profile from backend.
- * Distinguishes transport/auth failures from a successful "not approved" profile
- * so callers (AccessGate) do not treat flaky networks as logout/denial.
+ * Distinguishes transport/auth failures from a successful profile response.
  */
 export async function getCurrentUser(
   getToken: () => Promise<string | null>
@@ -2366,8 +1835,6 @@ export async function submitWater(params: {
   };
 }
 
-/** @deprecated Use submitWater */
-export const submitCodeSculpt = submitWater;
 
 export async function fetchWaterJob(
   jobId: string,
@@ -2381,6 +1848,11 @@ export async function fetchWaterJob(
   previewImageUrl: string | null;
   imageUrl: string | null;
   llmModel: string | null;
+  llmProvider: string | null;
+  llmInputTokens: number | null;
+  llmOutputTokens: number | null;
+  llmTotalTokens: number | null;
+  prompt: string | null;
 }> {
   const res = await fetch(`${backendBase}/api/water/jobs/${jobId}`, {
     headers: await authHeaders(getToken),
@@ -2400,11 +1872,42 @@ export async function fetchWaterJob(
     previewImageUrl: job.previewImageUrl ?? null,
     imageUrl: job.imageUrl ?? null,
     llmModel: job.llmModel ?? null,
+    llmProvider: job.llmProvider ?? null,
+    llmInputTokens: job.llmInputTokens ?? null,
+    llmOutputTokens: job.llmOutputTokens ?? null,
+    llmTotalTokens: job.llmTotalTokens ?? null,
+    prompt: job.prompt ?? null,
   };
 }
 
-/** @deprecated Use fetchWaterJob */
-export const fetchCodeSculptJob = fetchWaterJob;
+export type WaterUsageRow = {
+  id: string;
+  prompt: string | null;
+  status: string;
+  model: string | null;
+  provider: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  createdAt: string;
+};
+
+/** List Water jobs with LLM token usage for the current user. */
+export async function fetchWaterUsage(
+  getToken?: () => Promise<string | null>,
+  limit = 100
+): Promise<WaterUsageRow[]> {
+  const res = await fetch(`${backendBase}/api/water/usage?limit=${limit}`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to load Water usage");
+  }
+  return ((body as { jobs?: WaterUsageRow[] }).jobs || []) as WaterUsageRow[];
+}
+
 
 /** Persist a canvas screenshot as the Water library thumbnail. */
 export async function saveWaterThumbnail(
@@ -2423,6 +1926,3 @@ export async function saveWaterThumbnail(
   }
   return (body as { previewImageUrl?: string }).previewImageUrl || dataUrl;
 }
-
-/** @deprecated Use saveWaterThumbnail */
-export const saveCodeSculptThumbnail = saveWaterThumbnail;

@@ -1,48 +1,67 @@
 /**
- * API Health Monitor
+ * API capability monitor for hydrilla_runtime (low / high).
  *
- * Tracks whether the primary gateway (api.hydrilla.ai) is reachable.
- *
- * Feature availability per gateway:
- *   Primary  (api.hydrilla.ai) — Text, Edit, Combine, Image-to-3D
- *   Alternative (api.hydrilla.co) — Text, Image-to-3D only
- *
- * When the primary is down:
- *   - Text-to-image and Image-to-3D automatically fall back to the alternative.
- *   - Edit and Combine are unavailable (primary-only).
- *
- * Health status is cached so we never probe on every request.
- * A background recovery poller re-checks the primary every 30 s
- * and switches back automatically once it responds.
+ * Uses backend `GET /api/3d/health` (or direct GPU `/health`) for `{ mode, features, status }`.
+ * Single GPU host: https://api.hydrilla.co — no alternate/fallback host.
  */
 
-const PRIMARY_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.ai"
+export type GpuFeatures = {
+  text_to_image: boolean;
+  text_to_3d: boolean;
+  image_to_3d: boolean;
+  edit_image: boolean;
+  combined_edit: boolean;
+};
+
+export type GpuHealthState = {
+  status: "ok" | "degraded" | "down" | "unknown";
+  mode: "low" | "high" | string;
+  features: GpuFeatures;
+};
+
+const LOW_FEATURES: GpuFeatures = {
+  text_to_image: true,
+  text_to_3d: true,
+  image_to_3d: true,
+  edit_image: false,
+  combined_edit: false,
+};
+
+/** Single GPU runtime — no fallback to another host */
+const GPU_API_URL = (
+  process.env.NEXT_PUBLIC_API_URL || "https://api.hydrilla.co"
 ).replace(/\/$/, "");
 
-
-const ALTERNATIVE_URL = (
-  process.env.NEXT_PUBLIC_API_URL_ALTERNATIVE || "https://api.hydrilla.co"
-).replace(/\/$/, "");
+function getBackendBase(): string {
+  const url = process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
+    return "https://hydrilla-backend.vercel.app";
+  }
+  return url.replace(/\/$/, "");
+}
 
 const PROBE_TIMEOUT_MS = 5_000;
 const RECOVERY_POLL_MS = 30_000;
 
-let _primaryAvailable = true;
+let _state: GpuHealthState = {
+  status: "unknown",
+  mode: "low",
+  features: { ...LOW_FEATURES },
+};
+
+let _gpuAvailable = true;
 let _recoveryTimer: ReturnType<typeof setInterval> | null = null;
 
-// ── Listener / subscription system ──────────────────────────────────
-type HealthListener = (primaryUp: boolean) => void;
+type HealthListener = (gpuUp: boolean) => void;
+type FeaturesListener = (state: GpuHealthState) => void;
 const _listeners = new Set<HealthListener>();
+const _featureListeners = new Set<FeaturesListener>();
 
 function _notify(): void {
-  _listeners.forEach((fn) => fn(_primaryAvailable));
+  _listeners.forEach((fn) => fn(_gpuAvailable));
+  _featureListeners.forEach((fn) => fn(_state));
 }
 
-/**
- * Subscribe to health-state changes.
- * Returns an unsubscribe function.
- */
 export function onHealthChange(listener: HealthListener): () => void {
   _listeners.add(listener);
   return () => {
@@ -50,92 +69,141 @@ export function onHealthChange(listener: HealthListener): () => void {
   };
 }
 
-// ── Probing / recovery ──────────────────────────────────────────────
-/** Use GET /health (not HEAD /): CORS and nginx often allow GET to /health while HEAD on / fails in the browser. */
-function healthCheckUrl(base: string): string {
-  const b = base.replace(/\/$/, "");
-  return `${b}/health`;
+export function onFeaturesChange(listener: FeaturesListener): () => void {
+  _featureListeners.add(listener);
+  return () => {
+    _featureListeners.delete(listener);
+  };
 }
 
-async function probe(baseUrl: string): Promise<boolean> {
+function applyHealthPayload(data: any): void {
+  const mode = (data?.mode as string) || "low";
+  const f = data?.features;
+  const features: GpuFeatures = {
+    text_to_image: f?.text_to_image ?? true,
+    text_to_3d: f?.text_to_3d ?? true,
+    image_to_3d: f?.image_to_3d ?? true,
+    edit_image: f?.edit_image ?? mode === "high",
+    combined_edit: f?.combined_edit ?? mode === "high",
+  };
+  const status = (data?.status as GpuHealthState["status"]) || "unknown";
+  _state = { status, mode, features };
+  _gpuAvailable = status === "ok" || status === "degraded";
+}
+
+async function probeBackendHealth(): Promise<boolean> {
   try {
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-    const res = await fetch(healthCheckUrl(baseUrl), {
+    const res = await fetch(`${getBackendBase()}/api/3d/health`, {
       method: "GET",
       signal: controller.signal,
       cache: "no-store",
     });
     clearTimeout(tid);
-    // Any completed response means the browser can reach the host with CORS
-    // (same idea as the old HEAD probe, which ignored status). Do not require
-    // res.ok: `/health` may be 503/502 while other routes still work via the LB.
-    await res.arrayBuffer().catch(() => new ArrayBuffer(0));
+    if (!res.ok) return false;
+    const data = await res.json();
+    applyHealthPayload(data);
     return true;
   } catch {
     return false;
   }
 }
 
+async function probeGpuDirect(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    const res = await fetch(`${GPU_API_URL}/health`, {
+      method: "GET",
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    clearTimeout(tid);
+    if (!res.ok) return false;
+    const data = await res.json();
+    applyHealthPayload(data);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function refreshCapabilities(): Promise<void> {
+  const ok = (await probeBackendHealth()) || (await probeGpuDirect());
+  if (!ok) {
+    _state = {
+      status: "down",
+      mode: "low",
+      features: { ...LOW_FEATURES },
+    };
+    _gpuAvailable = false;
+  }
+  _notify();
+  if (!_gpuAvailable) startRecoveryPolling();
+  else if (_recoveryTimer) {
+    clearInterval(_recoveryTimer);
+    _recoveryTimer = null;
+  }
+}
+
 function startRecoveryPolling(): void {
   if (_recoveryTimer) return;
-  _recoveryTimer = setInterval(async () => {
-    if (await probe(PRIMARY_URL)) {
-      _primaryAvailable = true;
-      clearInterval(_recoveryTimer!);
-      _recoveryTimer = null;
-      console.log("[apiHealth] Primary API recovered:", PRIMARY_URL);
-      _notify();
-    }
+  _recoveryTimer = setInterval(() => {
+    void refreshCapabilities();
   }, RECOVERY_POLL_MS);
 }
 
-/**
- * Mark the primary API as unavailable and begin polling for recovery.
- * Called when any gateway request hits a network error.
- */
 export function markPrimaryDown(): void {
-  if (!_primaryAvailable) return;
-  _primaryAvailable = false;
-  console.warn(
-    "[apiHealth] Primary API marked unavailable — fallback active for Text & Image-to-3D:",
-    ALTERNATIVE_URL,
-  );
+  if (!_gpuAvailable && _state.status === "down") return;
+  _gpuAvailable = false;
+  _state = {
+    status: "down",
+    mode: _state.mode || "low",
+    features: { ...LOW_FEATURES },
+  };
+  console.warn("[apiHealth] GPU unavailable at api.hydrilla.co — retrying until recovery");
   _notify();
   if (typeof window !== "undefined") startRecoveryPolling();
 }
 
 export function isPrimaryUp(): boolean {
-  return _primaryAvailable;
+  return _gpuAvailable;
+}
+
+export function getHealthState(): GpuHealthState {
+  return _state;
+}
+
+export function canEdit(): boolean {
+  return !!_state.features.edit_image;
+}
+
+export function canCombine(): boolean {
+  return !!_state.features.combined_edit;
+}
+
+export function canTextToImage(): boolean {
+  return !!_state.features.text_to_image;
+}
+
+export function canTextTo3d(): boolean {
+  return !!_state.features.text_to_3d;
+}
+
+export function canImageTo3d(): boolean {
+  return !!_state.features.image_to_3d;
 }
 
 export function getPrimaryUrl(): string {
-  return PRIMARY_URL;
+  return GPU_API_URL;
 }
 
-export function getAlternativeUrl(): string {
-  return ALTERNATIVE_URL;
+/** @deprecated Use getPrimaryUrl — single host only */
+export function getGpuUrl(): string {
+  return GPU_API_URL;
 }
 
-/**
- * Returns the best available gateway URL for features that exist on
- * both gateways (text-to-image, image-to-3d).
- */
-export function getFallbackCapableUrl(): string {
-  return _primaryAvailable ? PRIMARY_URL : ALTERNATIVE_URL;
-}
-
-// Run a non-blocking startup probe on the client so the very first
-// request already knows whether to fall back.
 if (typeof window !== "undefined") {
-  probe(PRIMARY_URL).then((ok) => {
-    if (_primaryAvailable !== ok) {
-      _primaryAvailable = ok;
-      _notify();
-    }
-    if (!ok) {
-      console.warn("[apiHealth] Primary API unavailable at startup");
-      startRecoveryPolling();
-    }
-  });
+  void refreshCapabilities();
 }

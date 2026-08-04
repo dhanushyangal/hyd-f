@@ -51,6 +51,18 @@ type UsageRow = {
   status: string;
 };
 
+type WaterUsageRow = {
+  id: string;
+  prompt: string | null;
+  status: string;
+  model: string | null;
+  provider: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  createdAt: string;
+};
+
 const PLANS = [
   {
     id: "free",
@@ -139,6 +151,8 @@ export default function UsagePage() {
   const [credits, setCredits] = useState<CreditsData | null>(null);
   const [breakdown, setBreakdown] = useState<BreakdownItem[]>([]);
   const [usageHistory, setUsageHistory] = useState<UsageRow[]>([]);
+  const [waterUsage, setWaterUsage] = useState<WaterUsageRow[]>([]);
+  const [waterLoading, setWaterLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [range, setRange] = useState<"1d" | "7d" | "30d">("30d");
@@ -147,16 +161,18 @@ export default function UsagePage() {
     if (!isSignedIn) {
       setLoading(false);
       setHistoryLoading(false);
+      setWaterLoading(false);
       return;
     }
     (async () => {
       try {
         const token = await getToken();
         const headers = (token ? { Authorization: `Bearer ${token}` } : {}) as HeadersInit;
-        const [creditsRes, usageRes, historyRes] = await Promise.all([
+        const [creditsRes, usageRes, historyRes, waterRes] = await Promise.all([
           fetch(`${BACKEND_URL}/api/payments/credits`, { headers }),
           fetch(`${BACKEND_URL}/api/payments/usage`, { headers }),
           fetch(`${BACKEND_URL}/api/payments/usage/history?limit=200`, { headers }),
+          fetch(`${BACKEND_URL}/api/water/usage?limit=100`, { headers }),
         ]);
         if (creditsRes.ok) {
           const data = await creditsRes.json();
@@ -170,11 +186,16 @@ export default function UsagePage() {
           const data = await historyRes.json();
           setUsageHistory(data.usage ?? []);
         }
+        if (waterRes.ok) {
+          const data = await waterRes.json();
+          setWaterUsage((data.jobs ?? []) as WaterUsageRow[]);
+        }
       } catch {
         // ignore
       } finally {
         setLoading(false);
         setHistoryLoading(false);
+        setWaterLoading(false);
       }
     })();
   }, [isSignedIn, getToken]);
@@ -630,6 +651,111 @@ export default function UsagePage() {
                           </td>
                           <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-neutral-900 text-[13px]">
                             {row.credits}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-0.5 text-[11px] font-medium text-neutral-600 capitalize">
+                              {row.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* Water LLM tokens (BYOK — not Hydrilla credits) */}
+        <section id="water-tokens" className="scroll-mt-24 space-y-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-neutral-900 tracking-tight">
+              Water tokens
+            </h2>
+            <p className="text-[13px] text-neutral-500 mt-0.5">
+              LLM usage from your Water runs (your API key). Separate from Hydrilla credits.
+            </p>
+          </div>
+          <div className="rounded-[22px] border border-neutral-200/70 bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+            {waterLoading ? (
+              <div className="p-16 text-center">
+                <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-sm text-neutral-500">Loading Water tokens…</p>
+              </div>
+            ) : waterUsage.length === 0 ? (
+              <div className="p-16 text-center">
+                <p className="text-sm font-medium text-neutral-600 mb-1">No Water runs yet</p>
+                <p className="text-[13px] text-neutral-500">
+                  Token counts appear after you generate with Water.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="px-5 py-3.5 border-b border-neutral-100/80">
+                  <p className="text-[13px] text-neutral-500">
+                    <span className="font-medium text-neutral-800 tabular-nums">
+                      {waterUsage.length}
+                    </span>{" "}
+                    job{waterUsage.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-neutral-100">
+                        <th className="text-left font-medium text-[11px] uppercase tracking-[0.1em] text-neutral-400 px-5 py-3">
+                          Date
+                        </th>
+                        <th className="text-left font-medium text-[11px] uppercase tracking-[0.1em] text-neutral-400 px-5 py-3">
+                          Prompt
+                        </th>
+                        <th className="text-left font-medium text-[11px] uppercase tracking-[0.1em] text-neutral-400 px-5 py-3">
+                          Model
+                        </th>
+                        <th className="text-right font-medium text-[11px] uppercase tracking-[0.1em] text-neutral-400 px-5 py-3">
+                          Input
+                        </th>
+                        <th className="text-right font-medium text-[11px] uppercase tracking-[0.1em] text-neutral-400 px-5 py-3">
+                          Output
+                        </th>
+                        <th className="text-right font-medium text-[11px] uppercase tracking-[0.1em] text-neutral-400 px-5 py-3">
+                          Total
+                        </th>
+                        <th className="text-left font-medium text-[11px] uppercase tracking-[0.1em] text-neutral-400 px-5 py-3">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {waterUsage.map((row) => (
+                        <tr
+                          key={row.id}
+                          className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50/80 transition-colors"
+                        >
+                          <td className="px-5 py-3.5 text-neutral-500 tabular-nums text-[13px] whitespace-nowrap">
+                            {formatTableDate(row.createdAt)}
+                          </td>
+                          <td
+                            className="px-5 py-3.5 text-neutral-900 font-medium text-[13px] max-w-[220px] truncate"
+                            title={row.prompt || undefined}
+                          >
+                            {row.prompt?.trim() || "—"}
+                          </td>
+                          <td
+                            className="px-5 py-3.5 text-neutral-600 text-[13px] max-w-[160px] truncate"
+                            title={row.model || undefined}
+                          >
+                            {row.model || "—"}
+                          </td>
+                          <td className="px-5 py-3.5 text-right tabular-nums text-neutral-900 text-[13px]">
+                            {row.inputTokens && row.inputTokens > 0 ? row.inputTokens : "—"}
+                          </td>
+                          <td className="px-5 py-3.5 text-right tabular-nums text-neutral-900 text-[13px]">
+                            {row.outputTokens && row.outputTokens > 0 ? row.outputTokens : "—"}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-neutral-900 text-[13px]">
+                            {row.totalTokens && row.totalTokens > 0 ? row.totalTokens : "—"}
                           </td>
                           <td className="px-5 py-3.5">
                             <span className="inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-0.5 text-[11px] font-medium text-neutral-600 capitalize">
