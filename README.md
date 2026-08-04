@@ -1,358 +1,124 @@
 # Hydrilla Frontend
 
-Next.js frontend application for the Hydrilla 3D Generation Platform. Provides a modern web interface for generating 3D models from text prompts or images.
+Next.js app for the Hydrilla 3D platform — **Hydrilla cloud** (GPU → GLB, credits) and **Water** (BYOK LLM → procedural Three.js).
+
+## Engines (read these first)
+
+| Doc | What it covers |
+|-----|----------------|
+| [`docs/ENGINES.md`](./docs/ENGINES.md) | Cloud vs Water, **skills map** (where / what), models, prefs |
+| [`docs/WATER_ORCHESTRATION.md`](./docs/WATER_ORCHESTRATION.md) | Pipeline, tiers, harness files, downloads |
+| [`docs/GENERATION_FLOWS.md`](./docs/GENERATION_FLOWS.md) | Cloud GPU / credits / polling |
+| [`skills/water/SKILL.md`](./skills/water/SKILL.md) | Agent docs only (not runtime) |
+| Backend [`WATER_DEPLOY.md`](./backend/hydrilla_backend/WATER_DEPLOY.md) | SQL + Vercel env for BYOK |
 
 ## Overview
 
-This is the user-facing web application built with Next.js, React, and TypeScript. It provides:
-- User authentication via Clerk
-- 3D model generation interface (text-to-3D and image-to-3D)
-- Job library/history
-- 3D model viewer
-- Real-time job status updates
+- **Auth:** Clerk only (invite / AccessGate removed)
+- **Main UI:** `/workspace` (and `/workspace/:id`) — Engine picker, library rail, canvas
+- **Studio:** `/app/studio` — create / open workspaces
+- **Cloud:** text→image → image→3D (credits) → `ThreeViewer`
+- **Water:** BYOK keys in Settings → generate → `WaterViewer` sandbox
+- **Billing:** credits via backend `/api/payments/*` (Dodo subscriptions)
 
-## Tech Stack
+## Tech stack
 
-- **Framework**: Next.js 16+ (App Router)
-- **Language**: TypeScript
-- **UI Library**: React 19
-- **Styling**: Tailwind CSS
-- **Authentication**: Clerk
-- **3D Rendering**: Three.js
-- **State Management**: SWR (for data fetching)
-- **Animations**: Framer Motion
-- **Deployment**: Vercel
+- Next.js (App Router) · TypeScript · React · Tailwind · Clerk · Three.js · Framer Motion · PostHog · Vercel
 
-## Project Structure
+App lives at the **repo root** (not a nested `frontend/` folder). Nested backend clone: `backend/hydrilla_backend/`.
 
-```
-frontend/
-├── app/                    # Next.js App Router pages
-│   ├── page.tsx           # Home page
-│   ├── layout.tsx          # Root layout
-│   ├── generate/           # 3D generation page
-│   ├── library/            # Job library/history
-│   ├── viewer/             # 3D model viewer
-│   ├── sign-in/            # Clerk sign-in page
-│   ├── sign-up/            # Clerk sign-up page
-│   └── ...                 # Other pages (careers, team, etc.)
-├── components/             # React components
-│   ├── layout/             # Layout components (Navbar, Footer)
-│   ├── sections/           # Page sections (Hero, etc.)
-│   ├── ThreeViewer.tsx     # 3D model viewer component
-│   ├── PromptBox.tsx       # Text prompt input
-│   ├── JobStatusBadge.tsx # Job status display
-│   └── ...
-├── lib/
-│   └── api.ts             # API client functions
-├── public/                 # Static assets
-│   ├── images/            # Image assets
-│   └── videos/            # Video assets
-├── middleware.ts           # Next.js middleware (Clerk)
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts      # Tailwind CSS configuration
-└── next.config.js         # Next.js configuration
-```
+## Getting started
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- Clerk account for authentication
-- Backend API running (see backend README)
-- Python API server running (see main README)
-
-### Installation
-
-1. **Navigate to frontend directory:**
-   ```bash
-   cd frontend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables:**
-   Create `.env.local` file:
-   ```env
-   NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
-   NEXT_PUBLIC_API_URL=https://api.hydrilla.co
-   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-   CLERK_SECRET_KEY=sk_test_...
-   ```
-
-### Running Locally
-
-**Development mode:**
 ```bash
-npm run dev
+npm install
 ```
 
-Application will start on `http://localhost:3000`
-
-**Production build:**
-```bash
-npm run build
-npm start
-```
-
-## Environment Variables
-
-Create a `.env.local` file in the `frontend/` directory:
+Create `.env.local`:
 
 ```env
-# Backend API URL (Node.js backend)
 NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
-
-# Python API URL (GPU server)
 NEXT_PUBLIC_API_URL=https://api.hydrilla.co
-
-# Clerk Authentication
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 ```
 
-**Note**: Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser.
-
-## Key Features
-
-### 1. Authentication
-- Sign up / Sign in via Clerk
-- Protected routes
-- User profile management
-
-### 2. 3D Generation
-- **Text-to-3D**: Generate 3D models from text prompts
-- **Image-to-3D**: Generate 3D models from uploaded images
-- Preview image generation before 3D generation
-- Real-time progress tracking
-
-### 3. Chat Interface
-- ChatGPT-like conversation interface
-- Group multiple jobs into chats
-- Search chats by name or prompt
-- Rename and delete chats
-- View chat history with prompts and results
-- Sidebar with collapsible chat list
-- My Library section with horizontal scrolling image gallery
-
-### 4. Job Library
-- View all generated jobs
-- Filter by status
-- Rename jobs
-- Delete jobs
-- View job details
-
-### 5. 3D Viewer
-- Interactive 3D model viewer (Three.js)
-- Rotate, zoom, pan controls
-- Download 3D models (.glb format)
-
-### 6. Queue Information
-- Real-time queue position
-- Estimated wait time
-- Jobs ahead in queue
-
-## Pages
-
-### `/` - Home Page
-Landing page with hero section, features, and call-to-action.
-
-### `/generate` - Generation Page
-Main interface for generating 3D models:
-- ChatGPT-like chat interface
-- Text prompt input
-- Image upload
-- Preview generation
-- 3D generation trigger
-- Progress tracking
-- Sidebar with chat list and My Library
-- Search functionality for chats
-- Chat management (rename, delete)
-
-### `/library` - Job Library
-View all user's generated jobs:
-- Job list with status
-- Filter and search
-- Job actions (view, rename, delete)
-
-### `/viewer` - 3D Viewer
-Standalone 3D model viewer page.
-
-### `/sign-in` - Sign In
-Clerk authentication sign-in page.
-
-### `/sign-up` - Sign Up
-Clerk authentication sign-up page.
-
-## API Integration
-
-The frontend uses the API client in `lib/api.ts` to communicate with:
-
-1. **Node.js Backend** (`NEXT_PUBLIC_BACKEND_URL`)
-   - Authentication
-   - Job management
-   - File uploads
-   - User data
-
-2. **Python Backend** (`NEXT_PUBLIC_API_URL`)
-   - Preview image generation
-   - Direct API calls (when needed)
-
-### Key API Functions
-
-```typescript
-// Generate preview image
-generatePreviewImage(prompt: string)
-
-// Submit image-to-3D job
-submitImageTo3D(imageUrl: string)
-
-// Get job status
-fetchStatus(jobId: string)
-
-// Get user's job history
-fetchHistory()
-
-// Chat management
-fetchChats()                    // Get all chats
-fetchChat(chatId)              // Get chat with jobs
-createChat(name?)              // Create new chat
-updateChatName(chatId, name)   // Rename chat
-deleteChat(chatId)             // Delete chat
-
-// Upload image
-uploadImage(file: File)
-```
-
-See `lib/api.ts` for complete API client implementation.
-
-## Components
-
-### Layout Components
-- **Navbar**: Main navigation with auth state
-- **Footer**: Site footer
-- **ConditionalNavbar**: Navbar with conditional rendering
-
-### Feature Components
-- **ThreeViewer**: 3D model viewer (Three.js)
-- **PromptBox**: Text input for prompts
-- **JobStatusBadge**: Status indicator for jobs
-- **LoadingProgress**: Progress indicator
-- **UserSync**: Syncs user data on mount
-
-### Page Sections
-- **Hero**: Landing page hero section
-- **VideoBackground**: Video background component
-
-## Styling
-
-Uses **Tailwind CSS** for styling:
-- Utility-first CSS framework
-- Responsive design
-- Custom theme configuration in `tailwind.config.ts`
-
-## Authentication Flow
-
-1. User clicks "Sign In" or "Get Started"
-2. Redirected to Clerk sign-in/sign-up page
-3. After authentication, Clerk redirects back
-4. Frontend receives JWT token
-5. Token included in API requests via `Authorization` header
-6. Backend validates token and extracts user_id
-
-## State Management
-
-- **SWR**: For server state (jobs, status)
-- **React State**: For local component state
-- **Clerk**: For authentication state
-
-## Deployment
-
-### Vercel Deployment
-
-1. **Connect repository to Vercel**
-2. **Set environment variables** in Vercel dashboard:
-   - `NEXT_PUBLIC_BACKEND_URL`
-   - `NEXT_PUBLIC_API_URL`
-   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-   - `CLERK_SECRET_KEY`
-3. **Deploy** - Vercel will automatically build and deploy
-
-### Manual Deployment
+Optional: `NEXT_PUBLIC_CLERK_JS_VERSION` — see `lib/clerkConfig.ts`.
 
 ```bash
-npm run build
-# Deploy .next/ directory to your server
+npm run dev   # http://localhost:3000
 ```
 
-## Development
+## Product flow
 
-### Project Scripts
+```text
+Sign in (Clerk)
+  → /app/studio (pick or create workspace)
+  → /workspace/:id
+       Engine = Cloud (Trilles)  → /api/3d/*   → GLB
+       Engine = Water (BYOK)     → /api/water/* → factory code
+  → poll status → canvas + left library
+```
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm start` - Start production server
-- `npm run lint` - Run ESLint
+Credits (cloud):
 
-### Code Style
+| Op | Credits |
+|----|---------|
+| Text → image | 2 |
+| Edit image | 3 |
+| Combine 2 images | 4 |
+| Image → 3D | 10 |
 
-- TypeScript for type safety
-- Functional components with hooks
-- Component-based architecture
-- Tailwind CSS for styling
+Workspace text→mesh = 2 + 10 = **12**. Edit/combine need GPU `mode=high`.
 
-## Troubleshooting
+## Key routes
 
-### Build Errors
+| Path | Role |
+|------|------|
+| `/` | Marketing landing |
+| `/app/studio` | Workspace picker |
+| `/app/settings` | BYOK keys + Water defaults |
+| `/workspace`, `/workspace/:id` | Generation UI |
+| `/generate` | Redirect → `/workspace` |
+| `/generations` | Workspace gallery (GLB-oriented) |
+| `/library` | Global history (GLB-oriented) |
+| `/viewer` | Standalone GLB viewer |
+| `/sign-in`, `/sign-up` | Clerk |
 
-- Check Node.js version (18+ required)
-- Clear `.next` directory: `rm -rf .next`
-- Reinstall dependencies: `rm -rf node_modules && npm install`
+Protected by `middleware.ts`: `/app`, `/workspace`, `/generate`, `/generations`, `/library`, `/checkout`, `/rigging`.
 
-### API Connection Issues
+## Key libs
 
-- Verify `NEXT_PUBLIC_BACKEND_URL` is correct
-- Check backend server is running
-- Verify CORS is configured on backend
+| Path | Role |
+|------|------|
+| `lib/api.ts` | Backend / GPU HTTP client |
+| `lib/apiHealth.ts` | Single-host GPU health + edit/combine features |
+| `lib/engines.ts` / `lib/models.ts` | Engine constants + model catalog |
+| `lib/clerkConfig.ts` | Pinned Clerk JS version + preconnect |
 
-### Authentication Issues
+## Status updates
 
-- Verify Clerk keys are correct
-- Check Clerk dashboard for webhook configuration
-- Verify redirect URLs in Clerk dashboard
+Not WebSocket / Supabase Realtime. Client **HTTP polling**:
 
-### 3D Viewer Not Loading
+- Cloud 3D status ~3s
+- Water job ~2s
+- Workspace library refresh ~5s while active
 
-- Check browser console for errors
-- Verify GLB file URL is accessible
-- Check Three.js compatibility with browser
+## Backend
 
-## Browser Support
+Local clone: `backend/hydrilla_backend` → `https://github.com/dhanushyangal/hydrilla_backend`.
 
-- Chrome/Edge (latest)
-- Firefox (latest)
-- Safari (latest)
-- Mobile browsers (iOS Safari, Chrome Mobile)
+```bash
+cd backend/hydrilla_backend
+npm install
+npm run dev   # Express on :4000 + background cloud job sync
+```
 
-## Performance
+Vercel entry: `api/index.ts` (no background sync; Water uses `waitUntil` up to 300s).
 
-- **Image Optimization**: Next.js automatic image optimization
-- **Code Splitting**: Automatic with Next.js
-- **Static Generation**: Where possible
-- **SWR Caching**: Reduces API calls
+## Deployment (frontend)
 
-## Related Documentation
-
-- [API Documentation](./API_DOCUMENTATION.md) - Complete API reference
-- [Backend README](../backend/README.md) - Backend documentation
-- [System Architecture](../SYSTEM_ARCHITECTURE.md) - System overview
-- [Environment Variables Guide](../ENVIRONMENT_VARIABLES.md) - Env var guide
+Vercel env: `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_API_URL`, Clerk keys. Deploy from repo root.
 
 ## License
 
-Private - Hydrilla Platform
+Private — Hydrilla Platform

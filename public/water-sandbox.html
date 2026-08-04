@@ -319,6 +319,16 @@ const {
       let glbCache = null; // ArrayBuffer | null
       let glbWarmToken = 0;
 
+      function arrayBufferToBase64(ab) {
+        const bytes = new Uint8Array(ab);
+        const chunk = 0x8000;
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(binary);
+      }
+
       function replyExport(requestId, format, payload, transfer = []) {
         parent.postMessage(
           { type: "code-sculpt-export-result", requestId, format, ...payload },
@@ -327,7 +337,24 @@ const {
         );
       }
 
-      /** Shallow hierarchy clone — share geometry/materials for speed (exporters are read-only). */
+      /** Reply with transferable buffer + base64 fallback (cross-iframe instanceof can fail). */
+      function replyBinary(requestId, format, filename, mime, ab) {
+        const transferCopy = ab.slice(0);
+        const base64 = arrayBufferToBase64(ab);
+        replyExport(
+          requestId,
+          format,
+          {
+            ok: true,
+            filename,
+            mime,
+            buffer: transferCopy,
+            base64,
+          },
+          [transferCopy]
+        );
+      }
+
       function objectForExport() {
         if (!root) throw new Error("Nothing to export yet — wait for the preview to finish loading.");
         root.updateMatrixWorld(true);
@@ -340,6 +367,7 @@ const {
           binary: true,
           onlyVisible: true,
           truncateDrawRange: true,
+          embedImages: true,
         });
         const ab = result instanceof ArrayBuffer ? result : result.buffer;
         // Copy so we can keep a cache AND transfer a slice to the parent.
@@ -368,28 +396,20 @@ const {
           if (format === "glb") {
             let ab = glbCache ? glbCache.slice(0) : null;
             if (!ab) ab = await buildGlbBuffer();
-            replyExport(
-              requestId,
-              format,
-              {
-                ok: true,
-                filename: `${baseName}.glb`,
-                mime: "model/gltf-binary",
-                buffer: ab,
-              },
-              [ab]
-            );
+            replyBinary(requestId, format, `${baseName}.glb`, "model/gltf-binary", ab);
             return;
           }
 
           if (format === "gltf") {
             const object = objectForExport();
+            // JSON glTF with embedded buffers/images — single self-contained .gltf file.
             const result = await gltfExporter.parseAsync(object, {
               binary: false,
               onlyVisible: true,
               truncateDrawRange: true,
+              embedImages: true,
             });
-            const text = typeof result === "string" ? result : JSON.stringify(result);
+            const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
             replyExport(requestId, format, {
               ok: true,
               filename: `${baseName}.gltf`,
@@ -415,19 +435,8 @@ const {
             const ab =
               result instanceof ArrayBuffer
                 ? result
-                : new TextEncoder().encode(String(result)).buffer;
-            const transferAb = ab instanceof ArrayBuffer ? ab : ab.slice(0);
-            replyExport(
-              requestId,
-              format,
-              {
-                ok: true,
-                filename: `${baseName}.stl`,
-                mime: "model/stl",
-                buffer: transferAb,
-              },
-              transferAb instanceof ArrayBuffer ? [transferAb] : []
-            );
+                : new TextEncoder().encode(String(result)).buffer.slice(0);
+            replyBinary(requestId, format, `${baseName}.stl`, "model/stl", ab);
             return;
           }
 
@@ -445,17 +454,7 @@ const {
             controls.enableDamping = true;
             interactive = true;
             const ab = await blob.arrayBuffer();
-            replyExport(
-              requestId,
-              format,
-              {
-                ok: true,
-                filename: `${baseName}.png`,
-                mime: "image/png",
-                buffer: ab,
-              },
-              [ab]
-            );
+            replyBinary(requestId, format, `${baseName}.png`, "image/png", ab);
             return;
           }
 

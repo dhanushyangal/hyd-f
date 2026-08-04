@@ -1,76 +1,128 @@
-# Water orchestration
+# Water Studio — orchestration
 
-How Water builds procedural Three.js from a text prompt (BYOK).  
-Product / model picker / prefs: [`ENGINES.md`](./ENGINES.md).
+Multi-pass BYOK pipeline (img2threejs spirit + Anthropic-style generator/evaluator split).  
+Product overview + **skills map**: [`ENGINES.md`](./ENGINES.md).
 
 ---
 
-## Most important files
+## What runs at generate time
+
+```text
+intake
+  → planner (SculptSpec + qualityContract)     ← skill prompt pack
+  → for each unlocked pass:
+        generate → deterministic code gate → evaluate → optional 1× refine
+  → if still empty: deterministic fallback factory
+  → DONE (partial: true if budget cut short)
+```
+
+Request: `POST /api/water/generate` with:
+
+| Field | Source | Default |
+|-------|--------|---------|
+| `modelId` | Engine picker | prefs / catalog |
+| `skillId` | Skill chips | `object-studio` |
+| `qualityTier` | Fast / Standard / Studio | `standard` |
+| `prompt` | Create bar | required |
+| `imageUrl` | optional | — |
+
+---
+
+## Skills — availability and what is used
+
+| `skillId` | UI | Runtime pack used | Status |
+|-----------|----|-------------------|--------|
+| `object-studio` | Object | `backend/.../water/skills` object pack | live |
+| `character` | Character | character pack | live |
+| `animation` | Anim | animation pack (sockets / tick) | partial |
+| `game` | Game | game pack (colliders / LOD hooks) | partial |
+| `environment` | Env | — | stub (UI Soon) |
+| `world` | World | — | stub (UI Soon) |
+
+**UI / validation registries**
+
+- Frontend: `lib/waterSkills.ts`
+- Backend: `src/lib/waterSkills.ts`
+
+**Runtime prompts (actually injected into LLM calls)**
+
+- `backend/hydrilla_backend/src/lib/water/skills/index.ts`
+
+**Agent markdown (not runtime)**
+
+- `skills/water/SKILL.md`, `character.md`, `animation.md`, `game.md`, `object-studio.md`
+
+Selectable in UI = `status === "live" || "partial"`. Stubs render disabled.
+
+---
+
+## Quality tiers → passes
+
+| Tier | Unlocked passes |
+|------|-----------------|
+| Fast | `blockout` |
+| Standard | `blockout` → `structural` → `form` → `material` |
+| Studio | all 8 through `optimization` |
+
+### Soft budgets (provider-aware)
+
+| Provider | Fast | Standard | Studio |
+|----------|------|----------|--------|
+| Native (Anthropic / OpenAI / …) | ~90s | ~200s | ~240s |
+| **Cursor** Cloud Agents | ~240s | ~600s | ~900s |
+
+Per-stage timeout: Cursor ~210s (agents often need 2–4 min); other providers ~60s.  
+Hitting the budget returns the best code so far with `partial: true`.
+
+---
+
+## Harness files
 
 | Path | Role |
 |------|------|
-| [`docs/ENGINES.md`](./ENGINES.md) | Cloud vs Water, model catalog, prefs, APIs |
-| [`docs/WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md) (this) | Pipeline, prompts, gates, providers |
-| [`docs/GENERATION_FLOWS.md`](./GENERATION_FLOWS.md) | Hydrilla cloud (Trilles) only |
-| [`skills/water/SKILL.md`](../skills/water/SKILL.md) | Agent skill — gates + codegen contract |
-| `backend/.../codeSculptPipeline.ts` | Spec → code → gates |
-| `backend/.../llmProviders.ts` | Claude / OpenAI / Gemini / OpenRouter / Cursor adapters |
-| `backend/.../routes/codeSculpt.ts` | `/api/water/*` |
-| `backend/.../WATER_DEPLOY.md` | SQL + env |
+| `src/lib/water/harness/run.ts` | Orchestrator + budgets |
+| `src/lib/water/harness/planner.ts` | Spec JSON |
+| `src/lib/water/harness/generator.ts` | Pass-scoped `createModel()` codegen |
+| `src/lib/water/harness/evaluator.ts` | Code gate + skeptic LLM (skipped on Fast) |
+| `src/lib/water/harness/fallbackFactory.ts` | Last-resort valid factory if LLM empty |
+| `src/lib/water/skills/index.ts` | Per-skill prompt extras |
+| `src/routes/codeSculpt.ts` | `/api/water/*` (+ legacy `/api/code-sculpt/*`) |
+| `src/lib/llmProviders.ts` | Anthropic / OpenAI / Gemini / OpenRouter / Cursor |
+
+Frontend mirror: `lib/waterSkills.ts`, `lib/api.ts` (`submitWater`), `components/WaterViewer.tsx`.
 
 ---
 
-## Pipeline
+## Review loop (v1)
 
-```text
-intake (code) → assessment/spec (LLM) → spec gate (code)
-  → blockout (LLM) → code gate (code) → optional 1× refine (LLM) → DONE
-```
-
-Cost: **2** model calls on the happy path; up to **4** if both gates repair once.
-
-### Stage prompts (canonical)
-
-1. **Spec (`SPEC_SYSTEM`)** — JSON SculptSpec only: components, parents, materials, sockets, scale. Min depth by complexity (3 / 6 / 10).  
-2. **Code (`CODE_SYSTEM`)** — TypeScript only: `import * as THREE`, `export function createModel(): THREE.Group`, `sculptRuntime` + `tick`, no fetch/eval/loaders.  
-3. **Refine** — same code system + exact gate violations.
-
-### Deterministic gates
-
-| Gate | Blocks when |
-|------|-------------|
-| Intake | Empty / no subject / >2000 chars |
-| Spec | Shallow tree, bad parents/materials |
-| Code | Missing contract, banned APIs, brace imbalance, &lt;60% coverage |
+- Deterministic gates always (banned APIs, `createModel` contract, coverage).
+- Separate evaluator LLM (not the generator) — skipped on Fast.
+- Max one refine per pass.
+- No Playwright / VLM screenshot loop yet.
 
 ---
 
-## Provider adapters
+## Client downloads
 
-| Provider | Selection | Runtime |
-|----------|-----------|---------|
-| Anthropic | Catalog id → Messages API | Pass-through known ids |
-| OpenAI | Catalog id → chat completions | Pass-through known ids |
-| Gemini | Catalog id → generateContent | Pass-through known ids |
-| OpenRouter | Live free + catalog paid | Slug as API model |
-| Cursor | Live `/v1/models` + Auto | Cloud Agents create/poll; omit `model` for Auto |
+`WaterViewer` (top-right) + `public/water-sandbox.html`:
 
-Cursor: [API endpoints](https://cursor.com/docs/cloud-agent/api/endpoints). Slower per stage (agent run).
-
----
-
-## Frontend
-
-- Preview: `WaterViewer` → `public/water-sandbox.html` (`sandbox="allow-scripts"`).  
-- Job ids `wt_*` / `cs_*` → always Water path, never `/api/3d/glb/...`.  
-- Engine picker: Hydrilla cloud first; unlocked Water groups next; selection persists `defaultCodeModel`.
+| Format | Notes |
+|--------|--------|
+| **GLB** | Binary glTF (warm-cached) |
+| **GLTF** | JSON, embedded buffers/images |
+| **OBJ** / **STL** | Mesh interchange / print |
+| **PNG** | Viewport snapshot |
+| **TypeScript (.ts)** | Raw factory source |
 
 ---
 
-## Skills
+## Roadmap (honest)
 
-| Skill | Role |
-|-------|------|
-| `skills/water/SKILL.md` | Water codegen + gates for agents editing Hydrilla |
-
-No separate cloud skill — cloud is gateway + credits ([`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md)).
+| Theme | Today |
+|-------|--------|
+| Object quality | Studio + Object skill |
+| Character | Character skill (live) |
+| Environment / World | Stub |
+| Game pipeline | Partial hooks; **mesh exporters live** |
+| Animation | Partial sockets / tick |
+| AI Studio UI | `/workspace` |

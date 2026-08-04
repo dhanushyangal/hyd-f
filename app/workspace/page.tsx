@@ -80,32 +80,40 @@ import {
   type OpenRouterFreeModel,
 } from "../../lib/models";
 import { ENGINE, formatEngineLabel, isWaterJob, isWaterJobId } from "../../lib/engines";
+import {
+  WATER_SKILLS,
+  QUALITY_TIERS,
+  DEFAULT_WATER_SKILL,
+  DEFAULT_QUALITY_TIER,
+  WATER_SKILL_STORAGE_KEY,
+  WATER_TIER_STORAGE_KEY,
+  isWaterSkillSelectable,
+  parseWaterSkillId,
+  parseQualityTier,
+  passesForTier,
+  waterPassLabel,
+  waterPassIndex,
+  type WaterSkillId,
+  type QualityTier,
+  type BuildPassId,
+} from "../../lib/waterSkills";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const CREDITS_IMAGE = 2;
 const CREDITS_3D = 10;
+const WATER_POLL_INTERVAL_MS = 2_000;
+const WATER_POLL_MAX_MS: Record<QualityTier, number> = {
+  fast: 6 * 60 * 1000,
+  standard: 10 * 60 * 1000,
+  studio: 18 * 60 * 1000,
+};
 
 const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
 
-// Human labels for the Water pipeline passes (img2threejs-style transparency).
-const SCULPT_PASS_LABELS: Record<string, string> = {
-  intake: "Checking the brief…",
-  assessment: "Mapping the parts…",
-  spec: "Writing the build plan…",
-  blockout: "Building the blockout in code…",
-  review: "Checking structure…",
-  done: "Blockout ready",
-};
+const sculptPassLabel = (pass?: string | null): string => waterPassLabel(pass);
 
-const SCULPT_PASS_STEPS = ["assessment", "spec", "blockout", "review", "done"] as const;
-
-const sculptPassLabel = (pass?: string | null): string =>
-  SCULPT_PASS_LABELS[pass || ""] || "Building…";
-
-const sculptPassIndex = (pass?: string | null): number => {
-  const i = SCULPT_PASS_STEPS.indexOf((pass as (typeof SCULPT_PASS_STEPS)[number]) || "assessment");
-  return i >= 0 ? i : 0;
-};
+const sculptPassIndex = (pass?: string | null, unlocked?: BuildPassId[]): number =>
+  waterPassIndex(pass, unlocked);
 
 // Lazy-load ThreeViewer (Three.js is heavy; load only when 3D is shown)
 const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m) => ({ default: m.ThreeViewer })), {
@@ -584,6 +592,8 @@ function WorkspacePage() {
 
   // AI Model selection — Hydrilla mesh engines + Bring-your-own Water models
   const [selectedModel, setSelectedModel] = useState<ModelId>("trilles");
+  const [selectedWaterSkill, setSelectedWaterSkill] = useState<WaterSkillId>(DEFAULT_WATER_SKILL);
+  const [selectedQualityTier, setSelectedQualityTier] = useState<QualityTier>(DEFAULT_QUALITY_TIER);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState<UserApiKeyMeta[]>([]);
   const [liveFreeModels, setLiveFreeModels] = useState<OpenRouterFreeModel[]>([]);
@@ -630,6 +640,18 @@ function WorkspacePage() {
       setError(null);
     }
   }, [selectedIsCode, centerView]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    try {
+      const sk = parseWaterSkillId(localStorage.getItem(WATER_SKILL_STORAGE_KEY));
+      const tier = parseQualityTier(localStorage.getItem(WATER_TIER_STORAGE_KEY));
+      setSelectedWaterSkill(sk);
+      setSelectedQualityTier(tier);
+    } catch {
+      /* ignore */
+    }
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -1427,6 +1449,8 @@ function WorkspacePage() {
         model: selectedModel,
         provider,
         mode: referenceImageUrl ? "image_to_code" : "text_to_code",
+        skillId: selectedWaterSkill,
+        qualityTier: selectedQualityTier,
       });
       // Legacy event name kept for historical PostHog charts
       track("code_sculpt_started", {
@@ -1465,6 +1489,8 @@ function WorkspacePage() {
           imageUrl: referenceImageUrl,
           workspaceId,
           parentJobId: parentId,
+          skillId: selectedWaterSkill,
+          qualityTier: selectedQualityTier,
           getToken: tokenGetter,
         });
 
@@ -1505,9 +1531,12 @@ function WorkspacePage() {
         refreshLibrary();
 
         const poll = async () => {
-          for (let i = 0; i < 150; i++) {
+          const maxAttempts = Math.ceil(
+            WATER_POLL_MAX_MS[selectedQualityTier] / WATER_POLL_INTERVAL_MS
+          );
+          for (let i = 0; i < maxAttempts; i++) {
             if (pollGen !== waterPollGenRef.current) return;
-            await new Promise((r) => setTimeout(r, 2000));
+            await new Promise((r) => setTimeout(r, WATER_POLL_INTERVAL_MS));
             if (pollGen !== waterPollGenRef.current) return;
             try {
               const job = await fetchWaterJob(result.job_id, tokenGetter);
@@ -1587,7 +1616,8 @@ function WorkspacePage() {
           setCurrentGenerating(null);
           setCenterView({
             type: "error",
-            message: "Water timed out. Open the job from the library later.",
+            message:
+              "Water is still running longer than expected. Open the job from the library to resume live status.",
           });
           setLoading(false);
         };
@@ -1609,6 +1639,8 @@ function WorkspacePage() {
     [
       hasWorkspaceContext,
       selectedModel,
+      selectedWaterSkill,
+      selectedQualityTier,
       providerKeyOk,
       prompt,
       getToken,
@@ -2409,9 +2441,12 @@ function WorkspacePage() {
         // Resume poll
         void (async () => {
           const tokenGetter = async () => (await getToken()) ?? null;
-          for (let i = 0; i < 150; i++) {
+          const maxAttempts = Math.ceil(
+            WATER_POLL_MAX_MS.studio / WATER_POLL_INTERVAL_MS
+          );
+          for (let i = 0; i < maxAttempts; i++) {
             if (pollGen !== waterPollGenRef.current) return;
-            await new Promise((r) => setTimeout(r, 2000));
+            await new Promise((r) => setTimeout(r, WATER_POLL_INTERVAL_MS));
             if (pollGen !== waterPollGenRef.current) return;
             try {
               const cs = await fetchWaterJob(job.id, tokenGetter);
@@ -2474,7 +2509,8 @@ function WorkspacePage() {
           setLoading(false);
           setCenterView({
             type: "error",
-            message: "Water timed out. Try opening the job again from the library.",
+            message:
+              "Water is still running longer than expected. Open the job again from the library to resume live status.",
           });
         })();
         return;
@@ -3277,23 +3313,30 @@ function WorkspacePage() {
                   <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-neutral-900 leading-snug">
                     {centerView.type === "generating" ? centerView.message : "Generating 3D model…"}
                   </h2>
-                  {(currentGenerating?.jobId?.startsWith("cs_") || selectedIsCode) && (
-                    <div className="mt-5 flex items-center justify-center gap-1.5">
-                      {SCULPT_PASS_STEPS.map((step, idx) => {
-                        const activeIdx = sculptPassIndex(codeSculptPass);
-                        const done = idx < activeIdx;
-                        const active = idx === activeIdx;
-                        return (
-                          <div
-                            key={step}
-                            className={cn(
-                              "h-1.5 rounded-full transition-all duration-500",
-                              active ? "w-8 bg-neutral-900" : done ? "w-4 bg-neutral-400" : "w-4 bg-neutral-200"
-                            )}
-                            title={SCULPT_PASS_LABELS[step]}
-                          />
-                        );
-                      })}
+                  {(currentGenerating?.jobId?.startsWith("wt_") ||
+                    currentGenerating?.jobId?.startsWith("cs_") ||
+                    selectedIsCode) && (
+                    <div className="mt-5 flex items-center justify-center gap-1.5 flex-wrap max-w-sm mx-auto">
+                      {(["assessment", "spec", ...passesForTier(selectedQualityTier), "done"] as string[]).map(
+                        (step, idx) => {
+                          const activeIdx = sculptPassIndex(
+                            codeSculptPass,
+                            passesForTier(selectedQualityTier)
+                          );
+                          const done = idx < activeIdx;
+                          const active = idx === activeIdx;
+                          return (
+                            <div
+                              key={step}
+                              className={cn(
+                                "h-1.5 rounded-full transition-all duration-500",
+                                active ? "w-8 bg-neutral-900" : done ? "w-4 bg-neutral-400" : "w-4 bg-neutral-200"
+                              )}
+                              title={sculptPassLabel(step)}
+                            />
+                          );
+                        }
+                      )}
                     </div>
                   )}
                   {currentGenerating?.status === "generating" &&
@@ -3407,7 +3450,7 @@ function WorkspacePage() {
                 void handle3DClick(target);
               }}
             >
-              {/* Tokens stay top-left; primary Water Edit CTA sits bottom-center */}
+              {/* Tokens stay top-left; Download controls top-right in WaterViewer; Edit CTA bottom-center */}
               {waterTokenInfo && (waterTokenInfo.model || waterTokenInfo.totalTokens != null) && (
                 <div className="absolute top-3 left-3 z-[120] pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur border border-neutral-200/70 shadow-sm text-[11px] text-neutral-600 tabular-nums max-w-[min(100%-1.5rem,420px)]">
                   <span className="font-medium text-neutral-800">Tokens</span>
@@ -3545,6 +3588,8 @@ function WorkspacePage() {
                 passLabel={codeSculptPass}
                 jobId={centerView.jobId}
                 className="flex-1 min-h-0"
+                hideToolbar={waterEditMode}
+                onDownloaded={(format) => track("model_downloaded", { format, engine: "water" })}
                 onThumbnail={(dataUrl) => {
                   const jobId = centerView.type === "code" ? centerView.jobId : null;
                   if (!jobId) return;
@@ -4461,6 +4506,107 @@ function WorkspacePage() {
               </div>
             </div>
 
+            {/* Water Skill + Quality tier — only when a BYOK model is selected */}
+            {selectedIsCode && (
+              <>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 leading-[1.15]">
+                  <div className="flex items-center gap-1.5 min-w-0 pt-1">
+                    <label className="text-sm font-semibold text-neutral-800">Skill</label>
+                    <span
+                      className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600"
+                      title="Water Skill chooses the harness: Object Studio, Character, Animation, Game…"
+                      aria-label="Info"
+                    >
+                      <span className="text-[10px] font-bold leading-none">i</span>
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1.5 max-w-[min(100%,320px)]">
+                    {WATER_SKILLS.map((skill) => {
+                      const selectable = isWaterSkillSelectable(skill);
+                      const active = selectedWaterSkill === skill.id;
+                      return (
+                        <button
+                          key={skill.id}
+                          type="button"
+                          disabled={!selectable}
+                          title={
+                            selectable
+                              ? skill.description
+                              : `${skill.description} (${skill.badge || "Soon"})`
+                          }
+                          onClick={() => {
+                            if (!selectable) return;
+                            setSelectedWaterSkill(skill.id);
+                            try {
+                              localStorage.setItem(WATER_SKILL_STORAGE_KEY, skill.id);
+                            } catch {
+                              /* ignore */
+                            }
+                          }}
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors border",
+                            !selectable && "opacity-45 cursor-not-allowed border-neutral-200 text-neutral-400",
+                            selectable && active && "border-neutral-900 bg-neutral-900 text-white",
+                            selectable &&
+                              !active &&
+                              "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
+                          )}
+                        >
+                          {skill.shortLabel}
+                          {skill.badge ? (
+                            <span className="ml-1 text-[9px] uppercase tracking-wide opacity-80">
+                              {skill.badge}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <label className="text-sm font-semibold text-neutral-800">Quality</label>
+                    <span
+                      className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600"
+                      title="Fast = blockout. Standard = through materials. Studio = full 8-pass professional sculpt."
+                      aria-label="Info"
+                    >
+                      <span className="text-[10px] font-bold leading-none">i</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center rounded-xl bg-white border border-neutral-200 overflow-hidden">
+                    {QUALITY_TIERS.map((tier) => {
+                      const active = selectedQualityTier === tier.id;
+                      return (
+                        <button
+                          key={tier.id}
+                          type="button"
+                          title={`${tier.description} · ${tier.hint}`}
+                          onClick={() => {
+                            setSelectedQualityTier(tier.id);
+                            try {
+                              localStorage.setItem(WATER_TIER_STORAGE_KEY, tier.id);
+                            } catch {
+                              /* ignore */
+                            }
+                          }}
+                          className={cn(
+                            "px-3 py-2 text-[11px] font-semibold transition-colors",
+                            active
+                              ? "bg-neutral-900 text-white"
+                              : "text-neutral-600 hover:bg-neutral-50"
+                          )}
+                        >
+                          {tier.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* Number of Generations — Hydrilla cloud only; Water always builds one model */}
             <div
               className={cn(
@@ -4488,11 +4634,18 @@ function WorkspacePage() {
             {/* Cost line — Hydrilla cloud uses credits; Water is BYOK */}
             {(() => {
               if (selectedIsCode) {
+                const tier = QUALITY_TIERS.find((t) => t.id === selectedQualityTier);
                 return (
-                  <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200/80 bg-white px-3 py-2 text-[12px] text-neutral-600">
-                    <span className="tabular-nums text-neutral-500">~1–3 min</span>
-                    <span className="h-1 w-1 rounded-full bg-neutral-300" aria-hidden />
-                    <span className="font-semibold tracking-tight text-neutral-800">Water · 0 credits</span>
+                  <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-neutral-200/80 bg-white px-3 py-2 text-[12px] text-neutral-600">
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums text-neutral-500">{tier?.hint || "~2–4 min"}</span>
+                      <span className="h-1 w-1 rounded-full bg-neutral-300" aria-hidden />
+                      <span className="font-semibold tracking-tight text-neutral-800">Water · 0 credits</span>
+                    </div>
+                    <span className="text-[10px] text-neutral-400">
+                      {WATER_SKILLS.find((s) => s.id === selectedWaterSkill)?.label} ·{" "}
+                      {tier?.label} ({passesForTier(selectedQualityTier).length} build passes)
+                    </span>
                   </div>
                 );
               }

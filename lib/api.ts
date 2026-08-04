@@ -1808,8 +1808,15 @@ export async function submitWater(params: {
   imageUrl?: string | null;
   workspaceId?: string | null;
   parentJobId?: string | null;
+  skillId?: string | null;
+  qualityTier?: string | null;
   getToken?: () => Promise<string | null>;
-}): Promise<{ job_id: string; mode: "text_to_code" | "image_to_code" }> {
+}): Promise<{
+  job_id: string;
+  mode: "text_to_code" | "image_to_code";
+  skillId?: string;
+  qualityTier?: string;
+}> {
   const res = await fetch(`${backendBase}/api/water/generate`, {
     method: "POST",
     headers: await authHeaders(params.getToken),
@@ -1819,6 +1826,8 @@ export async function submitWater(params: {
       imageUrl: params.imageUrl || undefined,
       workspaceId: params.workspaceId || undefined,
       parentJobId: params.parentJobId || undefined,
+      skillId: params.skillId || undefined,
+      qualityTier: params.qualityTier || undefined,
     }),
   });
   const body = await res.json().catch(() => ({}));
@@ -1832,6 +1841,8 @@ export async function submitWater(params: {
   return {
     job_id: (body as { jobId?: string }).jobId || "",
     mode: (body as { mode?: "text_to_code" | "image_to_code" }).mode || "text_to_code",
+    skillId: (body as { skillId?: string }).skillId,
+    qualityTier: (body as { qualityTier?: string }).qualityTier,
   };
 }
 

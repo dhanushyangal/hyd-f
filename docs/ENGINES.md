@@ -4,13 +4,84 @@ Two engines. Same workspace. Different compute.
 
 | | **Hydrilla cloud** | **Water** |
 |---|---|---|
-| Models | Trilles (credits) | BYOK LLMs → procedural Three.js |
+| Models | Trilles (credits); Hunyuan reserved | BYOK LLMs → procedural Three.js |
 | Input | Image (or text→image→3D) | Text; image optional reference |
 | Cost | Plan credits | 0 Hydrilla credits (user’s API key) |
-| Output | GLB mesh | `createModel(): THREE.Group` (+ client export) |
-| APIs | `/api/3d/*` + GPU | `/api/water/*` + provider APIs |
+| Output | GLB mesh | `createModel()` + client export: **GLB, GLTF, OBJ, STL, PNG, TypeScript (.ts)** |
+| APIs | `/api/3d/*` + GPU (`api.hydrilla.co`) | `/api/water/*` (+ legacy `/api/code-sculpt/*`) |
+| Job ids | GPU / backend ids | `wt_*` (legacy `cs_*`) |
+| Viewer | `ThreeViewer` + `/api/3d/glb/:jobId` | `WaterViewer` + `public/water-sandbox.html` |
 
 Naming: cloud = Trilles / Hydrilla cloud. BYOK = **Water** (not “Aggregator”, not “Code Sculpt” in UI).
+
+**Auth:** Clerk JWT only. Any signed-in user can use both engines (cloud still needs credits; Water needs a valid BYOK key).
+
+**Product surface:** `/workspace` (and `/workspace/:id`). Studio (`/app/studio`) creates/opens workspaces.
+
+---
+
+## Routing (how the UI chooses)
+
+```text
+Engine picker selectedModel
+  → provider === "hydrilla"  → Cloud  → /api/3d/*
+  → otherwise                → Water  → /api/water/*
+```
+
+Frontend: `lib/engines.ts`, `lib/models.ts`, `app/workspace/page.tsx`.  
+Backend mirrors: `backend/hydrilla_backend/src/lib/engines.ts`.
+
+---
+
+## Water Skills — where they live and what is used
+
+Skills are **selectable in the workspace create bar** (next to Engine + Quality). They shape the planner / generator prompts. They are **not** the markdown files under `skills/water/` at runtime.
+
+### Status
+
+| UI label | `skillId` | Status | What it does |
+|----------|-----------|--------|--------------|
+| Object | `object-studio` | **live** | Hard-surface / prop reconstruction |
+| Character | `character` | **live** | Anatomy, proportions, stylized likeness |
+| Anim | `animation` | **partial** | Sockets + idle `tick` hierarchy |
+| Game | `game` | **partial** | Named parts, colliders, LOD hooks |
+| Env | `environment` | **stub** | Soon — not selectable |
+| World | `world` | **stub** | Soon — not selectable |
+
+Defaults: skill `object-studio`, tier `standard`.
+
+### Where each piece lives
+
+| Layer | Path | Role |
+|-------|------|------|
+| **FE registry (UI chips)** | `lib/waterSkills.ts` | Labels, status, tier unlock lists, progress labels |
+| **BE registry (mirror)** | `backend/.../src/lib/waterSkills.ts` | Same ids / tiers for API validation |
+| **Runtime prompt packs** | `backend/.../src/lib/water/skills/index.ts` | Actual planner/generator/evaluator extras per skill |
+| **Harness** | `backend/.../src/lib/water/harness/*` | `run` → planner → generator → evaluator → fallback |
+| **API** | `POST /api/water/generate` | Body: `modelId`, `skillId`, `qualityTier`, `prompt` |
+| **Agent docs only** | `skills/water/SKILL.md` (+ `character.md`, `game.md`, …) | For coding agents — **not loaded at generate time** |
+
+```text
+Workspace UI
+  selects skillId + qualityTier from lib/waterSkills.ts
+    → submitWater()  (lib/api.ts)
+      → POST /api/water/generate
+        → runStudioPipeline()
+             uses backend waterSkills + water/skills prompt packs
+        → DONE + factory_code
+          → WaterViewer / water-sandbox.html
+             export GLB | GLTF | OBJ | STL | PNG | .ts
+```
+
+### Quality tiers (what unlocks)
+
+| Tier | Passes unlocked | Typical cost |
+|------|-----------------|--------------|
+| **Fast** | blockout | ~2 LLM calls · ~1 min |
+| **Standard** | → material (4 passes) | ~6 LLM calls · ~2–4 min |
+| **Studio** | all 8: blockout → structural → form → material → surface → lighting → interaction → optimization | ~12 LLM calls · longer on Cursor |
+
+Cursor Cloud Agents need longer per call (~2–4 min). Soft budgets are provider-aware (see [`WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md)).
 
 ---
 
@@ -23,18 +94,16 @@ Naming: cloud = Trilles / Hydrilla cloud. BYOK = **Water** (not “Aggregator”
 | Anthropic | Static catalog | `claude-sonnet-4-5`, `claude-opus-4-5` | Messages API |
 | OpenAI | Static catalog | `gpt-4.1`, `gpt-4.1-mini` | Chat completions |
 | Gemini | Static catalog | `gemini-2.5-flash`, `gemini-2.5-pro` | generateContent |
-| OpenRouter Free | Seed + **live** `GET openrouter.ai/api/v1/models` (free filter) | OR slug / `openrouter/free` | Chat completions |
-| OpenRouter Paid | Static catalog | `openrouter/<slug>` | Chat completions (strip prefix) |
-| Cursor | **Auto** + **live** `GET api.cursor.com/v1/models` | `cursor-auto` or `cursor/<nativeId>` | Cloud Agents `POST /v1/agents` |
-
-Cursor docs: [Cloud Agents endpoints](https://cursor.com/docs/cloud-agent/api/endpoints) — only ids from `/v1/models` for that key may be passed as `model.id`. Omit `model` for account Auto.
+| OpenRouter Free | Seed + **live** free filter | OR slug / `openrouter/free` | Chat completions |
+| OpenRouter Paid | Static catalog | `openrouter/<slug>` | Chat completions |
+| Cursor | **Auto** + **live** `/v1/models` | `cursor-auto` or `cursor/<nativeId>` | Cloud Agents `POST /v1/agents` |
 
 ### Preference (`defaultCodeModel`)
 
 One field: `user_model_prefs.default_code_model`.
 
-1. **Settings → Default Water model** — single grid of unlocked providers; Save writes prefs.  
-2. **Workspace Engine picker** — selecting a Water model also saves the same prefs.  
+1. **Settings → Default Water model** — save prefs.
+2. **Workspace Engine picker** — selecting a Water model also saves prefs.
 3. On workspace load, prefs restore the last Water model when its key is still valid.
 
 Mesh default remains `default_mesh_model` (usually `trilles`).
@@ -42,31 +111,32 @@ Mesh default remains `default_mesh_model` (usually `trilles`).
 ### Generate path
 
 ```text
-Engine picker selectedModel
-  → submitWater({ modelId })
+selectedModel + skillId + qualityTier
   → POST /api/water/generate
-  → providerForModel(modelId) + decrypted BYOK key
-  → jobs.llm_model = modelId, engine = water
-  → codeSculptPipeline → callLLM(provider, modelId)
-       Anthropic / OpenAI / Gemini / OpenRouter → chat APIs
-       Cursor → resolveCursorAgentModel(/v1/models) → POST /v1/agents → poll result
-  → DONE + factory_code  |  FAIL
+  → runStudioPipeline
+  → DONE + factory_code + llm_*_tokens
   → WaterViewer (never /api/3d/glb for wt_* jobs)
 ```
+
+### Client downloads (Water)
+
+Top-right of the Water preview: **GLB** + **Formats** (GLTF, OBJ, STL, PNG, TypeScript `.ts`).  
+Implemented in `components/WaterViewer.tsx` + `public/water-sandbox.html`.
+
+### Token usage
+
+On DONE: `jobs.llm_*_tokens` + nested `sculpt_spec.tokenUsage`.  
+`GET /api/water/jobs/:jobId`, `GET /api/water/usage`.  
+Migration: `backend/hydrilla_backend/sql/005_water_llm_tokens.sql`.
 
 ### Key verification
 
 | Provider | Probe |
 |----------|--------|
-| Anthropic | `GET /v1/models` + `x-api-key` |
-| OpenAI | `GET /v1/models` + Bearer |
-| OpenRouter | `GET /v1/models` + Bearer |
-| Gemini | `GET …/models?key=` |
+| Anthropic / OpenAI / OpenRouter / Gemini | Respective `/v1/models` (or Gemini models list) |
 | Cursor | `GET api.cursor.com/v1/me` |
 
-HTTP OK → **valid**. Keys never returned to the browser (only `last4`, status).
-
-Generate allowed when `configured && status !== "invalid"`.
+Generate allowed when `configured && status !== "invalid"`. Keys never returned to the browser (only `last4`, status).
 
 ### Env / SQL
 
@@ -75,23 +145,34 @@ Generate allowed when `configured && status !== "invalid"`.
 | `USER_API_KEYS_ENCRYPTION_SECRET` | Encrypt BYOK keys |
 | `sql/add_user_api_keys_and_code_sculpt.sql` | Base Water + keys tables |
 | `sql/add_cursor_provider.sql` | Allow `provider = 'cursor'` |
+| `sql/005_water_llm_tokens.sql` | Water LLM token columns |
 
 ---
 
 ## Hydrilla cloud (brief)
 
-Image → FLUX (optional) → Trellis → GLB. Credits. Details: [`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md).
-
-Water jobs use ids `wt_*` and must open in WaterViewer — never the GLB proxy.
+Image → FLUX (optional) → Trellis → GLB. Credits. GPU host: `https://api.hydrilla.co` (overridable).  
+Edit / combine need GPU `mode=high`. Details: [`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md).
 
 ---
 
-## Important docs & skill
+## Artifact boundary (must hold)
+
+```text
+Cloud:  engine=trilles   result_kind=glb            result_glb_url=…
+Water:  engine=water     result_kind=three_factory  factory_code=…
+```
+
+Never send Water jobs to the GLB proxy or GPU status poller.
+
+---
+
+## Doc map
 
 | Path | Role |
 |------|------|
-| **`docs/ENGINES.md`** (this file) | Cloud vs Water, model architecture, prefs |
-| **`docs/WATER_ORCHESTRATION.md`** | Pipeline prompts, gates, provider adapters |
-| **`docs/GENERATION_FLOWS.md`** | Deep cloud GPU / credits path |
-| **`skills/water/SKILL.md`** | Agent skill for Water codegen |
+| **`docs/ENGINES.md`** (this file) | Cloud vs Water, **skills map**, models, prefs |
+| **`docs/WATER_ORCHESTRATION.md`** | Pipeline, budgets, harness files |
+| **`docs/GENERATION_FLOWS.md`** | Cloud GPU / credits path |
+| **`skills/water/SKILL.md`** | Agent skill (docs only) |
 | **Backend `WATER_DEPLOY.md`** | SQL + Vercel env for BYOK |

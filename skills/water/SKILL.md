@@ -1,68 +1,55 @@
 ---
 name: water
-description: Hydrilla Water engine — BYOK procedural Three.js (Claude, OpenAI, Gemini, OpenRouter, Cursor). Use when editing Water generation, gates, sandbox, or model picker.
+description: Hydrilla Water Studio — BYOK multi-pass procedural Three.js with selectable skills (Object, Character, Animation, Game) and quality tiers (Fast / Standard / Studio).
 ---
 
 # Water — Hydrilla skill
 
-Build a **code-only**, gated, animation-ready procedural Three.js model from a text description (image optional).
+Build a **code-only**, gated, animation-ready procedural Three.js model from text (image optional), using the **Water Studio** harness:
+
+`planner → locked passes → generator → evaluator` (Anthropic-style separation).
 
 | Doc | Use |
-|-----|-----|
-| [`docs/ENGINES.md`](../../docs/ENGINES.md) | Cloud vs Water, model catalog, prefs, Cursor live sync |
-| [`docs/WATER_ORCHESTRATION.md`](../../docs/WATER_ORCHESTRATION.md) | Pipeline prompts & gates |
-
-Adapted from [img2threejs](https://github.com/img2threejs/img2threejs): reconstruction-by-code, deterministic gates.
+|-----|------|
+| [`docs/ENGINES.md`](../../docs/ENGINES.md) | Cloud vs Water, models, prefs, skills, tokens |
+| [`docs/WATER_ORCHESTRATION.md`](../../docs/WATER_ORCHESTRATION.md) | Pipeline, passes, harness |
 
 ## When it runs
 
-User picks a **Water** model in the Engine picker (unlocked BYOK key) and clicks Generate.
+User picks a **Water** LLM model + **Skill** + **Quality** tier, then Generate.
 
-| Provider | Models |
-|----------|--------|
-| Anthropic | Claude Sonnet / Opus (catalog) |
-| OpenAI | GPT-4.1 / Mini (catalog) |
-| Gemini | 2.5 Flash / Pro (catalog) |
-| OpenRouter | Free (live) + paid (catalog) |
-| Cursor | Auto + live Cloud Agents `/v1/models` |
+| Skill | Status |
+|-------|--------|
+| Object Studio | live — hard-surface / props |
+| Character | live — anatomy-aware |
+| Animation Ready | partial — sockets + idle tick |
+| Game Ready | partial — colliders / LOD hooks |
+| Environment / World | stub (Soon) |
 
-Hydrilla cloud (Trilles / credits) is untouched.
+| Tier | Passes |
+|------|--------|
+| Fast | blockout |
+| Standard | → material |
+| Studio | full 8: blockout → structural → form → material → surface → lighting → interaction → optimization |
 
-## Pipeline
+## Harness (do not collapse to one-shot)
 
-```
-intake → assessment+spec → spec gate → blockout → code gate → (one refine) → done
-```
+1. **Planner** — SculptSpec + qualityContract + detailInventory  
+2. **Generator** — current pass only; evolve previous factory  
+3. **Evaluator** — deterministic code gate, then skeptic LLM (skipped on Fast)  
+4. Max **one refine** per pass; soft time budget → partial DONE  
 
-| Stage | Who | Output |
-|-------|-----|--------|
-| intake | code | Suitability before tokens |
-| assessment + spec | LLM | SculptSpec JSON |
-| spec gate | code | Depth / parent / material integrity |
-| blockout | LLM | `createModel(): THREE.Group` |
-| code gate | code | Contract, banned APIs, coverage ≥ 60% |
-| refine | LLM | One corrective pass |
+Runtime prompts live in `backend/.../lib/water/skills/` — **not** this markdown file.
 
-Happy path: **2** LLM calls; up to **4** with repairs.
+## Contract (must hold)
 
-## Gates (must hold)
+- `import * as THREE from 'three'`
+- `export function createModel(): THREE.Group`
+- `root.userData.sculptRuntime` + `root.userData.tick`
+- No fetch / eval / loaders / dynamic import  
 
-- Intake — describable subject, ≤ 2000 chars  
-- Spec depth — simple ≥ 3 / moderate ≥ 6 / complex ≥ 10 components  
-- Code contract — `import * as THREE from 'three'`, one `export function createModel(): THREE.Group`  
-- Sandbox — no `fetch`, `eval`, `new Function`, dynamic `import`, `require`, asset loaders  
-- Runtime — `root.userData.sculptRuntime` + `root.userData.tick(dt, elapsed)`  
+Preview: `public/water-sandbox.html`.
 
-Preview: browser iframe `public/water-sandbox.html` (`sandbox="allow-scripts"`).
+## Agent notes
 
-## Model ids (do not invent Cursor ids)
-
-- Static: catalog ids as listed in `lib/models.ts` / backend `llmProviders.ts`  
-- OpenRouter Free: live slug ids  
-- Cursor: `cursor-auto` (omit `model`) or `cursor/<nativeId>` from that key’s `/v1/models` only  
-- Persist: `user_model_prefs.default_code_model` (Settings + workspace picker)
-
-## Later passes (future)
-
-`blockout → structural → form → material → surface → lighting → interaction → optimization`  
-v1 ships **blockout** only.
+When editing Water, preserve pass order and generator≠evaluator split. Prefer extending skill packs over stuffing everything into one system prompt.

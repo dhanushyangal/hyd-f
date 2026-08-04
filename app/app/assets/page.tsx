@@ -174,7 +174,7 @@ function AssetDetailModal({ job, onClose }: { job: BackendJob; onClose: () => vo
                 </a>
               </Button>
             )}
-            {/* Water: use Download menu inside WaterViewer (GLB / OBJ / STL / .ts) */}
+            {/* Water: Download GLB / GLTF / OBJ / STL / PNG / .ts via WaterViewer toolbar */}
             <Button
               type="button"
               variant="ghost"

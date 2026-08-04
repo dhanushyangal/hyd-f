@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { ChevronDown, Download, Droplets, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ENGINE } from "@/lib/engines";
@@ -19,17 +25,27 @@ type Props = {
   passLabel?: string | null;
   jobId?: string | null;
   onThumbnail?: (dataUrl: string) => void;
+  /** Fired after a successful download (for analytics). */
+  onDownloaded?: (format: ExportFormat) => void;
+  /** Hide the built-in top-right controls when the parent renders its own bar. */
+  hideToolbar?: boolean;
 };
 
-type ExportFormat = "glb" | "gltf" | "obj" | "stl" | "png" | "ts";
+export type ExportFormat = "glb" | "gltf" | "obj" | "stl" | "png" | "ts";
+
+export type WaterViewerHandle = {
+  exportFormat: (format: ExportFormat) => Promise<{ ok: true } | { ok: false; error: string }>;
+  canExportMesh: boolean;
+  hasFactoryCode: boolean;
+};
 
 const MESH_FORMATS: Array<{
-  id: ExportFormat;
+  id: Exclude<ExportFormat, "ts">;
   label: string;
   hint: string;
 }> = [
   { id: "glb", label: "GLB", hint: "Binary glTF — best for web & most apps" },
-  { id: "gltf", label: "GLTF", hint: "JSON glTF" },
+  { id: "gltf", label: "GLTF", hint: "JSON glTF (self-contained)" },
   { id: "obj", label: "OBJ", hint: "Wavefront mesh" },
   { id: "stl", label: "STL", hint: "3D print / CAD" },
   { id: "png", label: "PNG", hint: "Preview snapshot" },
@@ -54,19 +70,42 @@ function base64ToBlob(base64: string, mime: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
+/** Cross-iframe ArrayBuffer may fail `instanceof` — detect by shape. */
+function coerceArrayBuffer(value: unknown): ArrayBuffer | null {
+  if (value instanceof ArrayBuffer) return value;
+  if (ArrayBuffer.isView(value)) {
+    const view = value as ArrayBufferView;
+    return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    (value as { constructor?: { name?: string } }).constructor?.name === "ArrayBuffer" &&
+    typeof (value as { byteLength?: number }).byteLength === "number"
+  ) {
+    return value as ArrayBuffer;
+  }
+  return null;
+}
+
 function fileBase(jobId?: string | null) {
   const id = (jobId || "model").replace(/[^\w.-]+/g, "").slice(0, 28);
   return `hydrilla-water-${id || "model"}`;
 }
 
 /** Water engine preview — procedural Three.js factory in a sandboxed iframe. */
-export function WaterViewer({
-  factoryCode,
-  className,
-  passLabel,
-  jobId,
-  onThumbnail,
-}: Props) {
+export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterViewer(
+  {
+    factoryCode,
+    className,
+    passLabel,
+    jobId,
+    onThumbnail,
+    onDownloaded,
+    hideToolbar = false,
+  },
+  ref
+) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const onThumbnailRef = useRef(onThumbnail);
   const pendingExport = useRef<{
@@ -133,12 +172,10 @@ export function WaterViewer({
           const ext = rawName.includes(".") ? rawName.slice(rawName.lastIndexOf(".")) : ".bin";
           const filename = `${fileBase(jobId)}${ext}`;
           const mime = String(data.mime || "application/octet-stream");
-          // Prefer transferred ArrayBuffer (fast path) over base64.
-          if (data.buffer instanceof ArrayBuffer) {
-            downloadBlob(new Blob([data.buffer], { type: mime }), filename);
-          } else if (ArrayBuffer.isView(data.buffer)) {
-            downloadBlob(new Blob([data.buffer as BlobPart], { type: mime }), filename);
-          } else if (typeof data.base64 === "string") {
+          const ab = coerceArrayBuffer(data.buffer);
+          if (ab) {
+            downloadBlob(new Blob([ab], { type: mime }), filename);
+          } else if (typeof data.base64 === "string" && data.base64.length > 0) {
             downloadBlob(base64ToBlob(data.base64, mime), filename);
           } else if (typeof data.text === "string") {
             downloadBlob(new Blob([data.text], { type: mime || "text/plain" }), filename);
@@ -203,34 +240,53 @@ export function WaterViewer({
     });
 
   const downloadTs = () => {
-    if (!factoryCode) return;
+    if (!factoryCode) {
+      return { ok: false as const, error: "No factory code to download" };
+    }
     downloadBlob(
       new Blob([factoryCode], { type: "text/typescript;charset=utf-8" }),
       `${fileBase(jobId)}.ts`
     );
+    return { ok: true as const };
   };
 
   const handleExport = async (format: ExportFormat) => {
     setExportError(null);
     if (format === "ts") {
-      downloadTs();
-      return;
+      const result = downloadTs();
+      if (result.ok) onDownloaded?.("ts");
+      else setExportError(result.error);
+      return result;
     }
     setExporting(format);
     try {
       const result = await requestSandboxExport(format);
       if (!result.ok) setExportError(result.error);
+      else onDownloaded?.(format);
+      return result;
     } finally {
       setExporting(null);
     }
   };
 
+  const canExportMesh = Boolean(factoryCode && modelReady && !exporting && !error);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      exportFormat: handleExport,
+      canExportMesh,
+      hasFactoryCode: Boolean(factoryCode),
+    }),
+    // handleExport closes over latest state; rebind when readiness changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [factoryCode, modelReady, exporting, error, jobId]
+  );
+
   const passDisplay =
     passLabel === "blockout" || passLabel === "done"
       ? "blockout ready"
       : passLabel || null;
-
-  const canExportMesh = Boolean(factoryCode && modelReady && !exporting && !error);
 
   return (
     <div className={cn("relative h-full w-full overflow-hidden bg-[#f4f4f5]", className)}>
@@ -256,14 +312,14 @@ export function WaterViewer({
           {passDisplay ? ` · ${passDisplay}` : ""}
         </span>
       </div>
-      {factoryCode && (
-        <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
+      {factoryCode && !hideToolbar && (
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
           <button
             type="button"
             disabled={!canExportMesh}
             onClick={() => void handleExport("glb")}
-            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-900 bg-neutral-900 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-neutral-800 disabled:opacity-50"
-            title="Download GLB (fast)"
+            className="inline-flex items-center gap-1 rounded-full border border-neutral-900 bg-neutral-900 px-2 py-1 text-[10px] font-semibold text-white shadow-sm hover:bg-neutral-800 disabled:opacity-50"
+            title="Download GLB"
           >
             {exporting === "glb" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -276,22 +332,25 @@ export function WaterViewer({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                disabled={Boolean(exporting)}
-                className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 bg-white/90 px-2 py-1 text-[11px] font-medium text-neutral-800 shadow-sm backdrop-blur hover:bg-white disabled:opacity-60"
-                title="More formats"
+                disabled={Boolean(exporting) && exporting !== "ts"}
+                className="inline-flex items-center gap-0.5 rounded-full border border-neutral-200/80 bg-white/90 px-1.5 py-1 text-[10px] font-medium text-neutral-800 shadow-sm backdrop-blur hover:bg-white disabled:opacity-60"
+                title="Download GLTF, TypeScript, and more"
               >
                 {exporting && exporting !== "glb" ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                  <>
+                    <span>Formats</span>
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                  </>
                 )}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[220px]">
               <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-neutral-400">
-                More formats
+                Mesh
               </DropdownMenuLabel>
-              {MESH_FORMATS.filter((f) => f.id !== "glb").map((fmt) => (
+              {MESH_FORMATS.map((fmt) => (
                 <DropdownMenuItem
                   key={fmt.id}
                   disabled={!canExportMesh}
@@ -310,14 +369,14 @@ export function WaterViewer({
                 Source
               </DropdownMenuLabel>
               <DropdownMenuItem
-                disabled={Boolean(exporting)}
+                disabled={!factoryCode || Boolean(exporting)}
                 onSelect={(e) => {
                   e.preventDefault();
                   void handleExport("ts");
                 }}
                 className="flex flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-xs cursor-pointer"
               >
-                <span className="font-semibold text-neutral-900">TypeScript</span>
+                <span className="font-semibold text-neutral-900">TypeScript (.ts)</span>
                 <span className="text-[10px] text-neutral-500">createModel() factory source</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -333,7 +392,7 @@ export function WaterViewer({
         </div>
       )}
       {error && (
-        <div className="absolute bottom-3 left-3 right-3 z-10 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="absolute top-12 left-3 right-3 z-10 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
@@ -344,4 +403,6 @@ export function WaterViewer({
       )}
     </div>
   );
-}
+});
+
+export default WaterViewer;
