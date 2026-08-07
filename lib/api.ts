@@ -19,9 +19,9 @@ const apiBase = getPrimaryUrl();
 const getBackendBase = (): string => {
   const url = process.env.NEXT_PUBLIC_BACKEND_URL;
   if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
-    return "https://hydrilla-backend.vercel.app/"; // Fallback for local dev
+    return "https://hydrilla-backend.vercel.app"; // Fallback for local dev
   }
-  return url.endsWith('/') ? url.slice(0, -1) : url;
+  return url.endsWith("/") ? url.slice(0, -1) : url;
 };
 
 const backendBase = getBackendBase();
@@ -717,17 +717,16 @@ export async function checkEarlyAccess(
  * Upload image file to backend and get URL (backend may use local uploads or S3).
  */
 export async function uploadImage(file: File, getToken?: () => Promise<string | null>): Promise<string> {
-  if (!getToken) {
-    throw new Error("Authentication required");
-  }
   const formData = new FormData();
   formData.append("image", file);
 
-  const token = await getToken();
-  if (!token) {
-    throw new Error("Authentication required");
+  const headers: HeadersInit = {};
+  if (getToken) {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
   }
-  const headers: HeadersInit = { Authorization: `Bearer ${token}` };
 
   const res = await fetch(`${backendBase}/api/3d/upload-image`, {
     method: "POST",
@@ -911,17 +910,68 @@ export async function submitImageTo3D(
   }
 }
 
-/** @deprecated — always use submitImageTo3D (Node backend). Kept as a hard error if called. */
+/** @deprecated Used only when falling back to gateway for image-to-3d (e.g. if backend generate fails). */
 async function submitImageTo3DViaGateway(
-  _imageUrl: string | null,
-  _imageFile: File | null,
-  _getToken?: () => Promise<string | null>,
-  _previewJobId?: string | null,
-  _chatId?: string | null,
-  _workspaceId?: string | null,
-  _parentJobId?: string | null
+  imageUrl: string | null,
+  imageFile: File | null,
+  getToken?: () => Promise<string | null>,
+  previewJobId?: string | null,
+  chatId?: string | null,
+  workspaceId?: string | null,
+  parentJobId?: string | null
 ): Promise<{ job_id: string }> {
-  throw new Error("Direct GPU gateway submit is disabled. Use submitImageTo3D via the Node backend.");
+  let sourceImageUrl: string | null = imageUrl || null;
+  if (imageFile && isPrimaryUp()) {
+    try {
+      sourceImageUrl = await uploadImageViaApi(imageFile, getToken);
+    } catch {
+      sourceImageUrl = null;
+    }
+  }
+  if (!sourceImageUrl && !imageUrl) throw new Error("Either imageUrl or imageFile must be provided");
+
+  const buildFormData = (): FormData => {
+    const fd = new FormData();
+    if (sourceImageUrl) fd.append("image_url", sourceImageUrl);
+    else if (imageFile) fd.append("image_file", imageFile);
+    else if (imageUrl) fd.append("image_url", imageUrl);
+    return fd;
+  };
+  const parseErrorResponse = async (res: Response): Promise<string> => {
+    try {
+      const data = await res.json();
+      return data.error || "Failed to submit job";
+    } catch {
+      return (await res.text()) || "Failed to submit job";
+    }
+  };
+  const registerJob = async (result: { job_id: string }): Promise<void> => {
+    try {
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (getToken) {
+        const token = await getToken();
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+      }
+      const body: Record<string, unknown> = {
+        job_id: result.job_id,
+        imageUrl: sourceImageUrl || imageUrl || "uploaded_file",
+        generateType: "ImageTo3D",
+      };
+      if (sourceImageUrl) body.sourceImages = [sourceImageUrl];
+      if (previewJobId) body.previewJobId = previewJobId;
+      if (chatId) body.chatId = chatId;
+      if (workspaceId) body.workspaceId = workspaceId;
+      if (parentJobId || previewJobId) body.parentJobId = parentJobId || previewJobId;
+      await fetch(`${backendBase}/api/3d/register-job`, { method: "POST", headers, body: JSON.stringify(body) }).catch(() => {});
+    } catch {}
+  };
+
+  const targetUrl = getPrimaryUrl();
+  const res = await fetch(`${targetUrl}/image-to-3d`, { method: "POST", body: buildFormData() });
+  if (!res.ok) throw new Error(await parseErrorResponse(res));
+  const result = await res.json();
+  await registerJob(result);
+  return result;
 }
 
 
@@ -959,18 +1009,10 @@ export async function fetchJobLineage(
 }
 
 /**
- * Fetch job status from Node backend (auth required).
+ * Fetch job status from API
  */
-export async function fetchStatus(
-  jobId: string,
-  getToken?: () => Promise<string | null>
-): Promise<Job> {
-  const headers: HeadersInit = {};
-  if (getToken) {
-    const token = await getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-  }
-  const res = await fetch(`${backendBase}/api/3d/status/${jobId}`, { headers });
+export async function fetchStatus(jobId: string): Promise<Job> {
+  const res = await fetch(`${backendBase}/api/3d/status/${jobId}`);
   if (!res.ok) {
     let errorText: string;
     try {
