@@ -75,7 +75,10 @@ function coerceArrayBuffer(value: unknown): ArrayBuffer | null {
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
     const view = value as ArrayBufferView;
-    return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+    // Copy into a fresh ArrayBuffer — view.buffer may be SharedArrayBuffer
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+    return copy.buffer;
   }
   if (
     value &&
