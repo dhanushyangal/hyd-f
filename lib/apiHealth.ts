@@ -110,27 +110,8 @@ async function probeBackendHealth(): Promise<boolean> {
   }
 }
 
-async function probeGpuDirect(): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-    const res = await fetch(`${GPU_API_URL}/health`, {
-      method: "GET",
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    clearTimeout(tid);
-    if (!res.ok) return false;
-    const data = await res.json();
-    applyHealthPayload(data);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function refreshCapabilities(): Promise<void> {
-  const ok = (await probeBackendHealth()) || (await probeGpuDirect());
+  const ok = await probeBackendHealth();
   if (!ok) {
     _state = {
       status: "down",

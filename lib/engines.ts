@@ -1,7 +1,7 @@
 /**
  * Hydrilla has two generation engines:
  *
- * 1) Hydrilla cloud — models we host (e.g. Trilles). Uses platform credits → GLB.
+ * 1) Hydrilla cloud — models we host (e.g. Bluefox3D-v1 / id `trilles`). Uses platform credits → GLB.
  * 2) Water          — bring-your-own-key (BYOK). Uses the user’s LLM key → Three.js code.
  *
  * Legacy Code Sculpt wire values (`code_sculpt`, `CodeSculpt`) are still accepted on read.
@@ -61,7 +61,7 @@ export function formatEngineLabel(value?: string | null): string {
   if (!value) return "Image";
   if (isWaterEngine(value)) return ENGINE.water.label;
   if (/hunyuan/i.test(value || "")) return "Hunyuan 3D";
-  if (isHydrillaCloudEngine(value)) return "Trilles";
+  if (isHydrillaCloudEngine(value)) return "Bluefox3D-v1";
   return value.replace(/_/g, " ").trim();
 }
 

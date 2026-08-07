@@ -1136,7 +1136,7 @@ function WorkspacePage() {
         return;
       }
       try {
-        const status = await fetchStatus(currentGenerating.jobId);
+        const status = await fetchStatus(currentGenerating.jobId, async () => (await getToken()) ?? null);
         consecutiveFailures = 0;
 
         if (status.queue) {

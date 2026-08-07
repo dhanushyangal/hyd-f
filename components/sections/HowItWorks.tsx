@@ -4,10 +4,13 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
+import { cloudinaryImage } from "@/lib/cloudinary";
 
 const DASHED = "repeating-linear-gradient(90deg, #d0d0d0 0 10px, transparent 10px 20px)";
-const CLOUDINARY_LANDING_BASE =
-  "https://res.cloudinary.com/dqizbxc9e/image/upload/f_auto,q_auto/v1/hydrilla-landing";
+
+/** Explicit WebP + width — avoids Next Image Optimizer timeouts on large f_auto PNGs. */
+const workflowStepImage = (id: string) =>
+  cloudinaryImage(`hydrilla-landing/workflow/${id}`, "f_webp,q_auto,c_fit,w_900");
 
 const STEPS = [
   {
@@ -15,7 +18,7 @@ const STEPS = [
     number: "01",
     title: "Describe your asset",
     body: "Type a prompt or upload a reference image. Describe your character, environment, or prop in plain language—our AI understands context and intent.",
-    image: `${CLOUDINARY_LANDING_BASE}/workflow/describe`,
+    image: workflowStepImage("describe"),
     hoverImage: null as string | null,
   },
   {
@@ -23,15 +26,15 @@ const STEPS = [
     number: "02",
     title: "Generate in seconds",
     body: "Hydrilla's models produce a production-quality 3D asset instantly. View the result from every angle—wireframe to full texture.",
-    image: `${CLOUDINARY_LANDING_BASE}/workflow/generated-model1`,
-    hoverImage: `${CLOUDINARY_LANDING_BASE}/workflow/generated-model2`,
+    image: workflowStepImage("generated-model1"),
+    hoverImage: workflowStepImage("generated-model2"),
   },
   {
     id: "refine",
     number: "03",
     title: "Refine and export",
     body: "Iterate on your asset, adjust details, and export in the format your pipeline requires—GLB, FBX, OBJ, or USD.",
-    image: `${CLOUDINARY_LANDING_BASE}/workflow/refine`,
+    image: workflowStepImage("refine"),
     hoverImage: null as string | null,
   },
 ];
@@ -112,6 +115,7 @@ export default function HowItWorks() {
                     src={displaySrc}
                     alt=""
                     fill
+                    unoptimized
                     className="object-contain object-center p-4"
                     sizes="(max-width: 768px) 100vw, 50vw"
                     loading="lazy"
@@ -154,6 +158,7 @@ export default function HowItWorks() {
                         src={step.image}
                         alt={step.title}
                         fill
+                        unoptimized
                         className="object-contain object-center"
                         sizes="100vw"
                         loading="lazy"

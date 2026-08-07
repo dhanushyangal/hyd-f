@@ -11,9 +11,9 @@ const CLOUDINARY_WORKFLOW_BASE =
 const workflowImage = (id: string, transform: string) =>
   `${CLOUDINARY_WORKFLOW_BASE}/${transform}/v1/hydrilla-landing/workflow/${id}`;
 
-const WORKFLOW_BACKDROP = workflowImage("back", "f_auto,q_auto,w_1280");
-const WORKFLOW_DESKTOP = workflowImage("workspace", "f_auto,q_auto,c_fit,w_1200");
-const WORKFLOW_MOBILE = workflowImage("workflow-mobile", "f_auto,q_auto,c_fill,w_760,h_760");
+const WORKFLOW_BACKDROP = workflowImage("back", "f_webp,q_auto,w_1280");
+const WORKFLOW_DESKTOP = workflowImage("workspace", "f_webp,q_auto,c_fit,w_1200");
+const WORKFLOW_MOBILE = workflowImage("workflow-mobile", "f_webp,q_auto,c_fill,w_760,h_760");
 
 const FLOATING_TAGS = [
   {

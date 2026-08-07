@@ -7,9 +7,7 @@ export type WaterSkillId =
   | "object-studio"
   | "character"
   | "animation"
-  | "game"
-  | "environment"
-  | "world";
+  | "game";
 
 export type QualityTier = "fast" | "standard" | "studio";
 
@@ -105,7 +103,7 @@ export const WATER_SKILLS: WaterSkillDef[] = [
     id: "animation",
     label: "Animation Ready",
     shortLabel: "Anim",
-    description: "Sockets, idle tick, clip-ready hierarchy",
+    description: "Sockets, pivot hierarchy — static rest pose",
     status: "partial",
     badge: "Partial",
     roadmapTheme: "v1.8 Animation",
@@ -118,24 +116,6 @@ export const WATER_SKILLS: WaterSkillDef[] = [
     status: "partial",
     badge: "Partial",
     roadmapTheme: "v1.7 Game Pipeline",
-  },
-  {
-    id: "environment",
-    label: "Environment",
-    shortLabel: "Env",
-    description: "Rooms, buildings, multi-object scenes",
-    status: "stub",
-    badge: "Soon",
-    roadmapTheme: "v1.6 Environment",
-  },
-  {
-    id: "world",
-    label: "Procedural World",
-    shortLabel: "World",
-    description: "Multi-view worlds, cities, semantic scenes",
-    status: "stub",
-    badge: "Soon",
-    roadmapTheme: "v2.0 Worlds",
   },
 ];
 

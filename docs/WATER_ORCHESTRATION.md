@@ -36,23 +36,12 @@ Request: `POST /api/water/generate` with:
 | `character` | Character | character pack | live |
 | `animation` | Anim | animation pack (sockets / tick) | partial |
 | `game` | Game | game pack (colliders / LOD hooks) | partial |
-| `environment` | Env | — | stub (UI Soon) |
-| `world` | World | — | stub (UI Soon) |
 
-**UI / validation registries**
+**UI / validation:** `frontend/lib/waterSkills.ts`, `backend/src/lib/waterSkills.ts`  
+**Runtime prompts:** `backend/src/lib/water/skills/index.ts`  
+**Agent markdown (not runtime):** `skills/water/SKILL.md`, `character.md`, `animation.md`, `game.md`, `object-studio.md`
 
-- Frontend: `lib/waterSkills.ts`
-- Backend: `src/lib/waterSkills.ts`
-
-**Runtime prompts (actually injected into LLM calls)**
-
-- `backend/hydrilla_backend/src/lib/water/skills/index.ts`
-
-**Agent markdown (not runtime)**
-
-- `skills/water/SKILL.md`, `character.md`, `animation.md`, `game.md`, `object-studio.md`
-
-Selectable in UI = `status === "live" || "partial"`. Stubs render disabled.
+Selectable in UI = `status === "live" || "partial"`.
 
 ---
 
@@ -114,6 +103,8 @@ Frontend mirror: `lib/waterSkills.ts`, `lib/api.ts` (`submitWater`), `components
 | **PNG** | Viewport snapshot |
 | **TypeScript (.ts)** | Raw factory source |
 
+Preview is **static**: factories must not animate; the sandbox never runs per-frame model animation.
+
 ---
 
 ## Roadmap (honest)
@@ -122,7 +113,6 @@ Frontend mirror: `lib/waterSkills.ts`, `lib/api.ts` (`submitWater`), `components
 |-------|--------|
 | Object quality | Studio + Object skill |
 | Character | Character skill (live) |
-| Environment / World | Stub |
 | Game pipeline | Partial hooks; **mesh exporters live** |
-| Animation | Partial sockets / tick |
+| Animation | Partial sockets; static pose (no idle tick) |
 | AI Studio UI | `/workspace` |

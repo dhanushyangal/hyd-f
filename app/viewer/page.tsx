@@ -6,6 +6,7 @@ import { ThreeViewer } from "../../components/ThreeViewer";
 import { JobStatusBadge } from "../../components/JobStatusBadge";
 import { useSearchParams } from "next/navigation";
 import { ConfirmModal } from "../../components/ConfirmModal";
+import { useAuth } from "@clerk/nextjs";
 
 // Force dynamic rendering to prevent prerendering errors with useSearchParams
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,7 @@ function ViewerContent() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get("jobId") || "";
   const mode = searchParams.get("mode") || ""; // "image" = show image view
+  const { getToken } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -100,7 +102,7 @@ function ViewerContent() {
 
     const fetchAndSchedule = async () => {
       try {
-        const data = await fetchStatus(jobId);
+        const data = await fetchStatus(jobId, async () => (await getToken()) ?? null);
         if (!active) return;
         consecutiveFailures = 0; // Reset on success
         setJob(data);
@@ -134,7 +136,7 @@ function ViewerContent() {
     return () => {
       active = false;
     };
-  }, [jobId]);
+  }, [jobId, getToken]);
 
   const handleCancelClick = () => {
     setShowCancelConfirm(true);
@@ -144,7 +146,7 @@ function ViewerContent() {
     setShowCancelConfirm(false);
     setCancelling(true);
     try {
-      await cancelJob(jobId);
+      await cancelJob(jobId, async () => (await getToken()) ?? null);
       setJob((prev) => prev ? { ...prev, status: "cancelled" } : null);
     } catch (err: any) {
       setError(err.message || "Failed to cancel job");

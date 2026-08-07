@@ -5,7 +5,7 @@ description: Hydrilla Water Studio — BYOK multi-pass procedural Three.js with 
 
 # Water — Hydrilla skill
 
-Build a **code-only**, gated, animation-ready procedural Three.js model from text (image optional), using the **Water Studio** harness:
+Build a **code-only**, gated, procedural Three.js model from text (image optional), using the **Water Studio** harness:
 
 `planner → locked passes → generator → evaluator` (Anthropic-style separation).
 
@@ -22,9 +22,8 @@ User picks a **Water** LLM model + **Skill** + **Quality** tier, then Generate.
 |-------|--------|
 | Object Studio | live — hard-surface / props |
 | Character | live — anatomy-aware |
-| Animation Ready | partial — sockets + idle tick |
+| Animation Ready | partial — sockets / static rest pose |
 | Game Ready | partial — colliders / LOD hooks |
-| Environment / World | stub (Soon) |
 
 | Tier | Passes |
 |------|--------|
@@ -45,7 +44,8 @@ Runtime prompts live in `backend/.../lib/water/skills/` — **not** this markdow
 
 - `import * as THREE from 'three'`
 - `export function createModel(): THREE.Group`
-- `root.userData.sculptRuntime` + `root.userData.tick`
+- `root.userData.sculptRuntime`
+- Factory is **static** (no time-based animation; no `userData.tick`)
 - No fetch / eval / loaders / dynamic import  
 
 Preview: `public/water-sandbox.html`.

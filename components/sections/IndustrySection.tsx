@@ -8,7 +8,7 @@ import { BlurReveal } from "@/components/ui/BlurReveal";
 const CLOUDINARY_LANDING_BASE =
   "https://res.cloudinary.com/dqizbxc9e/image/upload";
 
-const industryImage = (id: string, transform = "f_auto,q_auto,c_fill,w_420,h_590") =>
+const industryImage = (id: string, transform = "f_webp,q_auto,c_fill,w_420,h_590") =>
   `${CLOUDINARY_LANDING_BASE}/${transform}/v1/hydrilla-landing/industrypower/${id}`;
 
 /* ─────────────────────────── data ─────────────────────────── */
@@ -17,7 +17,7 @@ const INDUSTRIES = [
     id: "game",
     title: "Game Development",
     image: industryImage("dino"),
-    mobileImage: industryImage("dino", "f_auto,q_auto,c_fill,w_900,h_675"),
+    mobileImage: industryImage("dino", "f_webp,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Assets built for real-time production",
     ctaLabel: "Explore Game Development",
     ctaHref: "/usecase/gamedev",
@@ -36,7 +36,7 @@ const INDUSTRIES = [
     id: "film",
     title: "Film & Animation",
     image: industryImage("films-a"),
-    mobileImage: industryImage("films-a", "f_auto,q_auto,c_fill,w_900,h_675"),
+    mobileImage: industryImage("films-a", "f_webp,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Production assets for cinematic pipelines",
     ctaLabel: "Explore Film & Animation",
     ctaHref: "/usecase/filmproduction",
@@ -55,7 +55,7 @@ const INDUSTRIES = [
     id: "arc",
     title: "Architecture & Interiors",
     image: industryImage("architecture"),
-    mobileImage: industryImage("architecture", "f_auto,q_auto,c_fill,w_900,h_675"),
+    mobileImage: industryImage("architecture", "f_webp,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Architectural visualization assets",
     ctaLabel: "Explore Architecture",
     ctaHref: "/usecase/architecture",
@@ -74,7 +74,7 @@ const INDUSTRIES = [
     id: "arch",
     title: "AR / VR & XR",
     image: industryImage("arvr1"),
-    mobileImage: industryImage("arvr1", "f_auto,q_auto,c_fill,w_900,h_675"),
+    mobileImage: industryImage("arvr1", "f_webp,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Assets designed for immersive environments",
     ctaLabel: "Explore XR Solutions",
     ctaHref: "/usecase/arvr",
@@ -93,7 +93,7 @@ const INDUSTRIES = [
     id: "prop",
     title: "Product Visualization",
     image: industryImage("lampprop"),
-    mobileImage: industryImage("lampprop", "f_auto,q_auto,c_fill,w_900,h_675"),
+    mobileImage: industryImage("lampprop", "f_webp,q_auto,c_fill,w_900,h_675"),
     leftHeading: "Product assets for visualization and marketing",
     ctaLabel: "Explore Product Visualization",
     ctaHref: "/usecase/productdesign",
