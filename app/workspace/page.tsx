@@ -49,6 +49,7 @@ import {
   getGlbUrl,
   getProxyGlbUrl,
   getProxiedImageUrl,
+  downloadGlbWithAuth,
   notifyGpuOffline,
   cancelJob,
   canEdit,
@@ -3715,15 +3716,24 @@ function WorkspacePage() {
               {/* Actions: mobile = Download + info icon; desktop = Download + Full View + optional Create another 3D / Edit */}
               <div className="relative">
               <div className="flex items-center justify-center gap-2.5 p-3.5 border-t border-neutral-200/60 bg-white/90 backdrop-blur-xl flex-wrap">
-                <a
-                  href={centerView.glbUrl}
-                  download
-                  onClick={() => track("model_downloaded", { format: "glb" })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    track("model_downloaded", { format: "glb" });
+                    void downloadGlbWithAuth(
+                      centerView.glbUrl,
+                      `hydrilla-${centerView.jobId || "model"}.glb`,
+                      async () => (await getToken()) ?? null
+                    ).catch((err) => {
+                      console.error(err);
+                      alert(err instanceof Error ? err.message : "Failed to download model");
+                    });
+                  }}
                   className="inline-flex items-center h-10 px-4 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors"
                 >
                   <span className="lg:hidden">Download</span>
                   <span className="hidden lg:inline">Download GLB</span>
-                </a>
+                </button>
                 {/* Mobile-only: info icon to open generation info popover above */}
                 {selectedJobInfo && (
                   <button

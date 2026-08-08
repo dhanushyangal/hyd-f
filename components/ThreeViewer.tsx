@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -128,6 +129,7 @@ export function ThreeViewer({
   wireframeMode: wireframeModeProp,
   onWireframeChange,
 }: Props) {
+  const { getToken } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -306,101 +308,6 @@ export function ThreeViewer({
     gridHelperRef.current = gridHelper;
     scene.add(gridHelper);
 
-    // Load GLB model
-    const loader = new GLTFLoader();
-    
-    // Start showing progress immediately
-    setLoadProgress(1);
-
-    loader.load(
-      glbUrl,
-      (gltf) => {
-        try {
-          const model = gltf.scene;
-          modelRef.current = model; // Store reference to the actual model
-
-          // Center and scale the model
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-
-          // Calculate scale to fit in view
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const scale = maxDim > 0 ? 2 / maxDim : 1;
-          model.scale.multiplyScalar(scale);
-
-          // Center the model
-          model.position.x = -center.x * scale;
-          model.position.y = -center.y * scale;
-          model.position.z = -center.z * scale;
-
-          // Enable shadows; store original material ref for material-type switching
-          model.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              (child as THREE.Mesh & { userData: { originalMaterial?: THREE.Material } }).userData.originalMaterial = child.material;
-              if (child.material) {
-                if (Array.isArray(child.material)) {
-                  child.material.forEach((mat: THREE.Material) => {
-                    if (mat instanceof THREE.MeshStandardMaterial) mat.envMapIntensity = 0.8;
-                  });
-                } else if (child.material instanceof THREE.MeshStandardMaterial) {
-                  child.material.envMapIntensity = 0.8;
-                }
-              }
-            }
-          });
-
-          scene.add(model);
-          setLoading(false);
-          setModelReady(true); // So material sync effect runs and applies materialType/roughness
-
-          // Adjust camera to view the model
-          const newBox = new THREE.Box3().setFromObject(model);
-          const newSize = newBox.getSize(new THREE.Vector3());
-          const maxSize = Math.max(newSize.x, newSize.y, newSize.z);
-          const distance = maxSize * 2;
-          camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
-          camera.lookAt(0, 0, 0);
-          controls.target.set(0, 0, 0);
-          controls.update();
-        } catch (err: any) {
-          setError(`Failed to process model: ${err.message}`);
-          setLoading(false);
-        }
-      },
-      (progress) => {
-        if (progress.total > 0) {
-          const percent = Math.round((progress.loaded / progress.total) * 100);
-          setLoadProgress(Math.max(1, Math.min(99, percent))); // Clamp between 1-99%
-        } else if (progress.loaded > 0) {
-          // If total is unknown but we have loaded bytes, show progress based on loaded size
-          // Estimate: assume typical GLB is 1-5MB, show progress accordingly
-          const estimatedTotal = 3000000; // 3MB estimate
-          const percent = Math.min(95, Math.round((progress.loaded / estimatedTotal) * 100));
-          setLoadProgress(Math.max(1, percent));
-        } else {
-          // Show minimal progress if no data yet
-          setLoadProgress(1);
-        }
-      },
-      (err) => {
-        let errorMessage = "Unknown error";
-
-        if (err instanceof Error) {
-          errorMessage = err.message;
-          if (err.message.includes("CORS") || err.message.includes("Failed to fetch")) {
-            errorMessage = "CORS error: Unable to load model. The file may be blocked by browser security.";
-          }
-        } else if (err instanceof ProgressEvent) {
-          errorMessage = "Network error: Failed to download model file";
-        }
-        setError(`Failed to load model: ${errorMessage}`);
-        setLoading(false);
-      }
-    );
-
     // Animation loop
     const animate = () => {
       if (controlsRef.current) {
@@ -428,8 +335,123 @@ export function ThreeViewer({
     const ro = new ResizeObserver(handleResize);
     if (containerEl) ro.observe(containerEl);
 
+    let cancelled = false;
+
+    // Load GLB with Clerk Bearer — GLTFLoader cannot send auth on its own
+    (async () => {
+      setLoadProgress(1);
+      const loader = new GLTFLoader();
+      loader.setWithCredentials(true);
+      try {
+        const token = await getToken();
+        if (cancelled) return;
+        if (token) {
+          loader.setRequestHeader({ Authorization: `Bearer ${token}` });
+        }
+      } catch {
+        // proceed without token; server will 401 if required
+      }
+
+      if (cancelled) return;
+
+      loader.load(
+        glbUrl,
+        (gltf) => {
+          if (cancelled) return;
+          try {
+            const model = gltf.scene;
+            modelRef.current = model; // Store reference to the actual model
+
+            // Center and scale the model
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+
+            // Calculate scale to fit in view
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const scale = maxDim > 0 ? 2 / maxDim : 1;
+            model.scale.multiplyScalar(scale);
+
+            // Center the model
+            model.position.x = -center.x * scale;
+            model.position.y = -center.y * scale;
+            model.position.z = -center.z * scale;
+
+            // Enable shadows; store original material ref for material-type switching
+            model.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                (child as THREE.Mesh & { userData: { originalMaterial?: THREE.Material } }).userData.originalMaterial = child.material;
+                if (child.material) {
+                  if (Array.isArray(child.material)) {
+                    child.material.forEach((mat: THREE.Material) => {
+                      if (mat instanceof THREE.MeshStandardMaterial) mat.envMapIntensity = 0.8;
+                    });
+                  } else if (child.material instanceof THREE.MeshStandardMaterial) {
+                    child.material.envMapIntensity = 0.8;
+                  }
+                }
+              }
+            });
+
+            scene.add(model);
+            setLoading(false);
+            setModelReady(true); // So material sync effect runs and applies materialType/roughness
+
+            // Adjust camera to view the model
+            const newBox = new THREE.Box3().setFromObject(model);
+            const newSize = newBox.getSize(new THREE.Vector3());
+            const maxSize = Math.max(newSize.x, newSize.y, newSize.z);
+            const distance = maxSize * 2;
+            camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+          } catch (err: any) {
+            setError(`Failed to process model: ${err.message}`);
+            setLoading(false);
+          }
+        },
+        (progress) => {
+          if (cancelled) return;
+          if (progress.total > 0) {
+            const percent = Math.round((progress.loaded / progress.total) * 100);
+            setLoadProgress(Math.max(1, Math.min(99, percent))); // Clamp between 1-99%
+          } else if (progress.loaded > 0) {
+            // If total is unknown but we have loaded bytes, show progress based on loaded size
+            // Estimate: assume typical GLB is 1-5MB, show progress accordingly
+            const estimatedTotal = 3000000; // 3MB estimate
+            const percent = Math.min(95, Math.round((progress.loaded / estimatedTotal) * 100));
+            setLoadProgress(Math.max(1, percent));
+          } else {
+            // Show minimal progress if no data yet
+            setLoadProgress(1);
+          }
+        },
+        (err) => {
+          if (cancelled) return;
+          let errorMessage = "Unknown error";
+
+          if (err instanceof Error) {
+            errorMessage = err.message;
+            if (err.message.includes("CORS") || err.message.includes("Failed to fetch")) {
+              errorMessage = "CORS error: Unable to load model. The file may be blocked by browser security.";
+            } else if (err.message.includes("401") || err.message.includes("Unauthorized")) {
+              errorMessage = "Unauthorized: sign in again to load this model.";
+            }
+          } else if (err instanceof ProgressEvent) {
+            errorMessage = "Network error: Failed to download model file";
+          }
+          setError(`Failed to load model: ${errorMessage}`);
+          setLoading(false);
+        }
+      );
+    })();
+
     // Cleanup
     return () => {
+      cancelled = true;
       if (containerEl) ro.unobserve(containerEl);
       window.removeEventListener("resize", handleResize);
       if (animationFrameRef.current) {
@@ -477,7 +499,7 @@ export function ThreeViewer({
         wireframeOverlayRef.current = null;
       }
     };
-  }, [glbUrl]);
+  }, [glbUrl, getToken]);
 
   // Sync viewer options when they change (background, grid, autoRotate, lighting, material, brightness)
   useEffect(() => {

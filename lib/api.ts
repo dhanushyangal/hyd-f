@@ -1099,6 +1099,35 @@ export function getProxyGlbUrl(jobId: string): string {
 }
 
 /**
+ * Download a GLB through the auth-gated proxy (anchor tags cannot send Bearer tokens).
+ */
+export async function downloadGlbWithAuth(
+  glbUrl: string,
+  filename: string,
+  getToken: () => Promise<string | null>
+): Promise<void> {
+  const token = await getToken();
+  const headers: HeadersInit = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(glbUrl, { headers, credentials: "include" });
+  if (!res.ok) {
+    throw new Error(`Failed to download model (${res.status})`);
+  }
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename.endsWith(".glb") ? filename : `${filename}.glb`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/**
  * Proxy S3 / gateway image URLs through the backend to avoid CORS.
  * - data:/blob:/already-proxied → returned as-is
  * - Anything else → returned as-is (won't be proxied) unless S3/gateway

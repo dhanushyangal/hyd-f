@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, Suspense, useRef } from "react";
-import { fetchStatus, Job, getGlbUrl, getPreviewImageUrl, cancelJob } from "../../lib/api";
+import { fetchStatus, Job, getGlbUrl, getPreviewImageUrl, cancelJob, downloadGlbWithAuth } from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { JobStatusBadge } from "../../components/JobStatusBadge";
 import { useSearchParams } from "next/navigation";
@@ -291,18 +291,25 @@ function ViewerContent() {
                 <ThreeViewer glbUrl={glbUrl} />
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 flex-wrap">
-                <a
-                  href={glbUrl}
-                  download
+                <button
+                  type="button"
+                  onClick={() => {
+                    void downloadGlbWithAuth(
+                      glbUrl,
+                      `hydrilla-${job.job_id || "model"}.glb`,
+                      async () => (await getToken()) ?? null
+                    ).catch((err) => {
+                      console.error(err);
+                      alert(err instanceof Error ? err.message : "Failed to download model");
+                    });
+                  }}
                   className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-black text-white font-medium hover:bg-gray-900 transition-all text-sm sm:text-base"
-                  target="_blank"
-                  rel="noopener noreferrer"
                 >
                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                   Download GLB
-                </a>
+                </button>
                 {previewUrl && (
                   <a
                     href={previewUrl}

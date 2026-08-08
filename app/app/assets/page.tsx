@@ -9,6 +9,7 @@ import {
   fetchWaterJob,
   getProxyGlbUrl,
   getProxiedImageUrl,
+  downloadGlbWithAuth,
   type BackendJob,
 } from "../../../lib/api";
 import { Download, X, Box, Plus, Code2 } from "lucide-react";
@@ -167,11 +168,25 @@ function AssetDetailModal({ job, onClose }: { job: BackendJob; onClose: () => vo
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!code && (
-              <Button asChild size="sm" className="h-9 rounded-full px-4">
-                <a href={glbUrl} download className="inline-flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 rounded-full px-4"
+                onClick={() => {
+                  void downloadGlbWithAuth(
+                    glbUrl,
+                    `hydrilla-${job.id}.glb`,
+                    async () => (await getToken()) ?? null
+                  ).catch((err) => {
+                    console.error(err);
+                    alert(err instanceof Error ? err.message : "Failed to download model");
+                  });
+                }}
+              >
+                <span className="inline-flex items-center gap-1.5">
                   <Download className="w-3.5 h-3.5" />
                   GLB
-                </a>
+                </span>
               </Button>
             )}
             {/* Water: Download GLB / GLTF / OBJ / STL / PNG / .ts via WaterViewer toolbar */}
