@@ -4406,7 +4406,7 @@ function WorkspacePage() {
                         <Button
                           type="button"
                           size="sm"
-                          variant="secondary"
+                          variant="outline"
                           className="absolute top-2 right-2 h-7 rounded-full bg-white/95 px-2.5 text-[11px] font-semibold shadow-sm"
                           onClick={() => {
                             // Empty string = cleared; do not fall back to open canvas job
