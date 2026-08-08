@@ -1282,7 +1282,8 @@ export async function deleteJob(jobId: string, getToken: () => Promise<string | 
 }
 
 /**
- * Cancel a 3D job (via backend; backend proxies to Python gateway).
+ * Cancel a job. Water (`wt_` / `cs_`) → /api/water/jobs/:id/cancel.
+ * Cloud 3D / image → /api/3d/cancel/:id (proxies to GPU).
  */
 export async function cancelJob(
   jobId: string,
@@ -1293,7 +1294,11 @@ export async function cancelJob(
     const token = await getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
-  const res = await fetch(`${backendBase}/api/3d/cancel/${jobId}`, {
+  const isWater = jobId.startsWith("wt_") || jobId.startsWith("cs_");
+  const url = isWater
+    ? `${backendBase}/api/water/jobs/${jobId}/cancel`
+    : `${backendBase}/api/3d/cancel/${jobId}`;
+  const res = await fetch(url, {
     method: "POST",
     headers,
   });

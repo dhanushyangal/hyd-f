@@ -375,11 +375,11 @@ function WorkspacePage() {
     });
   }, []);
 
-  // When features drop to low, force back to "text" if on Edit/Combine
+  // When features drop to low, force back to "text" if on Combine.
+  // Cloud Edit snap (text_1img) is handled with Water awareness below.
   useEffect(() => {
-    if (!editAvailable && inputMode === "text_1img") setInputMode("text");
     if (!combineAvailable && inputMode === "text_2img") setInputMode("text");
-  }, [editAvailable, combineAvailable, inputMode]);
+  }, [combineAvailable, inputMode]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
@@ -622,10 +622,19 @@ function WorkspacePage() {
   const selectedIsCode =
     selectedProvider !== null && selectedProvider !== "hydrilla";
 
-  // Bring-your-own models are text → 3D only; the image tabs don't apply to them.
+  // Water: Text + Edit only. Snap away from cloud Image/Combine modes.
+  // Cloud: snap Edit off when GPU edit is unavailable.
   useEffect(() => {
-    if (selectedIsCode && inputMode !== "text") setInputMode("text");
-  }, [selectedIsCode, inputMode]);
+    if (selectedIsCode) {
+      if (inputMode === "image" || inputMode === "text_2img") {
+        setInputMode("text");
+      }
+      return;
+    }
+    if (inputMode === "text_1img" && !editAvailable) {
+      setInputMode("text");
+    }
+  }, [selectedIsCode, inputMode, editAvailable]);
 
   // A failed mesh/GPU job must not remain as the active canvas when the user
   // switches to Water. It is unrelated to the Water engine.
@@ -1653,6 +1662,35 @@ function WorkspacePage() {
     ]
   );
 
+  /** Resolve parent Water job for right-panel Edit mode. Empty string = user cleared the slot. */
+  const resolveWaterEditParentId = useCallback((): string | null => {
+    if (waterEditTargetJobId === "") return null;
+    if (waterEditTargetJobId) return waterEditTargetJobId;
+    if (centerView.type === "code" && centerView.jobId) return centerView.jobId;
+    if (selectedJobInfo && isWaterJobFn(selectedJobInfo)) return selectedJobInfo.id;
+    return null;
+  }, [waterEditTargetJobId, centerView, selectedJobInfo, isWaterJobFn]);
+
+  /** Right-panel Water Generate: Text = new job; Edit = refine parent. */
+  const runWaterFromPanel = useCallback(async () => {
+    if (inputMode === "text_1img") {
+      const parentId = resolveWaterEditParentId();
+      if (!parentId) {
+        const msg = "Open or select a Water model to edit first";
+        setError(msg);
+        setCenterView({ type: "error", message: msg });
+        return;
+      }
+      if (!prompt.trim()) {
+        setError("Please enter a refine prompt");
+        return;
+      }
+      await runWater({ parentId, promptOverride: prompt.trim() });
+      return;
+    }
+    await runWater();
+  }, [inputMode, resolveWaterEditParentId, prompt, runWater]);
+
   // Helper: start 3D generation from image URL (used after image gen or when we already have preview).
   // When `localFile` is set (user picked a file from disk), pass it straight into `submitImageTo3D` so
   // the client upload path matches /generate page — avoids relying on a separate pre-upload + URL that
@@ -1808,7 +1846,7 @@ function WorkspacePage() {
     // Architectural guard: no caller can accidentally send a bring-your-own
     // model through TextToImage, FLUX, Trellis, credits, or the GPU queue.
     if (selectedIsCode) {
-      await runWater();
+      await runWaterFromPanel();
       return;
     }
 
@@ -2263,7 +2301,7 @@ function WorkspacePage() {
     // Water engine writes Three.js straight from the prompt.
     // Never touches FLUX, Trellis, the queue, or credits.
     if (selectedIsCode) {
-      await runWater();
+      await runWaterFromPanel();
       return;
     }
 
@@ -2619,6 +2657,21 @@ function WorkspacePage() {
       loadJobInfo(job);
     }
   };
+
+  /** Set Water Edit parent from library drag/click — opens 3D in center + updates right-panel thumb. */
+  const applyWaterEditParent = useCallback(
+    (job: BackendJob) => {
+      if (!isWaterJobFn(job) && !isWaterJobId(job.id)) {
+        setError("Drop a Water model to edit");
+        return;
+      }
+      setWaterEditTargetJobId(job.id);
+      setError(null);
+      setInputMode("text_1img");
+      handle3DClick(job);
+    },
+    [isWaterJobFn, handle3DClick]
+  );
 
   /** Build minimal BackendJob from LineageItem for loadJobInfo / handle3DClick */
   const lineageItemToJob = useCallback((item: LineageItem): BackendJob => ({
@@ -3377,13 +3430,16 @@ function WorkspacePage() {
                       %
                     </p>
                   </div>
-                  {currentGenerating?.jobId && !currentGenerating.jobId.startsWith("cs_") && (
+                  {currentGenerating?.jobId && (
                     <button
                       type="button"
                       onClick={async () => {
                         if (!currentGenerating?.jobId) return;
+                        const jobId = currentGenerating.jobId;
                         try {
-                          await cancelJob(currentGenerating.jobId, () => getToken());
+                          // Invalidate Water pollers so a late DONE cannot overwrite cancelled UI
+                          waterPollGenRef.current += 1;
+                          await cancelJob(jobId, () => getToken());
                           if (progressIntervalRef.current) {
                             clearInterval(progressIntervalRef.current);
                             progressIntervalRef.current = null;
@@ -3401,20 +3457,6 @@ function WorkspacePage() {
                       className="mt-6 h-9 px-4 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
                     >
                       Cancel generation
-                    </button>
-                  )}
-                  {currentGenerating?.jobId?.startsWith("cs_") && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        waterPollGenRef.current += 1;
-                        setCurrentGenerating(null);
-                        setLoading(false);
-                        setCenterView({ type: "empty" });
-                      }}
-                      className="mt-6 h-9 px-4 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-colors"
-                    >
-                      Dismiss
                     </button>
                   )}
                 </CardContent>
@@ -3441,14 +3483,13 @@ function WorkspacePage() {
                 const droppedId = e.dataTransfer.getData("application/job-id");
                 if (!droppedId) return;
                 const target = library3DAssets.find((j) => j.id === droppedId);
-                if (!target || !isWaterJobFn(target)) {
+                if (!target) {
                   setError("Drop a Water job to edit");
                   return;
                 }
-                setWaterEditTargetJobId(droppedId);
                 setWaterEditMode(true);
                 setWaterEditPrompt("");
-                void handle3DClick(target);
+                applyWaterEditParent(target);
               }}
             >
               {/* Tokens stay top-left; Download controls top-right in WaterViewer; Edit CTA bottom-center */}
@@ -4139,11 +4180,14 @@ function WorkspacePage() {
           </div>
           <ScrollArea className="flex-1 min-h-0 w-full">
           <div className="mx-auto w-full max-w-xl lg:max-w-none px-4 sm:px-6 lg:px-5 pt-4 sm:pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8 space-y-4 sm:space-y-5 leading-[1.15]">
-            {/* Input mode — Text | Image | Edit | Combine */}
+            {/* Input mode — Water: Text | Edit; Cloud: Text | Image | Edit | Combine */}
             <div
               role="tablist"
               aria-label="Input mode"
-              className="grid grid-cols-4 gap-1 rounded-2xl border border-neutral-200 bg-neutral-100 p-1 text-neutral-500"
+              className={cn(
+                "grid gap-1 rounded-2xl border border-neutral-200 bg-neutral-100 p-1 text-neutral-500",
+                selectedIsCode ? "grid-cols-2" : "grid-cols-4"
+              )}
             >
               <Button
                 type="button"
@@ -4151,7 +4195,7 @@ function WorkspacePage() {
                 size="sm"
                 variant={inputMode === "text" ? "outline" : "ghost"}
                 onClick={() => setInputMode("text")}
-                title="Text prompt only"
+                title={selectedIsCode ? "New Water from text" : "Text prompt only"}
                 className={cn(
                   "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
                   inputMode === "text" && "border-transparent bg-white text-neutral-950 shadow-sm"
@@ -4160,36 +4204,105 @@ function WorkspacePage() {
                 <span className="text-xs font-bold leading-none sm:text-sm">T</span>
                 <span>Text</span>
               </Button>
-              <Button
-                type="button"
-                role="tab"
-                size="sm"
-                variant={inputMode === "image" ? "outline" : "ghost"}
-                disabled={selectedIsCode}
-                onClick={() => !selectedIsCode && setInputMode("image")}
-                title={
-                  selectedIsCode
-                    ? "Code models build from text only"
-                    : "Upload an image to generate a 3D model"
-                }
-                className={cn(
-                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
-                  inputMode === "image" && "border-transparent bg-white text-neutral-950 shadow-sm"
-                )}
-              >
-                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                <span>Image</span>
-              </Button>
+              {!selectedIsCode && (
+                <Button
+                  type="button"
+                  role="tab"
+                  size="sm"
+                  variant={inputMode === "image" ? "outline" : "ghost"}
+                  onClick={() => setInputMode("image")}
+                  title="Upload an image to generate a 3D model"
+                  className={cn(
+                    "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
+                    inputMode === "image" && "border-transparent bg-white text-neutral-950 shadow-sm"
+                  )}
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  <span>Image</span>
+                </Button>
+              )}
               <Button
                 type="button"
                 role="tab"
                 size="sm"
                 variant={inputMode === "text_1img" ? "outline" : "ghost"}
-                disabled={!editAvailable || selectedIsCode}
-                onClick={() => editAvailable && !selectedIsCode && setInputMode("text_1img")}
+                disabled={!selectedIsCode && !editAvailable}
+                onClick={() => {
+                  if (selectedIsCode) {
+                    setInputMode("text_1img");
+                    // Prefer open Water canvas → selected job → most recent ready Water asset
+                    let parentId: string | null =
+                      (centerView.type === "code" ? centerView.jobId : null) ||
+                      waterEditTargetJobId ||
+                      (selectedJobInfo && isWaterJobFn(selectedJobInfo)
+                        ? selectedJobInfo.id
+                        : null);
+                    if (!parentId) {
+                      const recent = library3DAssets.find(
+                        (j) =>
+                          (isWaterJobFn(j) || isWaterJobId(j.id)) &&
+                          j.status === "DONE" &&
+                          hasRealFactoryCode(j)
+                      );
+                      parentId = recent?.id ?? null;
+                    }
+                    if (!parentId) {
+                      setError("Open or select a Water model to edit first");
+                      return;
+                    }
+                    setWaterEditTargetJobId(parentId);
+                    setError(null);
+                    // Always show the 3D Water object — never an image preview
+                    if (centerView.type !== "code" || centerView.jobId !== parentId) {
+                      const job =
+                        library3DAssets.find((j) => j.id === parentId) ||
+                        (selectedJobInfo?.id === parentId ? selectedJobInfo : null);
+                      if (job) {
+                        handle3DClick(job);
+                      } else {
+                        setCenterView({
+                          type: "generating",
+                          progress: 40,
+                          message: "Loading Water model…",
+                        });
+                        void (async () => {
+                          try {
+                            const cs = await fetchWaterJob(
+                              parentId!,
+                              async () => (await getToken()) ?? null
+                            );
+                            if (cs.factoryCode) {
+                              setCodeFactoryCode(cs.factoryCode);
+                              if (cs.sculptPass) setCodeSculptPass(cs.sculptPass);
+                              setCurrentGenerating(null);
+                              setLoading(false);
+                              setCenterView({
+                                type: "code",
+                                factoryCode: cs.factoryCode,
+                                jobId: parentId!,
+                              });
+                            } else {
+                              setCenterView({
+                                type: "error",
+                                message: "Water model is not ready to edit yet",
+                              });
+                            }
+                          } catch {
+                            setCenterView({
+                              type: "error",
+                              message: "Could not load Water model",
+                            });
+                          }
+                        })();
+                      }
+                    }
+                    return;
+                  }
+                  if (editAvailable) setInputMode("text_1img");
+                }}
                 title={
                   selectedIsCode
-                    ? "Code models build from text only"
+                    ? "Refine an existing Water model"
                     : editAvailable
                       ? "Text + 1 image"
                       : "Requires high-GPU mode (Flux)"
@@ -4202,35 +4315,136 @@ function WorkspacePage() {
                 <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
                 <span>Edit</span>
               </Button>
-              <Button
-                type="button"
-                role="tab"
-                size="sm"
-                variant={inputMode === "text_2img" ? "outline" : "ghost"}
-                disabled={!combineAvailable || selectedIsCode}
-                onClick={() => combineAvailable && !selectedIsCode && setInputMode("text_2img")}
-                title={
-                  selectedIsCode
-                    ? "Code models build from text only"
-                    : combineAvailable
+              {!selectedIsCode && (
+                <Button
+                  type="button"
+                  role="tab"
+                  size="sm"
+                  variant={inputMode === "text_2img" ? "outline" : "ghost"}
+                  disabled={!combineAvailable}
+                  onClick={() => combineAvailable && setInputMode("text_2img")}
+                  title={
+                    combineAvailable
                       ? "Text + 2 images"
                       : "Requires high-GPU mode (Flux)"
-                }
-                className={cn(
-                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
-                  inputMode === "text_2img" && "border-transparent bg-white text-neutral-950 shadow-sm"
-                )}
-              >
-                <div className="flex -space-x-0.5 shrink-0">
-                  <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
-                  <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
-                </div>
-                <span>Combine</span>
-              </Button>
+                  }
+                  className={cn(
+                    "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
+                    inputMode === "text_2img" && "border-transparent bg-white text-neutral-950 shadow-sm"
+                  )}
+                >
+                  <div className="flex -space-x-0.5 shrink-0">
+                    <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
+                    <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
+                  </div>
+                  <span>Combine</span>
+                </Button>
+              )}
             </div>
 
-            {/* Image slots — same spacing as reference */}
-            {(inputMode === "image" || inputMode === "text_1img" || inputMode === "text_2img") && (
+            {/* Water Edit — parent model thumbnail + drag/drop to change */}
+            {selectedIsCode && inputMode === "text_1img" && (() => {
+              const parentId = resolveWaterEditParentId();
+              const parentJob =
+                (parentId && library3DAssets.find((j) => j.id === parentId)) ||
+                (parentId && selectedJobInfo?.id === parentId ? selectedJobInfo : null) ||
+                null;
+              const previewUrl =
+                parentJob?.previewImageUrl ||
+                parentJob?.imageUrl ||
+                null;
+              const title =
+                parentJob?.prompt?.trim() ||
+                (parentId ? `Water · ${parentId.slice(0, 10)}…` : "No model selected");
+              return (
+                <div className="space-y-2">
+                  <label className="block text-[13px] font-semibold tracking-tight text-neutral-800">
+                    Model to refine
+                  </label>
+                  <p className="text-[11px] text-neutral-500 -mt-1">
+                    Drag a Water model from the library to change which one you edit.
+                  </p>
+                  <div
+                    className={cn(
+                      "relative min-h-[148px] rounded-2xl border border-dashed flex flex-col overflow-hidden transition-all",
+                      waterDropHighlight
+                        ? "border-sky-400 bg-sky-50/80 ring-2 ring-sky-200 scale-[1.01]"
+                        : "border-neutral-300 bg-neutral-50/80 hover:border-neutral-400 hover:bg-white"
+                    )}
+                    onDragOver={(e) => {
+                      if (![...e.dataTransfer.types].includes("application/job-id")) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                      setWaterDropHighlight(true);
+                    }}
+                    onDragLeave={() => setWaterDropHighlight(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setWaterDropHighlight(false);
+                      const droppedId = e.dataTransfer.getData("application/job-id");
+                      if (!droppedId) return;
+                      const target = library3DAssets.find((j) => j.id === droppedId);
+                      if (!target) {
+                        setError("Drop a Water model from the library");
+                        return;
+                      }
+                      applyWaterEditParent(target);
+                    }}
+                  >
+                    {previewUrl ? (
+                      <div className="relative flex-1 min-h-[148px] w-full">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={displayImageUrl(previewUrl)}
+                          alt={title}
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 pb-2.5 pt-8">
+                          <p className="text-[12px] font-semibold text-white truncate">{title}</p>
+                          <p className="text-[10px] text-white/75">Drop another Water model to switch</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="absolute top-2 right-2 h-7 rounded-full bg-white/95 px-2.5 text-[11px] font-semibold shadow-sm"
+                          onClick={() => {
+                            // Empty string = cleared; do not fall back to open canvas job
+                            setWaterEditTargetJobId("");
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    ) : parentId ? (
+                      <div className="flex flex-1 min-h-[148px] flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-neutral-200 bg-white text-neutral-400 shadow-sm">
+                          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                          </svg>
+                        </div>
+                        <p className="text-xs font-semibold text-neutral-700 truncate max-w-full">{title}</p>
+                        <p className="text-[10px] text-neutral-400">No thumbnail yet — 3D is open in the canvas</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-1 min-h-[148px] flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+                        <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 shadow-sm">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
+                          </svg>
+                        </span>
+                        <p className="text-xs font-semibold text-neutral-700">Drop a Water model here</p>
+                        <p className="text-[10px] text-neutral-400">Drag from the 3D library on the left</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Image slots — cloud only (Water Edit uses parent model dropzone above) */}
+            {!selectedIsCode &&
+              (inputMode === "image" || inputMode === "text_1img" || inputMode === "text_2img") && (
               <div className="space-y-2">
                 <label className="block text-[13px] font-semibold tracking-tight text-neutral-800">{inputMode === "text_2img" ? "Image 1 & 2" : inputMode === "image" ? "Source image" : "Image"}</label>
                 <div className="flex gap-2">
@@ -4333,7 +4547,17 @@ function WorkspacePage() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value.slice(0, 800))}
                   maxLength={800}
-                  placeholder={selectedIsCode ? "Describe the object to build in Three.js, e.g., a vintage folding camera with a leather body and chrome dials." : inputMode === "text" ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe." : inputMode === "text_1img" ? "Describe how to edit this image..." : "Describe how to combine these images..."}
+                  placeholder={
+                    selectedIsCode
+                      ? inputMode === "text_1img"
+                        ? "Describe how to refine this Water model…"
+                        : "Describe the object to build in Three.js, e.g., a vintage folding camera with a leather body and chrome dials."
+                      : inputMode === "text"
+                        ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe."
+                        : inputMode === "text_1img"
+                          ? "Describe how to edit this image..."
+                          : "Describe how to combine these images..."
+                  }
                   className="min-h-[132px] sm:min-h-[148px] resize-none rounded-2xl border-neutral-200 bg-neutral-50 pb-8 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/10"
                   rows={4}
                 />
@@ -4694,9 +4918,9 @@ function WorkspacePage() {
             <Button
               type="button"
               onClick={() => {
-                // Water: text → Three.js. Never enters FLUX or the GPU queue.
+                // Water: text → Three.js. Edit → refine parent. Never FLUX/GPU.
                 if (selectedIsCode) {
-                  void runWater();
+                  void runWaterFromPanel();
                   return;
                 }
                 if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
@@ -4717,7 +4941,9 @@ function WorkspacePage() {
                   <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-95 invert brightness-110" />
                   <span className="tracking-tight font-semibold">
                     {selectedIsCode
-                      ? "Generate with Water"
+                      ? inputMode === "text_1img"
+                        ? "Refine with Water"
+                        : "Generate with Water"
                       : inputMode === "image"
                         ? "Generate 3D"
                         : "Generate"}

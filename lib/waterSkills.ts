@@ -120,7 +120,7 @@ export const WATER_SKILLS: WaterSkillDef[] = [
 ];
 
 export const DEFAULT_WATER_SKILL: WaterSkillId = "object-studio";
-export const DEFAULT_QUALITY_TIER: QualityTier = "standard";
+export const DEFAULT_QUALITY_TIER: QualityTier = "fast";
 
 const SKILL_IDS = new Set(WATER_SKILLS.map((s) => s.id));
 const TIER_IDS = new Set(QUALITY_TIERS.map((t) => t.id));
