@@ -30,6 +30,7 @@ import {
   OPENROUTER_MODELS,
   mergeCursorModels,
   mergeFreeModels,
+  migrateCodeModelId,
   providerLabel,
   type ApiKeyProvider,
   type CatalogModel,
@@ -45,7 +46,11 @@ const PROVIDERS: {
   placeholder: string;
   docs?: string;
 }[] = [
-  { id: "anthropic", placeholder: "sk-ant-...", docs: "https://console.anthropic.com/settings/keys" },
+  {
+    id: "anthropic",
+    placeholder: "sk-ant-...",
+    docs: "https://platform.claude.com/settings/keys",
+  },
   { id: "openai", placeholder: "sk-...", docs: "https://platform.openai.com/api-keys" },
   { id: "gemini", placeholder: "AIza...", docs: "https://aistudio.google.com/apikey" },
   {
@@ -150,11 +155,11 @@ export default function SettingsPage() {
             <WaterDefaultModel
               keys={keys}
               keyOk={keyOk}
-              value={(prefs?.defaultCodeModel as ModelId) || null}
+              value={(migrateCodeModelId(prefs?.defaultCodeModel) as ModelId) || null}
               onSaved={async (id) => {
                 const tokenGetter = async () => (await getToken()) ?? null;
                 const next = await saveUserModelPrefs(
-                  { defaultCodeModel: id },
+                  { defaultCodeModel: migrateCodeModelId(id) || id },
                   tokenGetter
                 );
                 setPrefs(next);
@@ -375,6 +380,20 @@ function ApiKeyCard({
             )}
             {localError && <p className="w-full text-[11px] text-red-600">{localError}</p>}
           </div>
+        )}
+        {provider === "anthropic" && (
+          <p className="text-[11px] text-neutral-500 leading-relaxed">
+            Create a Console key at{" "}
+            <a
+              href="https://platform.claude.com/settings/keys"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-neutral-700 underline-offset-2 hover:underline"
+            >
+              platform.claude.com/settings/keys
+            </a>
+            , ensure billing/credits are active, then Save and Verify.
+          </p>
         )}
       </CardContent>
     </Card>

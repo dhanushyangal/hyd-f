@@ -91,7 +91,7 @@ Cursor Cloud Agents need longer per call (~2–4 min). Soft budgets are provider
 
 | Provider | How models appear | Picker id | API call |
 |----------|-------------------|-----------|----------|
-| Anthropic | Static catalog | `claude-sonnet-4-5`, `claude-opus-4-5` | Messages API |
+| Anthropic | Static catalog | UI: `claude-sonnet-5`, `claude-opus-5`, `claude-haiku-4-5` → API aliases (same ids). Legacy prefs `claude-*-4-5` migrate to 5.x / still resolve via alias | Messages API |
 | OpenAI | Static catalog | `gpt-4.1`, `gpt-4.1-mini` | Chat completions |
 | Gemini | Static catalog | `gemini-2.5-flash`, `gemini-2.5-pro` | generateContent |
 | OpenRouter Free | Seed + **live** free filter | OR slug / `openrouter/free` | Chat completions |

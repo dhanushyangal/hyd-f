@@ -74,6 +74,7 @@ import {
   isCodeModel,
   mergeFreeModels,
   mergeCursorModels,
+  migrateCodeModelId,
   providerForModelId,
   type CatalogModel,
   type CursorLiveModel,
@@ -671,7 +672,7 @@ function WorkspacePage() {
         const data = await fetchUserApiKeys(tokenGetter);
         setApiKeys(data.keys);
         // Prefer saved Water default when user already configured BYOK
-        const preferred = data.prefs?.defaultCodeModel;
+        const preferred = migrateCodeModelId(data.prefs?.defaultCodeModel);
         if (preferred && isCodeModel(preferred)) {
           const provider = providerForModelId(preferred);
           const keyOk =
@@ -679,6 +680,10 @@ function WorkspacePage() {
             provider === "hydrilla" ||
             data.keys.some((k) => k.provider === provider && k.configured && k.status !== "invalid");
           if (keyOk) setSelectedModel(preferred as ModelId);
+          // Persist migration when prefs still hold a retired 4.5 id
+          if (data.prefs?.defaultCodeModel && data.prefs.defaultCodeModel !== preferred) {
+            void saveUserModelPrefs({ defaultCodeModel: preferred }, tokenGetter).catch(() => {});
+          }
         }
         // Live-sync OpenRouter free models for the picker
         try {

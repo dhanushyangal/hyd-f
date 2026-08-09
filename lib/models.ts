@@ -49,16 +49,24 @@ export const MODEL_CATALOG: CatalogModel[] = [
     vision: true,
   },
   {
-    id: "claude-sonnet-4-5",
-    label: "Claude Sonnet 4.5",
+    id: "claude-sonnet-5",
+    label: "Claude Sonnet 5",
     group: "Anthropic",
     kind: "code",
     provider: "anthropic",
     vision: true,
   },
   {
-    id: "claude-opus-4-5",
-    label: "Claude Opus 4.5",
+    id: "claude-opus-5",
+    label: "Claude Opus 5",
+    group: "Anthropic",
+    kind: "code",
+    provider: "anthropic",
+    vision: true,
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
     group: "Anthropic",
     kind: "code",
     provider: "anthropic",
@@ -219,25 +227,39 @@ export function getCatalogModel(id: string): CatalogModel | undefined {
   return MODEL_CATALOG.find((m) => m.id === id);
 }
 
+/** Map retired Claude 4.5 catalog prefs → current Claude 5 / Haiku 4.5 ids. */
+export function migrateCodeModelId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  if (id === "claude-sonnet-4-5") return "claude-sonnet-5";
+  if (id === "claude-opus-4-5") return "claude-opus-5";
+  return id;
+}
+
 export function isCodeModel(id: string): boolean {
-  const m = getCatalogModel(id);
+  const migrated = migrateCodeModelId(id) || id;
+  const m = getCatalogModel(migrated);
   if (m) return m.kind === "code";
   // Dynamic free / openrouter / cursor slugs from live sync
   return (
-    id.endsWith(":free") ||
-    id === "openrouter/free" ||
-    id.startsWith("openrouter/") ||
-    id.startsWith("cursor-") ||
-    id.startsWith("cursor/") ||
-    id === "cursor-composer-2" // legacy prefs
+    migrated.endsWith(":free") ||
+    migrated === "openrouter/free" ||
+    migrated.startsWith("openrouter/") ||
+    migrated.startsWith("cursor-") ||
+    migrated.startsWith("cursor/") ||
+    migrated === "cursor-composer-2" // legacy prefs
   );
 }
 
 export function providerForModelId(id: string): ApiKeyProvider | "hydrilla" | null {
-  const m = getCatalogModel(id);
+  const migrated = migrateCodeModelId(id) || id;
+  const m = getCatalogModel(migrated);
   if (m) return m.provider;
-  if (id.startsWith("cursor-") || id.startsWith("cursor/")) return "cursor";
-  if (id.endsWith(":free") || id === "openrouter/free" || id.startsWith("openrouter/")) {
+  if (migrated.startsWith("cursor-") || migrated.startsWith("cursor/")) return "cursor";
+  if (
+    migrated.endsWith(":free") ||
+    migrated === "openrouter/free" ||
+    migrated.startsWith("openrouter/")
+  ) {
     return "openrouter";
   }
   return null;
