@@ -5,44 +5,7 @@ import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Plus } from "lucide-react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
-
-const FAQ_ITEMS = [
-  {
-    question: "Who is Hydrilla designed for?",
-    answer:
-      "Hydrilla is built for creators, studios, and teams who need fast generation of production-ready 3D assets for games, film, architecture, and digital products.",
-  },
-  {
-    question: "How much time can Hydrilla save in asset creation?",
-    answer:
-      "Hydrilla can generate structured 3D assets in minutes, helping teams reduce the time spent on early modeling and concept asset production.",
-  },
-  {
-    question: "Is there a free plan available?",
-    answer:
-      "Yes. Hydrilla offers a free plan so users can explore the platform and generate a limited number of models before upgrading.",
-  },
-  {
-    question: "Can I change or cancel my plan anytime?",
-    answer:
-      "Yes. Plans can be upgraded, downgraded, or cancelled at any time directly from your account settings.",
-  },
-  {
-    question: "Is Hydrilla difficult to learn?",
-    answer:
-      "No. Hydrilla is designed to be simple to start with, while still supporting advanced workflows for professional teams.",
-  },
-  {
-    question: "What inputs does Hydrilla support?",
-    answer:
-      "Hydrilla supports both text prompts and reference images, allowing users to generate 3D assets from descriptions or visual input.",
-  },
-  {
-    question: "Can Hydrilla integrate with my pipeline?",
-    answer:
-      "Yes. Assets can be exported in GLB, FBX, OBJ, and USDZ, and API access allows integration with existing production workflows.",
-  },
-];
+import { FAQ_ITEMS } from "@/lib/faq";
 
 interface FAQItemProps {
   question: string;
@@ -137,11 +100,11 @@ function FAQChatItem({ question, answer, isOpen, onToggle, index }: FAQItemProps
   );
 }
 
-export default function FAQSection() {
+export default function FAQSection({ hideHeader = false }: { hideHeader?: boolean }) {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   return (
-    <section className="faq-section">
+    <section className={hideHeader ? "faq-section faq-section--embedded" : "faq-section"}>
       <style>{`
         .faq-section {
           width: 100%;
@@ -149,6 +112,10 @@ export default function FAQSection() {
           padding: 6.5rem 1.5rem 7.5rem;
           box-sizing: border-box;
           -webkit-font-smoothing: antialiased;
+        }
+        .faq-section--embedded {
+          background: #fff;
+          padding: 1.25rem 1.25rem 0.5rem;
         }
         .faq-shell {
           max-width: 46rem;
@@ -181,11 +148,8 @@ export default function FAQSection() {
           flex-direction: column;
           gap: 1.45rem;
           padding: 2rem;
-          border: 1px solid rgba(148, 163, 184, 0.28);
-          border-radius: 1.25rem;
-          background: rgba(255, 255, 255, 0.74);
-          box-shadow: 0 24px 70px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255,255,255,0.9);
-          backdrop-filter: blur(18px);
+          border: 1px solid rgba(17, 17, 17, 0.08);
+          background: #fff;
         }
         .faq-chat-item {
           width: 100%;
@@ -300,6 +264,9 @@ export default function FAQSection() {
           .faq-section {
             padding: 3.25rem 1rem 3.75rem;
           }
+          .faq-section--embedded {
+            padding: 0.75rem 1rem 0.25rem;
+          }
           .faq-header {
             margin-bottom: 2rem;
           }
@@ -333,12 +300,14 @@ export default function FAQSection() {
       `}</style>
 
       <div className="faq-shell">
-        <div className="faq-header">
-          <p className="faq-kicker">FAQ</p>
-          <BlurReveal as="h2" className="faq-title">
-            Questions & answers
-          </BlurReveal>
-        </div>
+        {hideHeader ? null : (
+          <div className="faq-header">
+            <p className="faq-kicker">FAQ</p>
+            <BlurReveal as="h2" className="faq-title">
+              Questions & answers
+            </BlurReveal>
+          </div>
+        )}
 
         <div className="faq-chat">
           {FAQ_ITEMS.map((item, i) => (
@@ -352,6 +321,14 @@ export default function FAQSection() {
             />
           ))}
         </div>
+        <dl className="sr-only">
+          {FAQ_ITEMS.map((item) => (
+            <div key={`ssr-${item.question}`}>
+              <dt>{item.question}</dt>
+              <dd>{item.answer}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );

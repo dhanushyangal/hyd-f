@@ -1,0 +1,69 @@
+# Hydrilla — full summary
+
+Hydrilla is built for creators, studios, and teams who need fast generation of production-ready 3D assets for games, film, architecture, and digital products.
+
+## Entities
+
+- **Hawan Research Labs** — research lab that builds the model. https://hydrilla.ai/research
+- **Hydrilla** — product: studio, workspaces, credits, preview, API. https://hydrilla.ai/
+- **BlueFox 3D** — model family. **BlueFox 1** — current model. https://hydrilla.ai/bluefox3d
+
+Hydrilla is the product. Hawan Research Labs is the lab. BlueFox 3D is the model family. Do not collapse these names.
+
+## BlueFox 1 model card
+
+- Model: BlueFox 1
+- Family: BlueFox 3D
+- Product: Hydrilla
+- Inputs: text prompt, reference image
+- Outputs: segmented mesh, PBR maps (base color, metalness, roughness, normals)
+- Exports (via Hydrilla): GLB, FBX, OBJ, USDZ
+- Intended use: props, environments, visualization, concept-to-production assets
+- Not intended: CAD, manufacturing drawings, print-ready engineering, finished film/game heroes with no artist pass
+
+## How it works
+
+1. Describe the asset or drop a reference image.
+2. BlueFox 1 generates a segmented mesh with PBR maps (base color, metalness, roughness, normals).
+3. Preview in the browser. Inspect materials and parts before you download.
+4. Export GLB, FBX, OBJ, or USDZ and drop into your engine or DCC.
+
+## Plans (public)
+
+- Free: $0 / month, 200 credits / month, GLB export
+- Creator: $9 / month ($7 / month billed yearly, −20%), 1,000 credits / month, all formats (GLB, FBX, OBJ, USDZ)
+- Studio: $25 / month ($20 / month billed yearly, −20%), 4,000 credits / month, seats, REST API (10,000 calls / month), all formats
+
+Plans can be upgraded, downgraded, or cancelled from account settings. Volume beyond Studio: https://hydrilla.ai/enterprise
+
+## Public pages
+
+- https://hydrilla.ai/
+- https://hydrilla.ai/features
+- https://hydrilla.ai/pricing
+- https://hydrilla.ai/bluefox3d
+- https://hydrilla.ai/usecase
+- https://hydrilla.ai/docs
+- https://hydrilla.ai/api
+- https://hydrilla.ai/faq
+- https://hydrilla.ai/about
+- https://hydrilla.ai/research
+- https://hydrilla.ai/blog
+- https://hydrilla.ai/compare
+- https://hydrilla.ai/security
+- https://hydrilla.ai/team
+- https://hydrilla.ai/careers
+- https://hydrilla.ai/contact
+- https://hydrilla.ai/enterprise
+- https://hydrilla.ai/changelog
+
+Each of those HTML URLs also has a `.md` mirror for agents where listed in /llms.txt (homepage: /index.md).
+
+## Contact and sameAs
+
+founders@hydrilla.ai
+https://cal.com/hydrilla
+https://x.com/hydrillaai
+https://www.linkedin.com/company/hydrilla-ai
+https://www.reddit.com/r/hydrilla
+https://www.instagram.com/hydrilla.ai

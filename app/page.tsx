@@ -1,9 +1,10 @@
 import dynamic from "next/dynamic";
 import Hero from "../components/sections/Hero";
+import HomeEntityIntro from "../components/sections/HomeEntityIntro";
 import HomeBelowFold from "../components/sections/HomeBelowFold";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { HomeAuthRedirect } from "@/components/HomeAuthRedirect";
-import { createPageMetadata, getHomepageJsonLd } from "@/lib/seo";
+import { HOME_TITLE, createPageMetadata, getHomepageJsonLd } from "@/lib/seo";
 import { HERO_POSTER_PRELOAD_URL } from "@/lib/cloudinary";
 
 const Footer = dynamic(() => import("../components/layout/Footer"), {
@@ -11,7 +12,7 @@ const Footer = dynamic(() => import("../components/layout/Footer"), {
 });
 
 export const metadata = createPageMetadata({
-  title: "Hydrilla AI | Production-Ready 3D Assets, Generated Fast",
+  title: HOME_TITLE,
   path: "/",
   absoluteTitle: true,
 });
@@ -27,7 +28,8 @@ export default function Home() {
       <JsonLd data={getHomepageJsonLd()} />
       <HomeAuthRedirect />
       <Hero />
-      {/* Client island: image-heavy sections use dynamic(ssr:false) internally */}
+      <HomeEntityIntro />
+      {/* Text sections SSR for crawlers; Showcase / AppShowcase stay client-only. */}
       <HomeBelowFold />
       <Footer />
     </>

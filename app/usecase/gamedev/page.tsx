@@ -14,6 +14,8 @@ const DATA = {
   capabilitiesHeading: "Built for real-time production",
   tagline:
     "Characters, props, and environments with clean geometry for Unreal, Unity, and other real-time pipelines.",
+  example:
+    "A typical Hydrilla job here is background props and environment fill for Unreal or Unity — crates, dressing, and set pieces you can import and light — not hero characters with no cleanup.",
   features: [
     {
       title: "Engine-ready models",

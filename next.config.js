@@ -32,6 +32,34 @@ const nextConfig = {
     return [
       { source: "/generate", destination: "/workspace", permanent: false },
       { source: "/generate/", destination: "/workspace", permanent: false },
+      { source: "/3d-ai", destination: "/bluefox3d", permanent: true },
+      { source: "/3d-ai/", destination: "/bluefox3d", permanent: true },
+      { source: "/science-technology", destination: "/bluefox3d", permanent: true },
+      { source: "/science-technology/", destination: "/bluefox3d", permanent: true },
+      { source: "/roadmap", destination: "/about", permanent: true },
+      { source: "/roadmap/", destination: "/about", permanent: true },
+      { source: "/case-study", destination: "/usecase", permanent: true },
+      { source: "/case-study/", destination: "/usecase", permanent: true },
+      { source: "/hawan", destination: "/research", permanent: true },
+      { source: "/hawan/", destination: "/research", permanent: true },
+      { source: "/bluefox", destination: "/bluefox3d", permanent: true },
+      { source: "/bluefox/", destination: "/bluefox3d", permanent: true },
+      { source: "/bluefox-3d", destination: "/bluefox3d", permanent: true },
+      { source: "/bluefox-3d/", destination: "/bluefox3d", permanent: true },
+      { source: "/models", destination: "/bluefox3d", permanent: true },
+      { source: "/models/", destination: "/bluefox3d", permanent: true },
+      { source: "/privacy", destination: "/privacy-policy", permanent: true },
+      { source: "/privacy/", destination: "/privacy-policy", permanent: true },
+      { source: "/terms", destination: "/terms-and-conditions", permanent: true },
+      { source: "/terms/", destination: "/terms-and-conditions", permanent: true },
+    ];
+  },
+  async rewrites() {
+    return [
+      { source: "/index.md", destination: "/md/index" },
+      { source: "/:file.md", destination: "/md/:file" },
+      { source: "/:dir/:file.md", destination: "/md/:dir/:file" },
+      { source: "/:dir/:subdir/:file.md", destination: "/md/:dir/:subdir/:file" },
     ];
   },
   // Caching headers: only static assets get long cache; documents stay fresh for Core Web Vitals
@@ -75,8 +103,12 @@ const nextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
-        source: "/hyd01.png",
-        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+        source: "/llms.txt",
+        headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }],
+      },
+      {
+        source: "/llms-full.txt",
+        headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }],
       },
     ];
   },

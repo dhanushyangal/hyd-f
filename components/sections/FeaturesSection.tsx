@@ -99,7 +99,13 @@ function CtaButton() {
   );
 }
 
-function FeatureRow({ card }: { card: FeatureCard }) {
+function FeatureRow({
+  card,
+  heading: Heading = "h3",
+}: {
+  card: FeatureCard;
+  heading?: "h2" | "h3";
+}) {
   return (
     <article
       className="mx-auto flex w-[92%] max-w-[80rem] flex-col overflow-hidden rounded-[30px] bg-white px-8 py-5 sm:px-10 sm:py-6 lg:w-[94%] lg:flex-row lg:items-stretch lg:gap-4 lg:px-5 lg:py-5"
@@ -114,12 +120,12 @@ function FeatureRow({ card }: { card: FeatureCard }) {
             : "lg:order-1 lg:pr-8 lg:pl-12 xl:pr-10 xl:pl-16",
         ].join(" ")}
       >
-        <h3
+        <Heading
           className="text-[1.85rem] font-semibold leading-[1.1] tracking-[-0.03em] text-[#1d1c1a] sm:text-[2.1rem] lg:text-[2.4rem] xl:text-[2.6rem]"
           style={{ fontFamily: DISPLAY }}
         >
           {card.title}
-        </h3>
+        </Heading>
         <p
           className="mt-5 max-w-[32rem] text-[1.05rem] font-normal leading-[1.5] text-[#1d1c1a] sm:text-[1.125rem] lg:text-[1.2rem]"
           style={{ fontFamily: BODY }}
@@ -152,40 +158,51 @@ function FeatureRow({ card }: { card: FeatureCard }) {
   );
 }
 
-export default function FeaturesSection() {
+export default function FeaturesSection({
+  hideHeader = false,
+}: {
+  hideHeader?: boolean;
+}) {
   return (
     <section
       id="features"
-      aria-labelledby="features-heading"
-      className="relative overflow-hidden bg-[#f9f8f6] py-16 sm:py-20 lg:py-24"
+      aria-labelledby={hideHeader ? undefined : "features-heading"}
+      className={`relative overflow-hidden bg-[#f9f8f6] ${
+        hideHeader ? "py-10 sm:py-12 lg:py-14" : "py-16 sm:py-20 lg:py-24"
+      }`}
       style={{ fontFamily: BODY }}
     >
       <div className="relative mx-auto w-full">
-        <header className="mx-auto mb-12 w-[92%] max-w-[80rem] text-center sm:mb-14 lg:mb-16 lg:w-[94%]">
-          <p
-            className="mb-3 text-[0.75rem] font-medium uppercase tracking-[0.1em] text-[#55534e]"
-            style={{ fontFamily: DISPLAY }}
-          >
-            Platform capabilities
-          </p>
-          <BlurReveal
-            as="h2"
-            id="features-heading"
-            className="text-[2rem] font-semibold leading-[1.05] tracking-[-0.04em] text-[#1d1c1a] sm:text-[2.5rem] lg:text-[3rem]"
-            style={{ fontFamily: DISPLAY }}
-          >
-            From first prompt to production.
-          </BlurReveal>
-          <p className="mx-auto mt-4 max-w-2xl text-[1.05rem] leading-[1.5] text-[#55534e] sm:text-[1.125rem]">
-            One connected workflow for generating, refining, and delivering production-ready 3D
-            assets.
-          </p>
-        </header>
+        {hideHeader ? null : (
+          <header className="mx-auto mb-12 w-[92%] max-w-[80rem] text-center sm:mb-14 lg:mb-16 lg:w-[94%]">
+            <p
+              className="mb-3 text-[0.75rem] font-medium uppercase tracking-[0.1em] text-[#55534e]"
+              style={{ fontFamily: DISPLAY }}
+            >
+              Platform capabilities
+            </p>
+            <BlurReveal
+              as="h2"
+              id="features-heading"
+              className="text-[2rem] font-semibold leading-[1.05] tracking-[-0.04em] text-[#1d1c1a] sm:text-[2.5rem] lg:text-[3rem]"
+              style={{ fontFamily: DISPLAY }}
+            >
+              From first prompt to production.
+            </BlurReveal>
+            <p className="mx-auto mt-4 max-w-2xl text-[1.05rem] leading-[1.5] text-[#55534e] sm:text-[1.125rem]">
+              One connected workflow for generating, refining, and delivering production-ready 3D
+              assets.
+            </p>
+          </header>
+        )}
 
-        {/* Clay-like stack: ~1.5–2rem between cards — continuous scroll, not slide gaps */}
         <div className="flex flex-col gap-6 sm:gap-7 lg:gap-8">
           {FEATURE_CARDS.map((card) => (
-            <FeatureRow key={card.id} card={card} />
+            <FeatureRow
+              key={card.id}
+              card={card}
+              heading={hideHeader ? "h2" : "h3"}
+            />
           ))}
         </div>
       </div>

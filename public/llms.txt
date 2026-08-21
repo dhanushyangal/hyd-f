@@ -1,0 +1,31 @@
+# Hydrilla
+
+> Hydrilla is built for creators, studios, and teams who need fast generation of production-ready 3D assets for games, film, architecture, and digital products.
+
+Hydrilla is the product. Hawan Research Labs is the research lab. BlueFox 3D is the model family. BlueFox 1 is the current model.
+
+## Product
+- [Hydrilla](https://hydrilla.ai/): https://hydrilla.ai/index.md
+- [Features](https://hydrilla.ai/features.md)
+- [BlueFox 3D / BlueFox 1](https://hydrilla.ai/bluefox3d.md)
+- [Pricing](https://hydrilla.ai/pricing.md)
+- [Docs](https://hydrilla.ai/docs.md)
+- [FAQ](https://hydrilla.ai/faq.md)
+- [API](https://hydrilla.ai/api.md)
+
+## Company
+- [About](https://hydrilla.ai/about.md)
+- [Hawan Research Labs](https://hydrilla.ai/research.md)
+- [Team](https://hydrilla.ai/team.md)
+- [Contact](https://hydrilla.ai/contact.md)
+- [Security](https://hydrilla.ai/security.md)
+
+## Learn
+- [Blog](https://hydrilla.ai/blog)
+- [Compare](https://hydrilla.ai/compare)
+
+## Optional
+- [Changelog](https://hydrilla.ai/changelog) (if it exists)
+- Legal: Privacy, Terms, Cookies (HTML)
+
+Full quote sheet: https://hydrilla.ai/llms-full.txt

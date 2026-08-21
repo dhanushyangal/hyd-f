@@ -1,158 +1,116 @@
 import Link from "next/link";
-import Footer from "../../components/layout/Footer";
-import { createPageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { MarketingPage } from "@/components/layout/MarketingPage";
+import { MarketingArticle, ProseHeading } from "@/components/content/MarkdownBody";
+import { createPageMetadata, getWebPageJsonLd } from "@/lib/seo";
+import { CONTACT_EMAIL } from "@/lib/brand";
 
 export const metadata = createPageMetadata({
-  title: "API",
+  title: "Hydrilla API",
   description:
-    "Hydrilla AI API for studios and developers — integrate production-ready 3D asset generation into your pipelines.",
+    "Studio plans include REST API access for programmatic generation. Partner and volume access via contact. Email founders@hydrilla.ai.",
   path: "/api",
 });
 
 export default function ApiPage() {
   return (
     <>
-      <main
-        style={{
-          width: "100%",
-          minHeight: "80vh",
-          backgroundColor: "#fff",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "8rem 1.5rem 6rem",
-          boxSizing: "border-box",
-          fontFamily: "'DM Sans', Arial, sans-serif",
-          WebkitFontSmoothing: "antialiased",
-          textAlign: "center",
-        }}
-      >
-        {/* Card container */}
-        <div
-          style={{
-            maxWidth: "32rem",
-            width: "100%",
-            borderRadius: "1.25rem",
-            border: "1px solid rgba(17,17,17,0.08)",
-            backgroundColor: "#fff",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-            padding: "2.5rem 2rem",
-            textAlign: "center",
-          }}
-        >
-          {/* Icon */}
-          <div
-            style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "16px",
-              backgroundColor: "rgba(59,142,232,0.12)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1.5rem",
-            }}
-          >
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ color: "#3b8ee8" }}
-            >
-              <path d="M18 20V10" />
-              <path d="M12 20V4" />
-              <path d="M6 20v-6" />
-            </svg>
-          </div>
-
-          <p
-            style={{
-              margin: "0 0 0.5rem",
-              fontSize: "0.6875rem",
-              fontWeight: 600,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "#aaa",
-            }}
-          >
-            API
-          </p>
-
-          <h1
-            style={{
-              margin: "0 0 1rem",
-              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-              fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
-              fontWeight: 700,
-              color: "#111",
-              letterSpacing: "-0.04em",
-              lineHeight: 1.15,
-            }}
-          >
-            Coming soon
-          </h1>
-
-          <p
-            style={{
-              margin: "0 0 2rem",
-              fontSize: "1rem",
-              color: "rgba(17,17,17,0.55)",
-              lineHeight: 1.6,
-            }}
-          >
-            Setting the API for studios! We&apos;re building programmatic access so you can integrate Hydrilla into your pipeline. Check back soon or reach out if you need early access.
-          </p>
-
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "center" }}>
-            <Link
-              href="/"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.375rem",
-                padding: "0.75rem 1.5rem",
-                borderRadius: "0.875rem",
-                backgroundColor: "#111",
-                color: "#fff",
-                fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-                fontSize: "0.9375rem",
-                fontWeight: 600,
-                textDecoration: "none",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Back to Home
+      <JsonLd
+        data={getWebPageJsonLd({
+          name: "Hydrilla API",
+          description:
+            "Studio plans include REST API access for programmatic generation. Partner and volume access via contact.",
+          path: "/api",
+        })}
+      />
+      <MarketingPage
+      eyebrow="Developers"
+      title="Hydrilla API"
+      description="API access is available on Studio and by partner arrangement. Same BlueFox 1 model, same production exports."
+      related={[
+        { label: "Docs", href: "/docs", hint: "Getting started in the studio" },
+        { label: "Enterprise", href: "/enterprise", hint: "Volume and seats" },
+        { label: "Contact", href: "/contact", hint: "Request access" },
+      ]}
+    >
+      <MarketingArticle>
+        <section className="space-y-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          <p>
+            Studio plans include REST API access (10,000 calls/month on Studio)
+            for programmatic generation in existing pipelines. Partner and
+            volume access via{" "}
+            <Link href="/contact" className="font-semibold text-neutral-950 underline underline-offset-2">
+              Contact
             </Link>
+            . Email{" "}
             <a
-              href="mailto:founders@hydrilla.co"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.375rem",
-                padding: "0.75rem 1.5rem",
-                borderRadius: "0.875rem",
-                border: "1.5px solid rgba(17,17,17,0.14)",
-                backgroundColor: "transparent",
-                color: "#111",
-                fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-                fontSize: "0.9375rem",
-                fontWeight: 600,
-                textDecoration: "none",
-                letterSpacing: "-0.01em",
-              }}
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="font-semibold text-neutral-950 underline underline-offset-2"
             >
-              Contact Us
+              {CONTACT_EMAIL}
             </a>
-          </div>
+            .
+          </p>
+          <p>
+            The Hydrilla API is for teams that want text-to-3D and image-to-3D
+            inside an existing production stack: asset libraries, DCC tools,
+            game engines, or internal review tools.
+          </p>
+          <p>
+            You submit a generation job, poll status, then download a mesh and
+            maps in GLB, FBX, OBJ, or USDZ. Preview still lives in the Hydrilla
+            studio when you need a visual check before ingest.
+          </p>
+        </section>
+
+        <ProseHeading>What you can integrate</ProseHeading>
+        <ul className="mt-4 list-disc space-y-3 pl-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          <li>Text and image inputs for BlueFox 1 generation jobs</li>
+          <li>Job status for queued, processing, completed, and failed runs</li>
+          <li>Production exports for engine and DCC handoff</li>
+          <li>Account-based authentication for studio access</li>
+        </ul>
+
+        <ProseHeading>Access</ProseHeading>
+        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          API access is available on Studio and by partner arrangement. We do not
+          publish a public OpenAPI on this page. Start in the product, then
+          request pipeline access if you need jobs from your own backend.
+        </p>
+        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          For early access, email{" "}
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="font-semibold text-neutral-950 underline underline-offset-2"
+          >
+            {CONTACT_EMAIL}
+          </a>{" "}
+          with your studio, use case, and expected volume, or use the
+          contact form.
+        </p>
+
+        <div className="mt-14 flex flex-wrap gap-3">
+          <Link
+            href="/contact"
+            className="inline-flex items-center rounded-xl bg-[#111] px-5 py-3 text-[15px] font-semibold text-white hover:bg-neutral-800"
+          >
+            Request API access
+          </Link>
+          <Link
+            href="/docs"
+            className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
+          >
+            Docs
+          </Link>
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
+          >
+            {CONTACT_EMAIL}
+          </a>
         </div>
-      </main>
-      <Footer />
+      </MarketingArticle>
+    </MarketingPage>
     </>
   );
 }

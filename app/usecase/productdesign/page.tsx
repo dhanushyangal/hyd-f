@@ -14,6 +14,8 @@ const DATA = {
   capabilitiesHeading: "Built for product teams",
   tagline:
     "Marketing-ready 3D for packaging, campaigns, and digital storefronts.",
+  example:
+    "SKU-style product meshes for viewers and campaigns — a pack shot you can orbit, not a manufacturing drawing.",
   features: [
     {
       title: "Clean product models",

@@ -14,6 +14,8 @@ const DATA = {
   capabilitiesHeading: "Built for design visualization",
   tagline:
     "Furniture, interiors, and architectural components for presentations and design reviews.",
+  example:
+    "Furniture and interior fill for visualization — chairs, tables, and dressing you can drop into a viz scene. Hydrilla is not BIM and not a CAD kernel.",
   features: [
     {
       title: "Interiors & furnishings",

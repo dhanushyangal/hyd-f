@@ -61,7 +61,7 @@ export function formatEngineLabel(value?: string | null): string {
   if (!value) return "Image";
   if (isWaterEngine(value)) return ENGINE.water.label;
   if (/hunyuan/i.test(value || "")) return "Hunyuan 3D";
-  if (isHydrillaCloudEngine(value)) return "Bluefox3D-v1";
+  if (isHydrillaCloudEngine(value)) return "BlueFox 1";
   return value.replace(/_/g, " ").trim();
 }
 

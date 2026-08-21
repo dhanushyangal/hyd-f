@@ -1,83 +1,90 @@
-"use client";
+import { MarketingPage } from "@/components/layout/MarketingPage";
+import { MarketingArticle, ProseHeading } from "@/components/content/MarkdownBody";
+import { CONTACT_EMAIL } from "@/lib/brand";
 
-import { useRef } from "react";
-import Image from "next/image";
-import Footer from "../../components/layout/Footer";
+const ROLES = [
+  {
+    title: "Engineering",
+    body: "Full-stack, 3D runtime, and generation infrastructure. You will ship product that studios actually run in production.",
+  },
+  {
+    title: "3D and research",
+    body: "Model quality, mesh structure, materials, and evaluation. You care about assets that survive a real lighting setup.",
+  },
+  {
+    title: "Go to market",
+    body: "Studio relationships, creator programs, and the story of production-ready 3D. You talk to the people who ship games, film, and XR.",
+  },
+];
 
 export default function CareersPage() {
-  // Refs for sections (navbar will detect scroll position)
-  const heroSectionRef = useRef<HTMLElement>(null);
-  const contentSectionRef = useRef<HTMLElement>(null);
-
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section ref={heroSectionRef} className="relative min-h-screen w-full overflow-hidden">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/waterhydrilla.png"
-            alt="Careers Background"
-            fill
-            className="object-cover"
-            priority
-          />
-          {/* Overlay for better text readability */}
-          <div className="absolute inset-0 bg-black/10"></div>
-        </div>
-        
-        {/* Content Container */}
-        <div className="relative z-10 container mx-auto px-4 sm:px-6 md:px-8 pt-32 sm:pt-40 md:pt-48 pb-12 sm:pb-16 md:pb-20 flex flex-col items-center justify-center min-h-screen">
-          {/* Subtitle */}
-          <p 
-            className="text-sm sm:text-base md:text-lg text-black/70 mb-4 sm:mb-6 tracking-wide"
-            style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
-          >
-            ( Join Our Team )
+    <MarketingPage
+      eyebrow="Company"
+      title="Careers"
+      description="Join Hydrilla and Hawan Research Labs. The work is meshes, exports, and a studio product teams can run."
+      formats={false}
+      related={[
+        { label: "Team", href: "/team", hint: "Who is already here" },
+        { label: "About", href: "/about", hint: "Lab, product, model" },
+        { label: "Contact", href: "/contact", hint: "Talk to the founders" },
+      ]}
+    >
+      <MarketingArticle>
+        <section className="space-y-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          <p>
+            We hire people who care about generative 3D and production
+            pipelines. Write to{" "}
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="font-semibold text-neutral-950 underline underline-offset-2"
+            >
+              {CONTACT_EMAIL}
+            </a>{" "}
+            with a short note and work.
           </p>
-          
-          {/* Main Heading */}
-          <h1 className="text-center">
-            <span 
-              className="block text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl text-black leading-tight tracking-tight font-bold"
-              style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-            >
-              Careers
-            </span>
-          </h1>
-        </div>
-      </section>
+          <p>
+            We are a small team at Hydrilla and Hawan Research Labs, building
+            BlueFox 1. The work is concrete: faster generation, cleaner meshes,
+            exports that land in real pipelines, and a studio product teams can
+            trust.
+          </p>
+          <p>
+            If you want to work on 3D, generative models, and production
+            software rather than slideware, we want to hear from you.
+          </p>
+        </section>
 
-      {/* Content Section */}
-      <section 
-        ref={contentSectionRef}
-        className="relative py-16 sm:py-20 md:py-24 px-4 sm:px-6 md:px-8 bg-neutral-50"
-      >
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center space-y-6">
-            <p 
-              className="text-lg sm:text-xl text-gray-600 leading-relaxed"
-              style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-            >
-              Interested in joining the Hydrilla AI team?
-            </p>
-            <div className="pt-4">
-              <a 
-                href="mailto:founders@hydrilla.ai"
-                className="text-2xl sm:text-3xl font-bold text-black hover:text-gray-700 transition-colors inline-block"
-                style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-              >
-                founders@hydrilla.ai
-              </a>
+        <ProseHeading>Who we hire</ProseHeading>
+        <div className="mt-6 grid gap-3">
+          {ROLES.map((role) => (
+            <div key={role.title} className="border border-neutral-200 bg-white p-5">
+              <h3 className="text-[15px] font-semibold tracking-tight text-neutral-950">
+                {role.title}
+              </h3>
+              <p className="mt-2 text-[14px] leading-6 text-neutral-600">
+                {role.body}
+              </p>
             </div>
-          </div>
+          ))}
         </div>
-      </section>
 
-      {/* Footer */}
-      <Footer />
-    </div>
+        <ProseHeading>How to apply</ProseHeading>
+        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          We do not keep a long public board of numbered reqs. Send a note
+          with what you want to work on, a few links, and where you are based.
+        </p>
+        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          Email{" "}
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="font-semibold text-neutral-950 underline underline-offset-2"
+          >
+            {CONTACT_EMAIL}
+          </a>{" "}
+          with the subject line “Careers / [your name]”.
+        </p>
+      </MarketingArticle>
+    </MarketingPage>
   );
 }
-
-

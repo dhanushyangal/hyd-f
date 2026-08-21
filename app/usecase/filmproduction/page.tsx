@@ -15,6 +15,8 @@ const DATA = {
   capabilitiesHeading: "Built for cinematic workflows",
   tagline:
     "Characters, props, and environments for animation and VFX—from early concept to DCC-ready exports.",
+  example:
+    "Use Hydrilla for concept meshes and set dressing before DCC hero work in Maya, Blender, Cinema 4D, or Houdini — a block-in you can light, not a finished film hero.",
   features: [
     {
       title: "High-detail generation",

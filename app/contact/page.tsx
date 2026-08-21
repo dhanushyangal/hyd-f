@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import Footer from "../../components/layout/Footer";
+import { MarketingPage } from "@/components/layout/MarketingPage";
 import { motion } from "motion/react";
 import { Calendar, Mail, Send } from "lucide-react";
 
@@ -73,40 +72,18 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <section className="w-full bg-white pt-[8rem] pb-12 px-6 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h1
-            className="m-0 mb-4 text-[#111] font-bold tracking-tight"
-            style={{
-              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-              fontSize: "clamp(2.5rem, 6vw, 4rem)",
-              letterSpacing: "-0.045em",
-              lineHeight: 1.08,
-            }}
-          >
-            Contact Us
-          </h1>
-          <p
-            className="mx-auto max-w-[520px] m-0 text-[#6b6966] leading-relaxed"
-            style={{
-              fontFamily: "'DM Sans', Arial, sans-serif",
-              fontSize: "1.0625rem",
-            }}
-          >
-            Have questions about Hydrilla or want to integrate it into your production workflow?
-            Send us a message and our team will respond shortly.
-          </p>
-        </motion.div>
-      </section>
-
-      {/* Form + Two cards in one section */}
-      <section className="w-full px-4 sm:px-6 pb-24 max-w-6xl mx-auto">
+    <MarketingPage
+      eyebrow="Company"
+      title="Contact"
+      description="Questions about Hydrilla, a studio pipeline, or a demo. Send a message or book a time with the founders."
+      formats={false}
+      related={[
+        { label: "Enterprise", href: "/enterprise", hint: "Volume, seats, API" },
+        { label: "Careers", href: "/careers", hint: "Join the team" },
+        { label: "Docs", href: "/docs", hint: "Getting started" },
+      ]}
+    >
+      <section className="mx-auto max-w-[42rem] px-5 py-14 sm:px-6 sm:py-16">
         {/* Contact Form */}
         <div className="mb-16">
           {submitted ? (
@@ -300,8 +277,6 @@ export default function ContactPage() {
           </motion.div>
         </div>
       </section>
-
-      <Footer />
-    </div>
+    </MarketingPage>
   );
 }

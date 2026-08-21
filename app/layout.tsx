@@ -12,6 +12,7 @@ import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import {
   DEFAULT_DESCRIPTION,
   DEFAULT_OG_IMAGE,
+  HOME_TITLE,
   SITE_NAME,
   SITE_URL,
 } from "@/lib/seo";
@@ -27,7 +28,7 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} | Production-Ready 3D Assets, Generated Fast`,
+    default: HOME_TITLE,
     template: `%s | ${SITE_NAME}`,
   },
   description: DEFAULT_DESCRIPTION,
@@ -36,9 +37,15 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
   category: "technology",
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
   icons: {
-    icon: "/hyd01.png",
-    shortcut: "/hyd01.png",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/hyd01.png", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
     apple: "/hyd01.png",
   },
   openGraph: {
@@ -46,7 +53,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: `${SITE_NAME} | Production-Ready 3D Assets, Generated Fast`,
+    title: HOME_TITLE,
     description: DEFAULT_DESCRIPTION,
     images: [
       {
@@ -61,7 +68,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     site: "@hydrillaai",
     creator: "@hydrillaai",
-    title: `${SITE_NAME} | Production-Ready 3D Assets, Generated Fast`,
+    title: HOME_TITLE,
     description: DEFAULT_DESCRIPTION,
     images: [DEFAULT_OG_IMAGE],
   },
@@ -75,9 +82,6 @@ export const metadata: Metadata = {
       "max-snippet": -1,
       "max-video-preview": -1,
     },
-  },
-  alternates: {
-    canonical: SITE_URL,
   },
 };
 

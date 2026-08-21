@@ -1,76 +1,67 @@
-"use client";
-
-import { useRef } from "react";
-import Image from "next/image";
-import Footer from "../../components/layout/Footer";
+import Link from "next/link";
+import { MarketingPage } from "@/components/layout/MarketingPage";
+import { MarketingArticle, ProseHeading } from "@/components/content/MarkdownBody";
+import { BRAND_SENTENCE } from "@/lib/brand";
 
 export default function AboutPage() {
-  // Refs for sections (navbar will detect scroll position)
-  const heroSectionRef = useRef<HTMLElement>(null);
-  const contentSectionRef = useRef<HTMLElement>(null);
-
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section ref={heroSectionRef} className="relative min-h-screen w-full overflow-hidden">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="/waterhydrilla.png"
-            alt="About Background"
-            fill
-            className="object-cover"
-            priority
-          />
-          {/* Overlay for better text readability */}
-          <div className="absolute inset-0 bg-black/10"></div>
-        </div>
-        
-        {/* Content Container */}
-        <div className="relative z-10 container mx-auto px-4 sm:px-6 md:px-8 pt-32 sm:pt-40 md:pt-48 pb-12 sm:pb-16 md:pb-20 flex flex-col items-center justify-center min-h-screen">
-          {/* Subtitle */}
-          <p 
-            className="text-xs sm:text-sm md:text-base text-black/70 mb-6 sm:mb-8 tracking-[0.15em] uppercase font-medium animate-fade-in"
-            style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
-          >
-            ( About Hydrilla AI )
-          </p>
-          
-          {/* Main Heading */}
-          <h1 className="text-center animate-fade-in-up">
-            <span 
-              className="block text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl text-black leading-[1.05] tracking-[-0.02em] font-bold"
-              style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
-            >
-              About
-            </span>
-          </h1>
-        </div>
-      </section>
+    <MarketingPage
+      eyebrow="Company"
+      title="About Hydrilla"
+      description="Hydrilla is the product. Hawan Research Labs is the lab. BlueFox 3D is the model family."
+      formats={false}
+      related={[
+        { label: "Meet the team", href: "/team", hint: "People building it" },
+        { label: "Research", href: "/research", hint: "Hawan Research Labs" },
+        { label: "BlueFox 3D", href: "/bluefox3d", hint: "The model family" },
+        { label: "Contact", href: "/contact", hint: "Talk to the founders" },
+      ]}
+    >
+      <MarketingArticle>
+        <p className="text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          {BRAND_SENTENCE}
+        </p>
+        <p className="mt-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          Hydrilla is the product: a studio for text-to-3D and image-to-3D,
+          in-browser preview, team workspaces, and exports into real pipelines.
+          It is built for 3D artists, technical artists, and the teams who work
+          with them.
+        </p>
+        <p className="mt-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          Hawan Research Labs is the research lab that builds the models behind
+          Hydrilla. The first public model family is BlueFox 3D. The model you
+          run in Hydrilla today is BlueFox 1.
+        </p>
+        <p className="mt-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          BlueFox 1 turns a prompt or a reference image into a segmented mesh
+          with PBR materials, then Hydrilla lets you preview and export GLB,
+          FBX, OBJ, and USDZ for Unity, Unreal, Blender, and other tools.
+        </p>
+        <p className="mt-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          We do not treat generated meshes as a replacement for art direction.
+          Hydrilla is how you get to a clean, editable base faster, then finish
+          the work in your own pipeline.
+        </p>
 
-      {/* Content Section */}
-      <section 
-        ref={contentSectionRef}
-        className="relative py-20 sm:py-24 md:py-32 px-4 sm:px-6 md:px-8 bg-gradient-to-b from-neutral-50 to-white"
-      >
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center animate-fade-in-up animate-delay-200">
-            <p 
-              className="text-xl sm:text-2xl md:text-3xl text-gray-600 leading-relaxed font-medium tracking-tight"
-              style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
-            >
-              Content coming soon...
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <Footer />
-    </div>
+        <ProseHeading>Keep reading</ProseHeading>
+        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+          <Link href="/team" className="font-semibold text-neutral-950 underline underline-offset-2">
+            Meet the team
+          </Link>
+          {" · "}
+          <Link href="/research" className="font-semibold text-neutral-950 underline underline-offset-2">
+            Research
+          </Link>
+          {" · "}
+          <Link href="/bluefox3d" className="font-semibold text-neutral-950 underline underline-offset-2">
+            BlueFox 3D
+          </Link>
+          {" · "}
+          <Link href="/contact" className="font-semibold text-neutral-950 underline underline-offset-2">
+            Contact
+          </Link>
+        </p>
+      </MarketingArticle>
+    </MarketingPage>
   );
 }
-
-
-
-

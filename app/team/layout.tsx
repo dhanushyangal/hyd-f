@@ -1,13 +1,19 @@
 import type { ReactNode } from "react";
-import { createPageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { createPageMetadata, getTeamJsonLd } from "@/lib/seo";
 
 export const metadata = createPageMetadata({
   title: "Team",
   description:
-    "Meet the Hydrilla AI team building the next generation of AI-powered 3D production tools for creators and studios.",
+    "Meet the Hydrilla team at Hawan Research Labs — the people building BlueFox and production 3D tools for creators and studios.",
   path: "/team",
 });
 
 export default function TeamLayout({ children }: { children: ReactNode }) {
-  return children;
+  return (
+    <>
+      <JsonLd data={getTeamJsonLd()} />
+      {children}
+    </>
+  );
 }

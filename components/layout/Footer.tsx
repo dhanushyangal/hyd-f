@@ -3,44 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { HERO_POSTER_URL, HERO_VIDEO_URL } from "@/lib/cloudinary";
-
-const CONTACT_EMAIL = "founders@hydrilla.ai";
-
-const FOOTER_NAV = [
-  {
-    heading: "Product",
-    links: [
-      { label: "Features", href: "/features" },
-      { label: "How It Works", href: "/#howitworks" },
-      { label: "API", href: "/api" },
-      { label: "Pricing", href: "/pricing" },
-    ],
-  },
-  {
-    heading: "Solutions",
-    links: [
-      { label: "Game Development", href: "/usecase/gamedev" },
-      { label: "Film & Animation", href: "/usecase/filmproduction" },
-      { label: "Architecture & Interiors", href: "/usecase/architecture" },
-      { label: "AR / VR & XR", href: "/usecase/arvr" },
-    ],
-  },
-  {
-    heading: "Resources",
-    links: [
-      { label: "Documentation", href: "/docs" },
-      { label: "FAQ", href: "/faq" },
-    ],
-  },
-  {
-    heading: "Company",
-    links: [
-      { label: "About", href: "/team" },
-      { label: "Contact", href: "/contact" },
-      { label: "Careers", href: "/careers" },
-    ],
-  },
-];
+import { CONTACT_EMAIL } from "@/lib/brand";
+import { FOOTER_NAV } from "@/lib/nav";
 
 const LEGAL_LINKS = [
   { label: "Privacy Policy", href: "/privacy-policy" },

@@ -41,6 +41,8 @@ export interface UseCaseData {
   cardVertical?: boolean;
   /** Short SEO-friendly capability heading */
   capabilitiesHeading?: string;
+  /** One concrete example so verticals do not read as clones. */
+  example?: string;
 }
 
 const CAL_DEMO_URL = "https://cal.com/hydrilla";
@@ -278,6 +280,11 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
             <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.03em] text-neutral-950 sm:text-[32px]">
               {data.capabilitiesHeading ?? "Built for your pipeline"}
             </h2>
+            {data.example ? (
+              <p className="mt-4 text-[16px] leading-7 text-neutral-600">
+                {data.example}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-10 grid grid-cols-1 gap-px overflow-hidden border border-neutral-200 bg-neutral-200 sm:grid-cols-2">
@@ -343,7 +350,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
             Start generating today
           </h2>
           <p className="max-w-md text-[15px] leading-7 text-neutral-400">
-            Production-ready 3D from text or image. Export GLB, FBX, and OBJ.
+            Production-ready 3D from text or image. Export GLB, FBX, OBJ, and USDZ.
           </p>
           <div className="flex flex-wrap gap-3 sm:justify-center">
             <PrimaryCta

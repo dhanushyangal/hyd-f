@@ -4,7 +4,7 @@ import { createPageMetadata } from "@/lib/seo";
 export const metadata = createPageMetadata({
   title: "AI 3D Use Cases for Games, Film, Architecture & XR",
   description:
-    "See how Hydrilla generates production-ready 3D for game development, film and animation, architecture, AR/VR, and product visualization.",
+    "See how Hydrilla and BlueFox generate production-ready 3D for game development, film and animation, architecture, AR/VR, and product visualization.",
   path: "/usecase",
   keywords: [
     "AI 3D use cases",

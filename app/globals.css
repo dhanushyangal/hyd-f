@@ -612,3 +612,82 @@ input.range-minimal::-moz-range-track {
   border-radius: 2px;
   background: rgb(229 231 235);
 }
+
+.markdown-body h2 {
+  margin-top: 3.25rem;
+  font-family: "RoobertVF", "Roobert", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: #0a0a0a;
+}
+
+.markdown-body > h2:first-child {
+  margin-top: 0;
+}
+
+.markdown-body h3 {
+  margin-top: 2rem;
+  font-family: "RoobertVF", "Roobert", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #0a0a0a;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body table {
+  margin-top: 1rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.25rem;
+}
+
+.markdown-body li {
+  margin-top: 0.4rem;
+}
+
+.markdown-body a {
+  font-weight: 600;
+  color: #0a0a0a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid #e5e5e5;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #0a0a0a;
+}
+
+.markdown-body blockquote {
+  margin-top: 1rem;
+  border-left: 2px solid #e5e5e5;
+  padding-left: 1rem;
+  color: #525252;
+}
+
+.markdown-body code {
+  font-size: 0.875em;
+  background: #f5f5f5;
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+}

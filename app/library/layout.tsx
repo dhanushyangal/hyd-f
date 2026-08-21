@@ -1,32 +1,13 @@
-"use client";
+import type { ReactNode } from "react";
+import { RequireAuthLayout } from "@/components/auth/RequireAuthLayout";
+import { createPageMetadata } from "@/lib/seo";
 
-import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+export const metadata = createPageMetadata({
+  title: "Library",
+  path: "/library",
+  noIndex: true,
+});
 
-export default function LibraryLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <>
-      <SignedOut>
-        <RedirectToSignIn />
-      </SignedOut>
-      <SignedIn>{children}</SignedIn>
-    </>
-  );
-}
-
-function RedirectToSignIn() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace("/sign-in");
-  }, [router]);
-  return (
-    <div className="h-screen flex items-center justify-center bg-neutral-50">
-      <div className="w-8 h-8 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
-    </div>
-  );
+export default function LibraryLayout({ children }: { children: ReactNode }) {
+  return <RequireAuthLayout>{children}</RequireAuthLayout>;
 }

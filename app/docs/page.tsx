@@ -1,147 +1,202 @@
 import Link from "next/link";
-import Footer from "../../components/layout/Footer";
-import { createPageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { MarketingPage } from "@/components/layout/MarketingPage";
+import { MarketingArticle, ProseHeading } from "@/components/content/MarkdownBody";
+import { createPageMetadata, getDocsJsonLd } from "@/lib/seo";
 
 export const metadata = createPageMetadata({
-  title: "Documentation",
+  title: "Docs | Get started with Hydrilla",
   description:
-    "Hydrilla AI documentation for text-to-3D, image-to-3D, rigging, exports, and studio integration workflows.",
+    "Get started with Hydrilla: create a workspace, generate with BlueFox 1 from text or image, preview, and export GLB, FBX, OBJ, or USDZ.",
   path: "/docs",
+  absoluteTitle: true,
 });
+
+const TOC = [
+  { href: "#getting-started", label: "Getting started" },
+  { href: "#text-to-3d", label: "Text to 3D" },
+  { href: "#image-to-3d", label: "Image to 3D" },
+  { href: "#preview", label: "Preview" },
+  { href: "#export", label: "Export formats" },
+  { href: "#workspaces", label: "Workspaces and credits" },
+  { href: "#api", label: "API" },
+];
 
 export default function DocsPage() {
   return (
     <>
-      <main
-        style={{
-          width: "100%",
-          minHeight: "80vh",
-          backgroundColor: "#fff",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "8rem 1.5rem 6rem",
-          boxSizing: "border-box",
-          fontFamily: "'DM Sans', Arial, sans-serif",
-          WebkitFontSmoothing: "antialiased",
-          textAlign: "center",
-        }}
+      <JsonLd data={getDocsJsonLd()} />
+      <MarketingPage
+        eyebrow="Documentation"
+        title="Get started"
+        description="From first prompt to a production export. This is the public getting-started guide for Hydrilla."
+        related={[
+          { label: "Export formats", href: "/blog/export-formats", hint: "GLB, FBX, OBJ, USDZ" },
+          { label: "API", href: "/api", hint: "Jobs from your pipeline" },
+          { label: "FAQ", href: "/faq", hint: "Pricing and exports" },
+        ]}
       >
-        {/* Icon */}
-        <div
-          style={{
-            width: "64px",
-            height: "64px",
-            borderRadius: "16px",
-            backgroundColor: "rgba(17,17,17,0.06)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: "2rem",
-          }}
-        >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ color: "#555" }}
-          >
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-          </svg>
-        </div>
+        <MarketingArticle>
+          <nav aria-label="On this page" className="border border-neutral-200 bg-[#fafafa] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+              On this page
+            </p>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {TOC.map((item) => (
+                <li key={item.href}>
+                  <a
+                    href={item.href}
+                    className="text-[14px] font-medium text-neutral-800 underline-offset-2 hover:underline"
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-        <p
-          style={{
-            margin: "0 0 0.75rem",
-            fontSize: "0.6875rem",
-            fontWeight: 600,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#aaa",
-          }}
-        >
-          Documentation
-        </p>
+          <DocSection id="getting-started" title="Getting started">
+            <ol className="list-decimal space-y-3 pl-5">
+              <li>Create an account and open a workspace.</li>
+              <li>
+                Start a generation with a text prompt or a reference image (BlueFox 1).
+              </li>
+              <li>
+                Wait for the mesh. Inspect parts, PBR, and silhouette in the browser
+                preview.
+              </li>
+              <li>
+                Export GLB (Free) or GLB/FBX/OBJ/USDZ (Creator/Studio).
+              </li>
+              <li>Import into Unity, Unreal, Blender, or your DCC.</li>
+            </ol>
+            <p>
+              <Link href="/features" className="font-semibold text-neutral-950 underline underline-offset-2">
+                Features
+              </Link>
+              {" · "}
+              <Link href="/pricing" className="font-semibold text-neutral-950 underline underline-offset-2">
+                Pricing
+              </Link>
+              {" · "}
+              <Link href="/api" className="font-semibold text-neutral-950 underline underline-offset-2">
+                API
+              </Link>
+              {" · "}
+              <Link href="/faq" className="font-semibold text-neutral-950 underline underline-offset-2">
+                FAQ
+              </Link>
+            </p>
+          </DocSection>
 
-        <h1
-          style={{
-            margin: "0 0 1.25rem",
-            fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-            fontSize: "clamp(2rem, 5vw, 3.25rem)",
-            fontWeight: 700,
-            color: "#111",
-            letterSpacing: "-0.04em",
-            lineHeight: 1.1,
-          }}
-        >
-          Coming Soon
-        </h1>
+          <DocSection id="text-to-3d" title="Text to 3D">
+            <p>
+              Type a prompt that names the subject, style, and any production
+              constraints: a game-ready prop, a cinematic character, an
+              interior piece. BlueFox 1 turns that description into a
+              structured mesh with parts you can continue editing.
+            </p>
+            <p>
+              Be specific about scale and use. “Low-poly crate for Unity” and
+              “hero prop with PBR wear” produce different starting points.
+            </p>
+          </DocSection>
 
-        <p
-          style={{
-            margin: "0 0 2.5rem",
-            fontSize: "1rem",
-            color: "rgba(17,17,17,0.5)",
-            lineHeight: 1.65,
-            maxWidth: "28rem",
-          }}
-        >
-          We&apos;re working on comprehensive documentation for Hydrilla. Check back soon — or reach out directly if you need help.
-        </p>
+          <DocSection id="image-to-3d" title="Image to 3D">
+            <p>
+              Drop a reference image when you already have a look. Hydrilla
+              uses the image as visual input so the generated asset tracks
+              silhouette, materials, and style instead of guessing from text
+              alone.
+            </p>
+            <p>
+              You can combine a short prompt with a reference when you need
+              both a look and a production note (engine, poly budget, or
+              export target).
+            </p>
+          </DocSection>
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", justifyContent: "center" }}>
-          <Link
-            href="/"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              padding: "0.75rem 1.5rem",
-              borderRadius: "0.875rem",
-              backgroundColor: "#111",
-              color: "#fff",
-              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-              fontSize: "0.9375rem",
-              fontWeight: 600,
-              textDecoration: "none",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Back to Home
-          </Link>
-          <a
-            href="mailto:founders@hydrilla.ai"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              padding: "0.75rem 1.5rem",
-              borderRadius: "0.875rem",
-              border: "1.5px solid rgba(17,17,17,0.14)",
-              backgroundColor: "transparent",
-              color: "#111",
-              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-              fontSize: "0.9375rem",
-              fontWeight: 600,
-              textDecoration: "none",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Contact Us
-          </a>
-        </div>
-      </main>
-      <Footer />
+          <DocSection id="preview" title="Preview">
+            <p>
+              Orbit the model in the browser before you download. Check
+              topology, materials, and silhouettes under lighting so issues
+              show up before the file hits your DCC tool or engine.
+            </p>
+            <p>
+              Meshes arrive segmented into logical parts, which keeps material
+              assignment and cleanup precise instead of starting from a solid
+              blob.
+            </p>
+          </DocSection>
+
+          <DocSection id="export" title="Export formats">
+            <p>
+              Hydrilla exports GLB, FBX, OBJ, and USDZ. Use GLB for web and
+              many real-time pipelines, FBX and OBJ for DCC and engines, and
+              USDZ for AR viewers.
+            </p>
+            <p>
+              Topology and UVs are produced for production handoff into Unity,
+              Unreal, Blender, and AR tools, without rebuilding the asset
+              from scratch.
+            </p>
+          </DocSection>
+
+          <DocSection id="workspaces" title="Workspaces and credits">
+            <p>
+              Workspaces keep generations, versions, and team delivery in one
+              place. Organize drafts, share review, and move from first output
+              to a client-ready file without scattering assets across folders.
+            </p>
+            <p>
+              Usage is metered in credits. The free plan includes a monthly
+              credit allotment so you can evaluate the pipeline; Creator and
+              Studio raise volume and unlock additional export options. Plans
+              can be changed from account settings.
+            </p>
+          </DocSection>
+
+          <DocSection id="api" title="API">
+            <p>
+              Studios that need programmatic generation can integrate Hydrilla
+              into an existing pipeline. Authentication is account-based; the
+              public API surface is documented for partners and early access.
+            </p>
+            <p>
+              <Link href="/api" className="font-semibold text-neutral-950 underline underline-offset-2">
+                Read the API overview
+              </Link>
+              {" "}or email{" "}
+              <a
+                href="mailto:founders@hydrilla.ai"
+                className="font-semibold text-neutral-950 underline underline-offset-2"
+              >
+                founders@hydrilla.ai
+              </a>{" "}
+              if you need pipeline access.
+            </p>
+          </DocSection>
+        </MarketingArticle>
+      </MarketingPage>
     </>
+  );
+}
+
+function DocSection({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-28">
+      <ProseHeading>{title}</ProseHeading>
+      <div className="mt-4 space-y-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+        {children}
+      </div>
+    </section>
   );
 }

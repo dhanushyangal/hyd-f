@@ -346,8 +346,11 @@ function FeatureValueCell({ value }: { value: FeatureValue }) {
 
 export default function PricingSection({
   compact = false,
+  pageHeading = false,
 }: {
   compact?: boolean;
+  /** Use an H1 on the dedicated /pricing page. Homepage keeps H2. */
+  pageHeading?: boolean;
 }) {
   const { getToken, isSignedIn } = useAuth();
   const [userPlan, setUserPlan] = useState<UserPlan>(null);
@@ -427,13 +430,13 @@ export default function PricingSection({
               Pricing
             </p>
             <BlurReveal
-              as="h2"
-              className={cn(
-                "mt-3 font-bold tracking-[-0.035em] leading-[1.08] text-[#111]",
-                compact
-                  ? "text-[clamp(1.75rem,3vw,2.25rem)]"
-                  : "text-[clamp(1.75rem,4vw,2.75rem)]"
-              )}
+            as={pageHeading ? "h1" : "h2"}
+            className={cn(
+              "mt-3 font-bold tracking-[-0.035em] leading-[1.08] text-[#111]",
+              compact
+                ? "text-[clamp(1.75rem,3vw,2.25rem)]"
+                : "text-[clamp(1.75rem,4vw,2.75rem)]"
+            )}
               style={{ fontFamily: FONT_DISPLAY }}
             >
               {compact ? "Plans" : "Pick a plan. Ship more 3D."}

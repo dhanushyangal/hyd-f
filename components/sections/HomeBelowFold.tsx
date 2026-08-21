@@ -7,15 +7,14 @@ import { SignUpButton } from "@clerk/nextjs";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 
 /**
- * Below-the-fold homepage sections — loaded client-side only so `/` HTML stays
- * small (TTFB/FCP/LCP). Image-heavy blocks never enter the initial document.
+ * Below-the-fold homepage sections.
+ * Text-heavy blocks SSR so crawlers and LLMs see Features, Pricing, FAQ, and How it works.
+ * Video/image showcases stay client-only to keep the initial document small.
  */
 const IndustrySection = dynamic(() => import("@/components/sections/IndustrySection"), {
-  ssr: false,
   loading: () => <div className="min-h-[320px] w-full" aria-hidden />,
 });
 const HowItWorks = dynamic(() => import("@/components/sections/HowItWorks"), {
-  ssr: false,
   loading: () => <div className="min-h-[280px] w-full" aria-hidden />,
 });
 const Showcase = dynamic(() => import("@/components/sections/Showcase"), {
@@ -27,19 +26,15 @@ const AppShowcase = dynamic(() => import("@/components/sections/AppShowcase"), {
   loading: () => <div className="min-h-[200px] w-full" aria-hidden />,
 });
 const FeaturesSection = dynamic(() => import("@/components/sections/FeaturesSection"), {
-  ssr: false,
   loading: () => <div className="min-h-[320px] w-full" aria-hidden />,
 });
 const WhyHydrilla = dynamic(() => import("@/components/sections/WhyHydrilla"), {
-  ssr: false,
   loading: () => <div className="min-h-[200px] w-full" aria-hidden />,
 });
 const PricingSection = dynamic(() => import("@/components/sections/PricingSection"), {
-  ssr: false,
   loading: () => <div className="min-h-[400px] w-full" aria-hidden />,
 });
 const FAQSection = dynamic(() => import("@/components/sections/FAQSection"), {
-  ssr: false,
   loading: () => <div className="min-h-[300px] w-full" aria-hidden />,
 });
 

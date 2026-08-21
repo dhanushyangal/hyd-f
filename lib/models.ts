@@ -29,7 +29,7 @@ export type CatalogModel = {
 };
 
 export const MODEL_CATALOG: CatalogModel[] = [
-  { id: "trilles", label: "Bluefox3D-v1", group: "Hydrilla", kind: "mesh", provider: "hydrilla" },
+  { id: "trilles", label: "BlueFox 1", group: "Hydrilla", kind: "mesh", provider: "hydrilla" },
   {
     id: "hunyuan3d",
     label: "Hunyuan 3D",

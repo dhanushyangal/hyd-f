@@ -14,6 +14,8 @@ const DATA = {
   capabilitiesHeading: "Built for spatial pipelines",
   tagline:
     "Lightweight, spatially coherent 3D for VR, AR, and spatial apps—from prototype to production.",
+  example:
+    "Lighter GLB and USDZ objects for spatial layouts — props and placeable objects for AR/VR scenes, not dense hero meshes.",
   features: [
     {
       title: "Real-time friendly models",
