@@ -1,6 +1,5 @@
 import dynamic from "next/dynamic";
 import Hero from "../components/sections/Hero";
-import HomeEntityIntro from "../components/sections/HomeEntityIntro";
 import HomeBelowFold from "../components/sections/HomeBelowFold";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { HomeAuthRedirect } from "@/components/HomeAuthRedirect";
@@ -28,7 +27,6 @@ export default function Home() {
       <JsonLd data={getHomepageJsonLd()} />
       <HomeAuthRedirect />
       <Hero />
-      <HomeEntityIntro />
       {/* Text sections SSR for crawlers; Showcase / AppShowcase stay client-only. */}
       <HomeBelowFold />
       <Footer />

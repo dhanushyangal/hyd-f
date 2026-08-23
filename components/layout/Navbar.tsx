@@ -13,6 +13,8 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 
 import { NAV_PRIMARY } from "@/lib/nav";
+import { MegaMenu } from "./MegaMenu";
+import { MobileNav } from "./MobileNav";
 
 const MENU_EASE = [0.22, 1, 0.36, 1] as const;
 const BAR_EASE = "duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none";
@@ -139,10 +141,12 @@ interface NavbarProps {
 
 export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [onDark, setOnDark] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
 
   const isHero = variant === "hero";
   const useHeroStyling = isHero;
@@ -157,6 +161,7 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
 
   useLayoutEffect(() => {
     setMobileMenuOpen(false);
+    setOpenMenu(null);
   }, [pathname]);
 
   useEffect(() => {
@@ -210,13 +215,43 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    if (!mobileMenuOpen) return;
+    if (!mobileMenuOpen && !openMenu) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileMenuOpen(false);
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        setOpenMenu(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mobileMenuOpen]);
+  }, [mobileMenuOpen, openMenu]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      if (!mq.matches) setOpenMenu(null);
+      else setMobileMenuOpen(false);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const cancelMenuClose = () => {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  const openDesktopMenu = (label: string) => {
+    cancelMenuClose();
+    setOpenMenu(label);
+  };
+
+  const scheduleMenuClose = () => {
+    cancelMenuClose();
+    closeTimer.current = window.setTimeout(() => setOpenMenu(null), 160);
+  };
 
   const containerClasses = useHeroStyling
     ? "bg-white/2 backdrop-blur-[80px] border border-gray-200/20 shadow-2xl"
@@ -246,6 +281,18 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   const barColor = onDark ? "bg-white" : "bg-black";
 
   const shouldShrink = isHero && isScrolled;
+  const activeGroup = NAV_PRIMARY.find((item) => item.label === openMenu);
+
+  useEffect(() => {
+    if (shouldShrink) setOpenMenu(null);
+  }, [shouldShrink]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    };
+  }, []);
+
   const chromeSurface = useHeroStyling
     ? `${shouldShrink ? "bg-white/5" : "bg-white/2"} backdrop-blur-[80px] border border-gray-200/20 shadow-2xl`
     : containerClasses;
@@ -318,55 +365,42 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
               shouldShrink ? "opacity-0" : "opacity-100"
             }`}
             aria-hidden={shouldShrink}
+            onMouseLeave={scheduleMenuClose}
           >
             <div
               className={`flex items-center gap-6 md:gap-8 ${
                 shouldShrink ? "pointer-events-none" : "pointer-events-auto"
               }`}
             >
-              {NAV_PRIMARY.map((item) =>
-                item.children ? (
-                  <div key={item.label} className="group relative">
-                    <Link
-                      href={item.href}
-                      tabIndex={shouldShrink ? -1 : 0}
-                      className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
-                    >
-                      {item.label}
-                    </Link>
-                    <div className="invisible absolute left-1/2 top-full z-50 pt-3 opacity-0 transition-[opacity,visibility] duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                      <div className="-translate-x-1/2 min-w-[18rem] rounded-2xl border border-black/8 bg-white/95 p-2 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-                        {item.children.map((child) => (
-                          <Link
-                            key={child.href}
-                            href={child.href}
-                            tabIndex={shouldShrink ? -1 : 0}
-                            className="block rounded-xl px-3 py-2.5 hover:bg-black/[0.04]"
-                          >
-                            <span className="block text-[13px] font-semibold tracking-[-0.02em] text-neutral-950">
-                              {child.label}
-                            </span>
-                            {child.description ? (
-                              <span className="mt-0.5 block text-[12px] leading-4 text-neutral-500">
-                                {child.description}
-                              </span>
-                            ) : null}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
+              {NAV_PRIMARY.map((item) => {
+                const hasMenu = Boolean(item.columns?.length);
+                const isOpen = openMenu === item.label;
+                return (
                   <Link
-                    key={item.href}
+                    key={item.label}
                     href={item.href}
                     tabIndex={shouldShrink ? -1 : 0}
-                    className={`text-xs sm:text-sm font-semibold uppercase tracking-wider transition-colors font-dm-sans ${textColor} hover:opacity-80`}
+                    aria-expanded={hasMenu ? isOpen : undefined}
+                    aria-haspopup={hasMenu ? "true" : undefined}
+                    onMouseEnter={() => {
+                      if (hasMenu) openDesktopMenu(item.label);
+                      else {
+                        cancelMenuClose();
+                        setOpenMenu(null);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (hasMenu) openDesktopMenu(item.label);
+                      else setOpenMenu(null);
+                    }}
+                    className={`text-[14px] font-medium tracking-[-0.018em] transition-opacity font-dm-sans ${textColor} ${
+                      openMenu && !isOpen ? "opacity-45" : "hover:opacity-80"
+                    }`}
                   >
                     {item.label}
                   </Link>
-                )
-              )}
+                );
+              })}
             </div>
           </nav>
 
@@ -428,7 +462,10 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
             {/* Mobile Menu Button */}
             <button
               type="button"
-              onClick={() => setMobileMenuOpen((open) => !open)}
+              onClick={() => {
+                setOpenMenu(null);
+                setMobileMenuOpen((open) => !open);
+              }}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
               className={hamburgerClasses}
@@ -479,137 +516,31 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
         </div>
 
         <AnimatePresence>
-          {mobileMenuOpen && (
+          {activeGroup?.columns && !shouldShrink && (
             <motion.div
-              role="navigation"
-              aria-label="Mobile"
-              initial={
-                reduceMotion
-                  ? { opacity: 0 }
-                  : { opacity: 0, y: -10, scale: 0.98, filter: "blur(10px)" }
-              }
-              animate={
-                reduceMotion
-                  ? { opacity: 1 }
-                  : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }
-              }
-              exit={
-                reduceMotion
-                  ? { opacity: 0 }
-                  : { opacity: 0, y: -8, scale: 0.985, filter: "blur(8px)" }
-              }
-              transition={{ duration: reduceMotion ? 0.12 : 0.32, ease: MENU_EASE }}
-              className={`lg:hidden absolute top-full left-0 right-0 mt-2 overflow-hidden rounded-[22px] border ${
-                onDark
-                  ? "border-white/12 bg-black/55 text-white shadow-[0_28px_80px_-24px_rgba(0,0,0,0.65)]"
-                  : "border-black/8 bg-white/92 text-neutral-950 shadow-[0_28px_80px_-28px_rgba(0,0,0,0.28)]"
-              } backdrop-blur-2xl`}
-              style={{ transformOrigin: "top center" }}
+              key="desktop-mega-menu"
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+              transition={{ duration: reduceMotion ? 0.1 : 0.18, ease: MENU_EASE }}
+              className="absolute left-0 right-0 top-full z-50 hidden pt-2 lg:block"
+              onMouseEnter={cancelMenuClose}
+              onMouseLeave={scheduleMenuClose}
             >
-              <div
-                aria-hidden
-                className={`pointer-events-none absolute inset-x-8 top-0 h-px ${
-                  onDark
-                    ? "bg-gradient-to-r from-transparent via-white/35 to-transparent"
-                    : "bg-gradient-to-r from-transparent via-black/15 to-transparent"
-                }`}
+              <MegaMenu
+                group={activeGroup}
+                onNavigate={() => setOpenMenu(null)}
               />
-
-              <nav className="px-3 pt-3 pb-2" style={{ perspective: 900 }}>
-                {NAV_PRIMARY.flatMap((item) =>
-                  item.children?.length ? item.children : [item]
-                ).map((link, index) => (
-                  <motion.div
-                    key={link.href}
-                    initial={
-                      reduceMotion
-                        ? { opacity: 0 }
-                        : { opacity: 0, y: 12, rotateX: 16 }
-                    }
-                    animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                    transition={{
-                      duration: reduceMotion ? 0 : 0.3,
-                      ease: MENU_EASE,
-                      delay: reduceMotion ? 0 : 0.045 + index * 0.034,
-                    }}
-                    style={{ transformOrigin: "top center" }}
-                  >
-                    <Link
-                      href={link.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={`group flex items-center justify-between rounded-[14px] px-3.5 py-3 text-[15px] font-medium tracking-[-0.022em] transition-colors ${
-                        onDark
-                          ? "text-white/90 hover:bg-white/8 hover:text-white"
-                          : "text-neutral-900 hover:bg-black/[0.04]"
-                      }`}
-                      style={{
-                        fontFamily:
-                          "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
-                      }}
-                    >
-                      {link.label}
-                      <span
-                        className={`text-[11px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5 ${
-                          onDark ? "text-white/30" : "text-black/25"
-                        }`}
-                      >
-                        →
-                      </span>
-                    </Link>
-                  </motion.div>
-                ))}
-              </nav>
-
-              <div className={`mx-5 h-px ${onDark ? "bg-white/10" : "bg-black/8"}`} />
-
-              <div className="px-3 py-3">
-                <SignedIn>
-                  <Link
-                    href="/generate"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center justify-center rounded-full px-4 py-3 text-[14px] font-semibold tracking-[-0.02em] transition-transform duration-300 active:scale-[0.98] ${
-                      onDark
-                        ? "bg-white text-black"
-                        : "bg-neutral-950 text-white"
-                    }`}
-                  >
-                    Generate
-                  </Link>
-                </SignedIn>
-                <SignedOut>
-                  <div className="flex flex-col gap-1.5">
-                    <SignInButton mode="modal">
-                      <button
-                        type="button"
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`rounded-full px-4 py-2.5 text-[14px] font-medium tracking-[-0.02em] transition-colors ${
-                          onDark
-                            ? "text-white/80 hover:bg-white/8 hover:text-white"
-                            : "text-neutral-600 hover:bg-black/[0.04] hover:text-neutral-950"
-                        }`}
-                      >
-                        Log in
-                      </button>
-                    </SignInButton>
-                    <SignUpButton mode="modal">
-                      <button
-                        type="button"
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`rounded-full px-4 py-3 text-[14px] font-semibold tracking-[-0.02em] transition-transform duration-300 active:scale-[0.98] ${
-                          onDark
-                            ? "bg-white text-black"
-                            : "bg-neutral-950 text-white"
-                        }`}
-                      >
-                        Get started
-                      </button>
-                    </SignUpButton>
-                  </div>
-                </SignedOut>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        <MobileNav
+          open={mobileMenuOpen}
+          onDark={onDark}
+          reduceMotion={reduceMotion}
+          onClose={() => setMobileMenuOpen(false)}
+        />
       </div>
     </header>
   );

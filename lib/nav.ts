@@ -1,106 +1,204 @@
+export type NavIconName =
+  | "text"
+  | "image"
+  | "bluefox"
+  | "features"
+  | "preview"
+  | "export"
+  | "api"
+  | "rigging"
+  | "enterprise"
+  | "security"
+  | "game"
+  | "film"
+  | "architecture"
+  | "arvr"
+  | "product"
+  | "studio"
+  | "startup"
+  | "docs"
+  | "faq"
+  | "blog"
+  | "changelog"
+  | "compare"
+  | "about"
+  | "team"
+  | "careers"
+  | "contact"
+  | "research"
+  | "brand";
+
 export type NavLink = {
   label: string;
   href: string;
   description?: string;
+  icon?: NavIconName;
+};
+
+export type NavColumn = {
+  heading: string;
+  items: NavLink[];
+};
+
+export type NavFeatured = {
+  eyebrow: string;
+  title: string;
+  href: string;
+  visual: "formats" | "game" | "docs" | "lab";
 };
 
 export type NavGroup = {
   label: string;
   href: string;
-  children?: NavLink[];
+  columns?: NavColumn[];
+  featured?: NavFeatured;
 };
 
 export const NAV_PRIMARY: NavGroup[] = [
   {
     label: "Product",
     href: "/features",
-    children: [
+    columns: [
       {
-        label: "Features",
-        href: "/features",
-        description: "Text and image to 3D, preview, and pipeline exports.",
+        heading: "Generate",
+        items: [
+          { label: "Text to 3D", href: "/docs#text-to-3d", icon: "text" },
+          { label: "Image to 3D", href: "/docs#image-to-3d", icon: "image" },
+          { label: "BlueFox 3D", href: "/bluefox3d", icon: "bluefox" },
+        ],
       },
       {
-        label: "BlueFox 3D",
-        href: "/bluefox3d",
-        description: "The BlueFox 1 model for production meshes.",
+        heading: "Pipeline",
+        items: [
+          { label: "Features", href: "/features", icon: "features" },
+          { label: "Preview", href: "/docs#preview", icon: "preview" },
+          { label: "Exports", href: "/docs#export", icon: "export" },
+        ],
       },
       {
-        label: "API",
-        href: "/api",
-        description: "Programmatic generation for studio pipelines.",
+        heading: "Build",
+        items: [
+          { label: "API", href: "/api", icon: "api" },
+          { label: "Rigging", href: "/rigging", icon: "rigging" },
+        ],
       },
       {
-        label: "Docs",
-        href: "/docs",
-        description: "Get started: prompt, preview, export.",
+        heading: "Scale",
+        items: [
+          { label: "Enterprise", href: "/enterprise", icon: "enterprise" },
+          { label: "Security", href: "/security", icon: "security" },
+        ],
       },
     ],
+    featured: {
+      eyebrow: "BlueFox 1",
+      title: "Give studios production meshes with PBR, ready for their engines",
+      href: "/bluefox3d",
+      visual: "formats",
+    },
   },
   {
     label: "Solutions",
     href: "/usecase",
-    children: [
+    columns: [
       {
-        label: "All solutions",
-        href: "/usecase",
-        description: "Games, film, architecture, XR, and product visualization.",
+        heading: "Industries",
+        items: [
+          { label: "Game development", href: "/usecase/gamedev", icon: "game" },
+          { label: "Film & animation", href: "/usecase/filmproduction", icon: "film" },
+          { label: "Architecture", href: "/usecase/architecture", icon: "architecture" },
+          { label: "AR / VR & XR", href: "/usecase/arvr", icon: "arvr" },
+        ],
       },
       {
-        label: "Game Development",
-        href: "/usecase/gamedev",
-        description: "Characters, props, and environments for real-time engines.",
+        heading: "Visualization",
+        items: [
+          { label: "Product visualization", href: "/usecase/productdesign", icon: "product" },
+          { label: "All solutions", href: "/usecase", icon: "features" },
+        ],
       },
       {
-        label: "Film & Animation",
-        href: "/usecase/filmproduction",
-        description: "Concept and production assets for cinematic pipelines.",
-      },
-      {
-        label: "Architecture",
-        href: "/usecase/architecture",
-        description: "Furniture and interiors for visualization.",
-      },
-      {
-        label: "AR / VR & XR",
-        href: "/usecase/arvr",
-        description: "Lightweight assets for immersive builds.",
-      },
-      {
-        label: "Product Visualization",
-        href: "/usecase/productdesign",
-        description: "SKU-ready 3D for marketing and commerce.",
+        heading: "Teams",
+        items: [
+          { label: "Studios", href: "/enterprise", icon: "studio" },
+          { label: "Enterprise", href: "/enterprise", icon: "enterprise" },
+          { label: "Startup", href: "/pricing", icon: "startup" },
+        ],
       },
     ],
+    featured: {
+      eyebrow: "Game development",
+      title: "Characters, props, and environments for real-time engines",
+      href: "/usecase/gamedev",
+      visual: "game",
+    },
   },
-  { label: "Pricing", href: "/pricing" },
-  { label: "FAQ", href: "/faq" },
+  {
+    label: "Resources",
+    href: "/docs",
+    columns: [
+      {
+        heading: "Learn",
+        items: [
+          { label: "Documentation", href: "/docs", icon: "docs" },
+          { label: "FAQ", href: "/faq", icon: "faq" },
+          { label: "Blog", href: "/blog", icon: "blog" },
+          { label: "Changelog", href: "/changelog", icon: "changelog" },
+        ],
+      },
+      {
+        heading: "Compare",
+        items: [
+          { label: "Hydrilla vs Meshy", href: "/compare/hydrilla-vs-meshy", icon: "compare" },
+          { label: "Hydrilla vs Tripo", href: "/compare/hydrilla-vs-tripo", icon: "compare" },
+          { label: "Hydrilla vs Luma", href: "/compare/hydrilla-vs-luma", icon: "compare" },
+          { label: "Best AI 3D generators", href: "/compare/best-ai-3d-generators", icon: "features" },
+        ],
+      },
+    ],
+    featured: {
+      eyebrow: "Docs",
+      title: "From first prompt to a production export in your engine",
+      href: "/docs",
+      visual: "docs",
+    },
+  },
   {
     label: "Company",
     href: "/about",
-    children: [
+    columns: [
       {
-        label: "About",
-        href: "/about",
-        description: "Hydrilla and Hawan Research Labs.",
+        heading: "Hydrilla",
+        items: [
+          { label: "About", href: "/about", icon: "about" },
+          { label: "Team", href: "/team", icon: "team" },
+          { label: "Careers", href: "/careers", icon: "careers" },
+          { label: "Contact", href: "/contact", icon: "contact" },
+        ],
       },
       {
-        label: "Research",
-        href: "/research",
-        description: "Hawan Research Labs and BlueFox.",
+        heading: "Lab",
+        items: [
+          { label: "Research", href: "/research", icon: "research" },
+          { label: "BlueFox 3D", href: "/bluefox3d", icon: "bluefox" },
+        ],
       },
       {
-        label: "Careers",
-        href: "/careers",
-        description: "Open roles and how to apply.",
-      },
-      {
-        label: "Contact",
-        href: "/contact",
-        description: "Talk to the founders. Book a demo.",
+        heading: "Trust",
+        items: [
+          { label: "Security", href: "/security", icon: "security" },
+          { label: "Brand", href: "/brand", icon: "brand" },
+        ],
       },
     ],
+    featured: {
+      eyebrow: "Hawan Research Labs",
+      title: "The lab that builds BlueFox, the model behind Hydrilla",
+      href: "/research",
+      visual: "lab",
+    },
   },
+  { label: "Pricing", href: "/pricing" },
 ];
 
 export const FOOTER_NAV: Array<{ heading: string; links: NavLink[] }> = [

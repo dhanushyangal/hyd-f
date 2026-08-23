@@ -21,7 +21,7 @@ function routeLastModified(routePath: string): Date {
     return (
       mtimeIfExists(path.join(APP_ROOT, "page.tsx")) ||
       mtimeIfExists(
-        path.join(COMPONENTS_ROOT, "sections", "HomeEntityIntro.tsx")
+        path.join(COMPONENTS_ROOT, "sections", "Hero.tsx")
       ) ||
       new Date()
     );
