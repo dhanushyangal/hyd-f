@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { MetadataRoute } from "next";
+import { fetchBlogSlugs } from "@/lib/blog";
 import { getAllArticles } from "@/lib/content";
 import { PUBLIC_ROUTES, absoluteUrl } from "@/lib/seo";
 
@@ -20,9 +21,7 @@ function routeLastModified(routePath: string): Date {
   if (routePath === "/") {
     return (
       mtimeIfExists(path.join(APP_ROOT, "page.tsx")) ||
-      mtimeIfExists(
-        path.join(COMPONENTS_ROOT, "sections", "Hero.tsx")
-      ) ||
+      mtimeIfExists(path.join(COMPONENTS_ROOT, "sections", "Hero.tsx")) ||
       new Date()
     );
   }
@@ -35,7 +34,7 @@ function routeLastModified(routePath: string): Date {
   );
 }
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const pages = PUBLIC_ROUTES.map(({ path: routePath, changeFrequency, priority }) => ({
     url: absoluteUrl(routePath),
     lastModified: routeLastModified(routePath),
@@ -43,21 +42,30 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority,
   }));
 
-  const articles = getAllArticles().map((article) => {
-    const contentFile = path.join(
-      CONTENT_ROOT,
-      article.collection,
-      `${article.slug}.md`
-    );
+  let blogEntries: MetadataRoute.Sitemap = [];
+  try {
+    const slugs = await fetchBlogSlugs();
+    blogEntries = slugs.map(({ slug, updatedAt }) => ({
+      url: absoluteUrl(`/blog/${slug}`),
+      lastModified: new Date(updatedAt),
+      changeFrequency: "monthly" as const,
+      priority: 0.65,
+    }));
+  } catch {
+    blogEntries = [];
+  }
+
+  const compareArticles = getAllArticles().map((article) => {
+    const contentFile = path.join(CONTENT_ROOT, article.collection, `${article.slug}.md`);
     return {
       url: absoluteUrl(article.path),
       lastModified: article.dateModified
         ? new Date(article.dateModified)
         : mtimeIfExists(contentFile) ?? new Date(article.datePublished),
       changeFrequency: "monthly" as const,
-      priority: article.collection === "compare" ? 0.75 : 0.65,
+      priority: 0.75,
     };
   });
 
-  return [...pages, ...articles];
+  return [...pages, ...blogEntries, ...compareArticles];
 }

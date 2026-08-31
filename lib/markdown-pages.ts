@@ -10,6 +10,7 @@ import {
   SITE_URL,
 } from "@/lib/brand";
 import { getAllArticles } from "@/lib/content";
+import { fetchBlogPost, htmlToMarkdownLite } from "@/lib/blog";
 import { FAQ_ITEMS } from "@/lib/faq";
 import { PRICING } from "@/lib/pricing";
 
@@ -209,7 +210,7 @@ ${SITE_URL}/cookie-policy
 `,
 };
 
-export function getMarkdownForSlug(slugParts: string[]): string | null {
+export async function getMarkdownForSlug(slugParts: string[]): Promise<string | null> {
   const slug = slugParts.join("/") || "index";
 
   if (PAGE_MARKDOWN[slug]) return PAGE_MARKDOWN[slug];
@@ -218,10 +219,19 @@ export function getMarkdownForSlug(slugParts: string[]): string | null {
     return `# Hydrilla use case\n\n${BRAND_SENTENCE}\n\n${SITE_URL}/${slug}\n`;
   }
 
-  if (slug.startsWith("blog/") || slug.startsWith("compare/")) {
-    const [collection, articleSlug] = slug.split("/");
+  if (slug.startsWith("blog/")) {
+    const articleSlug = slug.split("/")[1];
+    if (!articleSlug) return null;
+    const post = await fetchBlogPost(articleSlug);
+    if (!post) return null;
+    const body = htmlToMarkdownLite(post.content);
+    return `# ${post.headline}\n\n${post.excerpt}\n\n${body}\n`;
+  }
+
+  if (slug.startsWith("compare/")) {
+    const [, articleSlug] = slug.split("/");
     const article = getAllArticles().find(
-      (item) => item.collection === collection && item.slug === articleSlug
+      (item) => item.collection === "compare" && item.slug === articleSlug
     );
     if (!article) return null;
     return `# ${article.headline}\n\n${article.description}\n\n${article.markdown}\n`;

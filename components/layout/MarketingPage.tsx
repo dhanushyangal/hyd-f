@@ -15,6 +15,8 @@ export type RelatedLink = {
 
 type MarketingPageProps = {
   eyebrow: string;
+  /** When set, the eyebrow links here (e.g. "Blog" → /blog). */
+  eyebrowHref?: string;
   title: string;
   description: string;
   children: ReactNode;
@@ -26,6 +28,7 @@ type MarketingPageProps = {
 
 export function MarketingPage({
   eyebrow,
+  eyebrowHref,
   title,
   description,
   children,
@@ -39,7 +42,13 @@ export function MarketingPage({
         <section className="mkt-hero">
           <div className="mkt-hero-inner">
             <div className="mkt-hero-kicker">
-              <p className="mkt-eyebrow">{eyebrow}</p>
+              {eyebrowHref ? (
+                <Link href={eyebrowHref} className="mkt-eyebrow mkt-eyebrow-link">
+                  {eyebrow}
+                </Link>
+              ) : (
+                <p className="mkt-eyebrow">{eyebrow}</p>
+              )}
               {meta ? <p className="mkt-meta">{meta}</p> : null}
             </div>
             <h1 className="mkt-title" style={{ fontFamily: DISPLAY }}>
@@ -118,6 +127,15 @@ export function MarketingPage({
           letter-spacing: 0.16em;
           text-transform: uppercase;
           color: #6b7280;
+        }
+        .mkt-eyebrow-link {
+          text-decoration: none;
+          transition: color 0.15s ease;
+        }
+        .mkt-eyebrow-link:hover {
+          color: #0a0a0a;
+          text-decoration: underline;
+          text-underline-offset: 3px;
         }
         .mkt-meta {
           margin: 0;

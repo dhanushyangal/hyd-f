@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { markdownToHtml, parseFrontmatter } from "./markdown";
 
-export type ArticleCollection = "blog" | "compare";
+export type ArticleCollection = "compare";
 
 export type Article = {
   slug: string;
@@ -19,21 +19,6 @@ export type Article = {
 };
 
 const CONTENT_ROOT = path.join(process.cwd(), "content");
-
-function clusterFor(collection: ArticleCollection, slug: string, explicit?: string) {
-  if (explicit) return explicit;
-  if (collection === "compare") return "Compare";
-  if (
-    slug.includes("unity") ||
-    slug.includes("unreal") ||
-    slug.includes("blender") ||
-    slug.includes("export")
-  ) {
-    return "Pipeline";
-  }
-  if (slug.includes("pricing")) return "Plans";
-  return "BlueFox";
-}
 
 function readCollection(collection: ArticleCollection): Article[] {
   const dir = path.join(CONTENT_ROOT, collection);
@@ -55,7 +40,7 @@ function readCollection(collection: ArticleCollection): Article[] {
         description: data.description || "",
         datePublished: data.date || data.datePublished || "2026-08-19",
         dateModified: data.updated || data.dateModified,
-        cluster: clusterFor(collection, slug, data.cluster),
+        cluster: data.cluster || "Compare",
         markdown: content,
         html: markdownToHtml(content),
       };
@@ -67,7 +52,7 @@ let cache: Article[] | null = null;
 
 export function getAllArticles(): Article[] {
   if (cache) return cache;
-  cache = [...readCollection("blog"), ...readCollection("compare")];
+  cache = readCollection("compare");
   return cache;
 }
 
@@ -84,17 +69,14 @@ export function getArticle(
   );
 }
 
-export function getRelatedArticles(
-  article: Article,
-  limit = 3
-): Article[] {
+export function getRelatedArticles(article: Article, limit = 3): Article[] {
   const pool = getAllArticles().filter((item) => item.path !== article.path);
   const sameCluster = pool.filter((item) => item.cluster === article.cluster);
   const rest = pool.filter((item) => item.cluster !== article.cluster);
   return [...sameCluster, ...rest].slice(0, limit);
 }
 
-const CLUSTER_ORDER = ["BlueFox", "Pipeline", "Plans", "Compare"];
+const CLUSTER_ORDER = ["Compare"];
 
 export function groupArticlesByCluster(
   articles: Article[]

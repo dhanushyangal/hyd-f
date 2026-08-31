@@ -1,57 +1,82 @@
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MarketingPage } from "@/components/layout/MarketingPage";
-import { MarkdownBody } from "@/components/content/MarkdownBody";
-import { getArticle, getArticles, getRelatedArticles } from "@/lib/content";
+import { ArticleBody } from "@/components/content/ArticleBody";
+import { blogPostPath, fetchBlogPost, fetchBlogPosts, formatBlogDate, getBlogContinueLinks } from "@/lib/blog";
 import { createPageMetadata, getArticleJsonLd } from "@/lib/seo";
+import { DEFAULT_OG_IMAGE } from "@/lib/seo";
+
+export const revalidate = 60;
+export const dynamicParams = true;
 
 type Props = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return getArticles("blog").map((article) => ({ slug: article.slug }));
+export async function generateStaticParams() {
+  try {
+    const { posts } = await fetchBlogPosts({ limit: 100 });
+    return posts.map((post) => ({ slug: post.slug }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
-  const article = getArticle("blog", slug);
-  if (!article) return {};
+  const post = await fetchBlogPost(slug);
+  if (!post) return {};
   return createPageMetadata({
-    title: article.title,
-    description: article.description,
-    path: article.path,
+    title: post.seoTitle || post.title,
+    description: post.seoDescription || post.excerpt,
+    path: blogPostPath(slug),
     absoluteTitle: true,
+    ogImage: post.seoImage || post.coverImage || DEFAULT_OG_IMAGE,
   });
 }
 
 export default async function BlogArticlePage({ params }: Props) {
   const { slug } = await params;
-  const article = getArticle("blog", slug);
-  if (!article) notFound();
-  const related = getRelatedArticles(article).map((item) => ({
-    label: item.title,
-    href: item.path,
-    hint: item.cluster,
-  }));
+  const post = await fetchBlogPost(slug);
+  if (!post) notFound();
+
+  const continueLinks = await getBlogContinueLinks(slug);
+
+  const dateLabel = formatBlogDate(post.publishedAt);
+  const metaParts = [post.category, dateLabel, post.author].filter(Boolean).join(" · ");
 
   return (
     <>
       <JsonLd
         data={getArticleJsonLd({
-          headline: article.title,
-          description: article.description,
-          path: article.path,
-          datePublished: article.datePublished,
-          dateModified: article.dateModified,
+          headline: post.headline,
+          description: post.seoDescription || post.excerpt,
+          path: blogPostPath(slug),
+          datePublished: post.publishedAt || post.updatedAt,
+          dateModified: post.updatedAt,
         })}
       />
       <MarketingPage
         eyebrow="Blog"
-        title={article.headline}
-        description={article.description}
-        meta={article.datePublished}
-        related={related}
+        eyebrowHref="/blog"
+        title={post.headline}
+        description={post.excerpt}
+        meta={metaParts}
+        related={continueLinks}
+        formats={false}
       >
-        <MarkdownBody html={article.html} />
+        {post.coverImage ? (
+          <div className="relative mx-auto aspect-[2/1] max-w-3xl overflow-hidden rounded-xl border border-neutral-200">
+            <Image
+              src={post.coverImage}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 768px"
+              priority
+            />
+          </div>
+        ) : null}
+        <ArticleBody html={post.content} />
       </MarketingPage>
     </>
   );

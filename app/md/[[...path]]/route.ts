@@ -6,7 +6,7 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { path } = await context.params;
-  const markdown = getMarkdownForSlug(path || ["index"]);
+  const markdown = await getMarkdownForSlug(path || ["index"]);
 
   if (!markdown) {
     return new Response("Not found", { status: 404 });
