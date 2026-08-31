@@ -59,6 +59,7 @@ import {
   QueueInfo,
   LineageItem,
   UserApiKeyMeta,
+  providerKeyAvailable,
 } from "../../lib/api";
 import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
 import { track, isPaywallError } from "../../lib/analytics";
@@ -598,6 +599,7 @@ function WorkspacePage() {
   const [selectedQualityTier, setSelectedQualityTier] = useState<QualityTier>(DEFAULT_QUALITY_TIER);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState<UserApiKeyMeta[]>([]);
+  const [sharedKeys, setSharedKeys] = useState<UserApiKeyMeta[]>([]);
   const [liveFreeModels, setLiveFreeModels] = useState<OpenRouterFreeModel[]>([]);
   const [liveCursorModels, setLiveCursorModels] = useState<CursorLiveModel[]>([]);
   const [codeFactoryCode, setCodeFactoryCode] = useState<string | null>(null);
@@ -671,6 +673,7 @@ function WorkspacePage() {
         const tokenGetter = async () => (await getToken()) ?? null;
         const data = await fetchUserApiKeys(tokenGetter);
         setApiKeys(data.keys);
+        setSharedKeys(data.sharedKeys ?? []);
         // Prefer saved Water default when user already configured BYOK
         const preferred = migrateCodeModelId(data.prefs?.defaultCodeModel);
         if (preferred && isCodeModel(preferred)) {
@@ -678,7 +681,7 @@ function WorkspacePage() {
           const keyOk =
             !provider ||
             provider === "hydrilla" ||
-            data.keys.some((k) => k.provider === provider && k.configured && k.status !== "invalid");
+            providerKeyAvailable(provider, data.keys, data.sharedKeys ?? []);
           if (keyOk) setSelectedModel(preferred as ModelId);
           // Persist migration when prefs still hold a retired 4.5 id
           if (data.prefs?.defaultCodeModel && data.prefs.defaultCodeModel !== preferred) {
@@ -693,9 +696,7 @@ function WorkspacePage() {
           // Curated free list still works offline
         }
         // Live-sync Cursor Cloud Agents models when a key is configured
-        const cursorOk = data.keys.some(
-          (k) => k.provider === "cursor" && k.configured && k.status !== "invalid"
-        );
+        const cursorOk = providerKeyAvailable("cursor", data.keys, data.sharedKeys ?? []);
         if (cursorOk) {
           try {
             const cursor = await fetchCursorModels(tokenGetter);
@@ -711,12 +712,8 @@ function WorkspacePage() {
   }, [isSignedIn, getToken]);
 
   const providerKeyOk = useCallback(
-    (provider: string) => {
-      if (provider === "hydrilla") return true;
-      const k = apiKeys.find((x) => x.provider === provider);
-      return Boolean(k?.configured && k.status !== "invalid");
-    },
-    [apiKeys]
+    (provider: string) => providerKeyAvailable(provider, apiKeys, sharedKeys),
+    [apiKeys, sharedKeys]
   );
 
   const pickerItemsForGroup = useCallback(

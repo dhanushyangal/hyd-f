@@ -49,3 +49,5 @@ public/pricing/
 .env.local
 backend/
 /Users/tharak/Developer/hydrilla-ai/hyd-f/backend
+# Separate GitHub repo (dhanushyangal/admin)
+admin/

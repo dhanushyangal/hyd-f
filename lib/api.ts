@@ -189,6 +189,22 @@ export type UserApiKeyMeta = {
   updatedAt: string | null;
 };
 
+function keyUsable(k: UserApiKeyMeta | undefined): boolean {
+  return Boolean(k?.configured && k.status !== "invalid");
+}
+
+export function providerKeyAvailable(
+  provider: string,
+  keys: UserApiKeyMeta[],
+  sharedKeys: UserApiKeyMeta[] = []
+): boolean {
+  if (provider === "hydrilla") return true;
+  return (
+    keyUsable(keys.find((k) => k.provider === provider)) ||
+    keyUsable(sharedKeys.find((k) => k.provider === provider))
+  );
+}
+
 export type UserModelPrefs = {
   defaultMeshModel: string;
   defaultCodeModel: string | null;
@@ -1580,7 +1596,7 @@ async function authHeaders(getToken?: () => Promise<string | null>): Promise<Hea
 
 export async function fetchUserApiKeys(
   getToken?: () => Promise<string | null>
-): Promise<{ keys: UserApiKeyMeta[]; prefs: UserModelPrefs }> {
+): Promise<{ keys: UserApiKeyMeta[]; sharedKeys: UserApiKeyMeta[]; prefs: UserModelPrefs }> {
   const res = await fetch(`${backendBase}/api/user/api-keys`, {
     headers: await authHeaders(getToken),
     cache: "no-store",
@@ -1589,7 +1605,16 @@ export async function fetchUserApiKeys(
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error || "Failed to load API keys");
   }
-  return res.json();
+  const body = (await res.json()) as {
+    keys: UserApiKeyMeta[];
+    sharedKeys?: UserApiKeyMeta[];
+    prefs: UserModelPrefs;
+  };
+  return {
+    keys: body.keys,
+    sharedKeys: body.sharedKeys ?? [],
+    prefs: body.prefs,
+  };
 }
 
 export async function saveUserApiKey(
