@@ -10,64 +10,41 @@ import {
   Loader2,
   AlertCircle,
   ExternalLink,
+  Search,
   RefreshCw,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  filterModelsByQuery,
+  isPinnedModel,
+  resolveEnabledModelIds,
+  setModelEnabled,
+} from "@/lib/waterModels";
 import {
   deleteUserApiKey,
-  fetchCursorModels,
-  fetchOpenRouterFreeModels,
-  fetchOpenRouterKeyStatus,
   fetchUserApiKeys,
+  fetchWaterModels,
+  providerKeyAvailable,
   saveUserApiKey,
   saveUserModelPrefs,
   verifyUserApiKey,
-  type OpenRouterFreeModelRow,
+  type ConnectorPublic,
   type UserApiKeyMeta,
   type UserModelPrefs,
+  type WaterModelGroup,
 } from "@/lib/api";
-import {
-  MODEL_CATALOG,
-  OPENROUTER_MODELS,
-  mergeCursorModels,
-  mergeFreeModels,
-  migrateCodeModelId,
-  providerLabel,
-  type ApiKeyProvider,
-  type CatalogModel,
-  type ModelId,
-} from "@/lib/models";
+import { FALLBACK_CONNECTORS } from "@/lib/connectors";
+import { migrateCodeModelId, type ApiKeyProvider, type ModelId } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-const PROVIDERS: {
-  id: ApiKeyProvider;
-  placeholder: string;
-  docs?: string;
-}[] = [
-  {
-    id: "anthropic",
-    placeholder: "sk-ant-...",
-    docs: "https://platform.claude.com/settings/keys",
-  },
-  { id: "openai", placeholder: "sk-...", docs: "https://platform.openai.com/api-keys" },
-  { id: "gemini", placeholder: "AIza...", docs: "https://aistudio.google.com/apikey" },
-  {
-    id: "cursor",
-    placeholder: "crsr_...",
-    docs: "https://cursor.com/dashboard/api",
-  },
-  {
-    id: "openrouter",
-    placeholder: "sk-or-v1-...",
-    docs: "https://openrouter.ai/settings/keys",
-  },
-];
-
 export default function SettingsPage() {
   const { getToken, isSignedIn, isLoaded } = useAuth();
   const [keys, setKeys] = useState<UserApiKeyMeta[]>([]);
+  const [sharedKeys, setSharedKeys] = useState<UserApiKeyMeta[]>([]);
+  const [connectors, setConnectors] = useState<ConnectorPublic[]>([]);
   const [prefs, setPrefs] = useState<UserModelPrefs | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +57,8 @@ export default function SettingsPage() {
       const tokenGetter = async () => (await getToken()) ?? null;
       const data = await fetchUserApiKeys(tokenGetter);
       setKeys(data.keys);
+      setSharedKeys(data.sharedKeys ?? []);
+      setConnectors(data.connectors?.length ? data.connectors : FALLBACK_CONNECTORS);
       setPrefs(data.prefs);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
@@ -93,12 +72,6 @@ export default function SettingsPage() {
     void load();
   }, [isLoaded, isSignedIn]);
 
-  const keyOk = (provider: ApiKeyProvider) =>
-    Boolean(
-      keys.find((k) => k.provider === provider)?.configured &&
-        keys.find((k) => k.provider === provider)?.status === "valid"
-    );
-
   return (
     <div className="app-content-page font-dm-sans bg-[#fafafa]">
       <div className="mx-auto w-full max-w-2xl space-y-6">
@@ -109,9 +82,7 @@ export default function SettingsPage() {
           <h1 className="mt-1.5 text-[28px] sm:text-[32px] font-semibold text-neutral-900 tracking-[-0.03em]">
             Settings
           </h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            API keys for Water (BYOK). Hydrilla cloud models still use plan credits.
-          </p>
+          <p className="mt-2 text-sm text-neutral-500">Keys and models for Water.</p>
         </header>
 
         {error && (
@@ -140,29 +111,39 @@ export default function SettingsPage() {
                   Back to Studio
                 </Link>
               </div>
-              {PROVIDERS.map((p) => (
+              {(connectors.length ? connectors : FALLBACK_CONNECTORS).map((p) => (
                 <ApiKeyCard
                   key={p.id}
-                  provider={p.id}
-                  placeholder={p.placeholder}
-                  docs={p.docs}
-                  meta={keys.find((k) => k.provider === p.id)}
+                  connector={p}
+                  meta={keys.find((k) => (k.provider === "gemini" ? "google" : k.provider) === p.id)}
+                  shared={sharedKeys.find((k) => (k.provider === "gemini" ? "google" : k.provider) === p.id)}
                   onChanged={load}
                 />
               ))}
             </section>
 
-            <WaterDefaultModel
+            <WaterModelSlots
               keys={keys}
-              keyOk={keyOk}
-              value={(migrateCodeModelId(prefs?.defaultCodeModel) as ModelId) || null}
-              onSaved={async (id) => {
+              sharedKeys={sharedKeys}
+              connectors={connectors.length ? connectors : FALLBACK_CONNECTORS}
+              defaultCodeModel={(migrateCodeModelId(prefs?.defaultCodeModel) as ModelId) || null}
+              serverEnabled={prefs?.enabledCodeModels}
+              onDefaultSaved={async (id) => {
                 const tokenGetter = async () => (await getToken()) ?? null;
                 const next = await saveUserModelPrefs(
                   { defaultCodeModel: migrateCodeModelId(id) || id },
                   tokenGetter
                 );
                 setPrefs(next);
+              }}
+              onEnabledSaved={async (ids) => {
+                const tokenGetter = async () => (await getToken()) ?? null;
+                try {
+                  const next = await saveUserModelPrefs({ enabledCodeModels: ids }, tokenGetter);
+                  setPrefs(next);
+                } catch {
+                  // localStorage already updated; SQL 008 may not be applied yet
+                }
               }}
             />
 
@@ -221,18 +202,19 @@ function LimitsCard() {
 }
 
 function ApiKeyCard({
-  provider,
-  placeholder,
-  docs,
+  connector,
   meta,
+  shared,
   onChanged,
 }: {
-  provider: ApiKeyProvider;
-  placeholder: string;
-  docs?: string;
+  connector: ConnectorPublic;
   meta?: UserApiKeyMeta;
+  shared?: UserApiKeyMeta;
   onChanged: () => Promise<void>;
 }) {
+  const provider = connector.id as ApiKeyProvider;
+  const placeholder = connector.keyPlaceholder;
+  const docs = connector.docsUrl;
   const { getToken } = useAuth();
   const [value, setValue] = useState("");
   const [show, setShow] = useState(false);
@@ -294,7 +276,7 @@ function ApiKeyCard({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-[15px] font-semibold tracking-tight text-neutral-900">
-                {providerLabel(provider)}
+                {connector.name}
               </h3>
               {docs && (
                 <a
@@ -308,6 +290,12 @@ function ApiKeyCard({
                 </a>
               )}
             </div>
+            {connector.product ? (
+              <p className="mt-0.5 text-[12px] text-neutral-500">{connector.product}</p>
+            ) : null}
+            {!configured && shared?.configured && shared.status !== "invalid" ? (
+              <p className="mt-1 text-[12px] text-neutral-500">Hydrilla key available until you add your own.</p>
+            ) : null}
           </div>
           <StatusPill configured={configured} status={status} last4={meta?.last4} />
         </div>
@@ -437,263 +425,143 @@ function StatusPill({
   );
 }
 
-/**
- * Single Water default: one `defaultCodeModel` for Claude / OpenAI / Gemini /
- * OpenRouter / Cursor. Live-sync OpenRouter Free + Cursor when keys are valid.
- */
-function WaterDefaultModel({
-  keys: _keys,
-  keyOk,
-  value,
-  onSaved,
+function WaterModelSlots({
+  keys,
+  sharedKeys,
+  connectors,
+  defaultCodeModel,
+  serverEnabled,
+  onDefaultSaved,
+  onEnabledSaved,
 }: {
   keys: UserApiKeyMeta[];
-  keyOk: (provider: ApiKeyProvider) => boolean;
-  value: ModelId | null;
-  onSaved: (id: ModelId) => Promise<void>;
+  sharedKeys: UserApiKeyMeta[];
+  connectors: ConnectorPublic[];
+  defaultCodeModel: ModelId | null;
+  serverEnabled?: string[] | null;
+  onDefaultSaved: (id: ModelId) => Promise<void>;
+  onEnabledSaved: (ids: string[]) => Promise<void>;
 }) {
   const { getToken } = useAuth();
-  const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [local, setLocal] = useState<ModelId | null>(value);
-  const [freeModels, setFreeModels] = useState<CatalogModel[]>(() => mergeFreeModels([]));
-  const [cursorModels, setCursorModels] = useState<CatalogModel[]>(() =>
-    mergeCursorModels([])
-  );
-  const [keyUsage, setKeyUsage] = useState<string | null>(null);
-  const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [groups, setGroups] = useState<WaterModelGroup[]>([]);
+  const [enabled, setEnabled] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [syncing, setSyncing] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLocal(value);
-  }, [value]);
+  const keyFingerprint = [...keys, ...sharedKeys]
+    .map((k) => `${k.provider}:${k.configured}:${k.status}`)
+    .sort()
+    .join("|");
 
-  const anyKey =
-    keyOk("anthropic") ||
-    keyOk("openai") ||
-    keyOk("gemini") ||
-    keyOk("openrouter") ||
-    keyOk("cursor");
-
-  const syncLive = async () => {
+  const loadModels = async () => {
     setSyncing(true);
-    setSyncNote(null);
-    const tokenGetter = async () => (await getToken()) ?? null;
-    const notes: string[] = [];
-    if (keyOk("openrouter")) {
-      try {
-        const data = await fetchOpenRouterFreeModels(tokenGetter);
-        setFreeModels(mergeFreeModels(data.models as OpenRouterFreeModelRow[]));
-        try {
-          const status = await fetchOpenRouterKeyStatus(tokenGetter);
-          if (status.usage != null || status.limit != null) {
-            setKeyUsage(
-              `${status.usage ?? "—"}` +
-                (status.limit != null ? ` / ${status.limit}` : "") +
-                (status.isFreeTier ? " · free tier" : "")
-            );
-          }
-        } catch {
-          // optional
-        }
-      } catch (err: unknown) {
-        notes.push(err instanceof Error ? err.message : "OpenRouter sync failed");
-        setFreeModels(mergeFreeModels([]));
-      }
+    try {
+      const data = await fetchWaterModels(async () => (await getToken()) ?? null);
+      setGroups(data.groups);
+      setEnabled(resolveEnabledModelIds(data.groups, serverEnabled));
+      setLoadError(null);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : "Could not load models");
+    } finally {
+      setSyncing(false);
     }
-    if (keyOk("cursor")) {
-      try {
-        const data = await fetchCursorModels(tokenGetter);
-        setCursorModels(mergeCursorModels(data.models));
-      } catch (err: unknown) {
-        notes.push(err instanceof Error ? err.message : "Cursor sync failed");
-        setCursorModels(mergeCursorModels([]));
-      }
-    }
-    setSyncNote(notes.length ? notes.join(" · ") : null);
-    setSyncing(false);
   };
 
   useEffect(() => {
-    if (!anyKey) return;
-    void syncLive();
+    void loadModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    keyOk("anthropic"),
-    keyOk("openai"),
-    keyOk("gemini"),
-    keyOk("openrouter"),
-    keyOk("cursor"),
-  ]);
+  }, [keyFingerprint]);
 
-  if (!anyKey) {
+  const hasAccess = connectors.some((c) => providerKeyAvailable(c.id, keys, sharedKeys));
+
+  if (!hasAccess && !groups.length && !syncing) {
     return (
-      <Card className="border-dashed bg-white/70">
-        <CardContent className="p-5 text-sm text-neutral-500">
-          Add a valid API key above to choose a default Water model.
+      <Card className="border-dashed">
+        <CardContent className="p-6 text-[15px] text-neutral-500">
+          Save a key above. Models for that provider will show up here.
         </CardContent>
       </Card>
     );
   }
 
-  const staticBy = (provider: ApiKeyProvider) =>
-    MODEL_CATALOG.filter((m) => m.kind === "code" && m.provider === provider && !m.comingSoon);
-
-  const sections: { title: string; models: CatalogModel[]; showVision?: boolean }[] = [];
-  if (keyOk("cursor")) {
-    sections.push({ title: "Cursor", models: cursorModels });
-  }
-  if (keyOk("openrouter")) {
-    sections.push({
-      title: "OpenRouter Free",
-      models: freeModels.length ? freeModels : mergeFreeModels([]),
-      showVision: true,
-    });
-    sections.push({ title: "OpenRouter Paid", models: OPENROUTER_MODELS });
-  }
-  if (keyOk("anthropic")) {
-    sections.push({ title: "Anthropic", models: staticBy("anthropic") });
-  }
-  if (keyOk("openai")) {
-    sections.push({ title: "OpenAI", models: staticBy("openai") });
-  }
-  if (keyOk("gemini")) {
-    sections.push({ title: "Google", models: staticBy("gemini") });
-  }
-
-  const selected = local || sections[0]?.models[0]?.id || "cursor-auto";
+  const toggle = (id: string, on: boolean) => {
+    const next = setModelEnabled(id, on, enabled, groups);
+    setEnabled(next);
+    void onEnabledSaved(next);
+    if (on && !defaultCodeModel) {
+      void onDefaultSaved(id);
+    }
+    if (!on && defaultCodeModel === id) {
+      const fallback = next[0];
+      if (fallback) void onDefaultSaved(fallback);
+    }
+  };
 
   return (
-    <Card>
-      <CardContent className="p-5 space-y-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-[15px] font-semibold tracking-tight text-neutral-900">
-              Default Water model
-            </h2>
-            <p className="mt-0.5 text-[12px] text-neutral-500">
-              Used when the workspace opens. The Engine picker saves the same preference.
-            </p>
+    <section className="space-y-3">
+      <h2 className="px-0.5 text-sm font-semibold text-neutral-900">Models</h2>
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-neutral-200 bg-white px-3 py-3">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Add or search model"
+              className="h-12 rounded-xl border-neutral-200 pl-10 text-[15px]"
+            />
           </div>
-          {(keyOk("openrouter") || keyOk("cursor")) && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 shrink-0 rounded-lg gap-1.5 text-xs"
-              disabled={syncing}
-              onClick={() => void syncLive()}
-            >
-              {syncing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              Sync
-            </Button>
-          )}
+          <button
+            type="button"
+            onClick={() => void loadModels()}
+            disabled={syncing}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+            aria-label="Refresh models"
+          >
+            <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+          </button>
         </div>
 
-        {(keyUsage || syncNote) && (
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
-            {keyUsage && (
-              <span className="rounded-md bg-neutral-100 px-2 py-1 font-medium text-neutral-700">
-                OpenRouter {keyUsage}
-              </span>
-            )}
-            {syncNote && <span className="text-amber-700">{syncNote}</span>}
-          </div>
+        {loadError && (
+          <p className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">{loadError}</p>
         )}
 
-        {sections.map((s) => (
-          <ModelGrid
-            key={s.title}
-            title={s.title}
-            models={s.models}
-            selected={selected}
-            onSelect={setLocal}
-            showVision={s.showVision}
-          />
-        ))}
-
-        <Button
-          type="button"
-          className="h-10 rounded-xl"
-          disabled={saving || !selected || selected === value}
-          onClick={async () => {
-            if (!selected) return;
-            setSaving(true);
-            try {
-              await onSaved(selected);
-            } finally {
-              setSaving(false);
-            }
-          }}
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save default"}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ModelGrid({
-  title,
-  models,
-  selected,
-  onSelect,
-  showVision,
-}: {
-  title: string;
-  models: CatalogModel[];
-  selected: ModelId;
-  onSelect: (id: ModelId) => void;
-  showVision?: boolean;
-}) {
-  return (
-    <div>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
-        {title}
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {models.map((m) => {
-          const active = selected === m.id;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => onSelect(m.id)}
-              className={cn(
-                "rounded-xl border px-3 py-2.5 text-left text-sm transition-colors",
-                active
-                  ? "border-neutral-900 bg-neutral-900 text-white"
-                  : "border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50"
-              )}
-            >
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="truncate">{m.label}</span>
-                {showVision && m.vision && (
-                  <span
-                    className={cn(
-                      "shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-                      active ? "bg-white/15 text-white/90" : "bg-neutral-100 text-neutral-600"
-                    )}
-                  >
-                    vision
-                  </span>
-                )}
-              </span>
-              <span
-                className={cn(
-                  "mt-0.5 block truncate text-[10px]",
-                  active ? "text-white/65" : "text-neutral-400"
-                )}
-              >
-                {m.cursorModelId || m.openRouterSlug || m.id}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+        <div className="max-h-[min(28rem,60vh)] overflow-y-auto">
+          {groups.map((g) => {
+            const models = filterModelsByQuery(g.models, query);
+            if (!models.length) return null;
+            return (
+              <div key={g.provider}>
+                <div className="sticky top-0 z-[1] bg-neutral-50 px-4 py-2 text-[13px] font-medium text-neutral-500">
+                  {g.name}
+                </div>
+                {models.map((m) => {
+                  const on = enabled.includes(m.id);
+                  const pinned = isPinnedModel(m.id, enabled, groups);
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex min-h-[3.5rem] items-center justify-between gap-4 border-t border-neutral-100 px-4 py-3"
+                    >
+                      <span className="min-w-0 truncate text-[16px] font-medium leading-snug text-neutral-900">
+                        {m.name}
+                      </span>
+                      <Switch
+                        checked={on}
+                        disabled={pinned && on}
+                        onCheckedChange={(next) => toggle(m.id, next)}
+                        className="h-6 w-11 shrink-0 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-neutral-200 [&>span]:h-5 [&>span]:w-5 data-[state=checked]:[&>span]:translate-x-5"
+                        aria-label={`Show ${m.name} in Engine`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </section>
   );
 }

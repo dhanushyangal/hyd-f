@@ -179,7 +179,7 @@ export interface BackendJob {
 }
 
 export type UserApiKeyMeta = {
-  provider: "anthropic" | "openai" | "gemini" | "openrouter" | "cursor";
+  provider: "anthropic" | "openai" | "google" | "gemini" | "openrouter" | "cursor";
   label?: string;
   configured: boolean;
   last4: string | null;
@@ -189,8 +189,42 @@ export type UserApiKeyMeta = {
   updatedAt: string | null;
 };
 
+export type ConnectorPublic = {
+  id: "anthropic" | "openai" | "google" | "openrouter" | "cursor";
+  name: string;
+  product: string;
+  docsUrl: string;
+  keyPlaceholder: string;
+};
+
+export type WaterModelRow = {
+  id: string;
+  name: string;
+  nativeId: string;
+  free?: boolean;
+};
+
+export type WaterModelGroup = {
+  provider: ConnectorPublic["id"];
+  name: string;
+  source: "user" | "platform";
+  models: WaterModelRow[];
+  error?: string;
+};
+
 function keyUsable(k: UserApiKeyMeta | undefined): boolean {
   return Boolean(k?.configured && k.status !== "invalid");
+}
+
+function providerSlot(
+  provider: string,
+  keys: UserApiKeyMeta[]
+): UserApiKeyMeta | undefined {
+  const want = provider === "gemini" ? "google" : provider;
+  return keys.find((k) => {
+    const id = k.provider === "gemini" ? "google" : k.provider;
+    return id === want;
+  });
 }
 
 export function providerKeyAvailable(
@@ -199,15 +233,13 @@ export function providerKeyAvailable(
   sharedKeys: UserApiKeyMeta[] = []
 ): boolean {
   if (provider === "hydrilla") return true;
-  return (
-    keyUsable(keys.find((k) => k.provider === provider)) ||
-    keyUsable(sharedKeys.find((k) => k.provider === provider))
-  );
+  return keyUsable(providerSlot(provider, keys)) || keyUsable(providerSlot(provider, sharedKeys));
 }
 
 export type UserModelPrefs = {
   defaultMeshModel: string;
   defaultCodeModel: string | null;
+  enabledCodeModels?: string[] | null;
 };
 
 
@@ -1596,7 +1628,12 @@ async function authHeaders(getToken?: () => Promise<string | null>): Promise<Hea
 
 export async function fetchUserApiKeys(
   getToken?: () => Promise<string | null>
-): Promise<{ keys: UserApiKeyMeta[]; sharedKeys: UserApiKeyMeta[]; prefs: UserModelPrefs }> {
+): Promise<{
+  keys: UserApiKeyMeta[];
+  sharedKeys: UserApiKeyMeta[];
+  prefs: UserModelPrefs;
+  connectors: ConnectorPublic[];
+}> {
   const res = await fetch(`${backendBase}/api/user/api-keys`, {
     headers: await authHeaders(getToken),
     cache: "no-store",
@@ -1609,11 +1646,13 @@ export async function fetchUserApiKeys(
     keys: UserApiKeyMeta[];
     sharedKeys?: UserApiKeyMeta[];
     prefs: UserModelPrefs;
+    connectors?: ConnectorPublic[];
   };
   return {
     keys: body.keys,
     sharedKeys: body.sharedKeys ?? [],
     prefs: body.prefs,
+    connectors: body.connectors ?? [],
   };
 }
 
@@ -1664,7 +1703,11 @@ export async function deleteUserApiKey(
 }
 
 export async function saveUserModelPrefs(
-  prefs: { defaultMeshModel?: string; defaultCodeModel?: string | null },
+  prefs: {
+    defaultMeshModel?: string;
+    defaultCodeModel?: string | null;
+    enabledCodeModels?: string[] | null;
+  },
   getToken?: () => Promise<string | null>
 ): Promise<UserModelPrefs> {
   const res = await fetch(`${backendBase}/api/user/model-prefs`, {
@@ -1685,6 +1728,20 @@ export type OpenRouterFreeModelRow = {
   vision: boolean;
   contextLength: number | null;
 };
+
+export async function fetchWaterModels(
+  getToken?: () => Promise<string | null>
+): Promise<{ groups: WaterModelGroup[]; syncedAt: string }> {
+  const res = await fetch(`${backendBase}/api/user/models`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to load Water models");
+  }
+  return body as { groups: WaterModelGroup[]; syncedAt: string };
+}
 
 export async function fetchOpenRouterFreeModels(
   getToken?: () => Promise<string | null>

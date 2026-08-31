@@ -1,7 +1,8 @@
 # Water Studio — orchestration
 
 Multi-pass BYOK pipeline (img2threejs spirit + Anthropic-style generator/evaluator split).  
-Product overview + **skills map**: [`ENGINES.md`](./ENGINES.md).
+Product overview + **skills map**: [`ENGINES.md`](./ENGINES.md).  
+Keys, connectors, Settings toggles: [`WATER_PROVIDERS.md`](./WATER_PROVIDERS.md).
 
 ---
 
@@ -22,7 +23,7 @@ Request: `POST /api/water/generate` with:
 |-------|--------|---------|
 | `modelId` | Engine picker | prefs / catalog |
 | `skillId` | Skill chips | `object-studio` |
-| `qualityTier` | Fast / Standard / Studio | `standard` |
+| `qualityTier` | Fast / Standard / Studio | `fast` |
 | `prompt` | Create bar | required |
 | `imageUrl` | optional | — |
 
@@ -76,7 +77,8 @@ Hitting the budget returns the best code so far with `partial: true`.
 | `src/lib/water/harness/fallbackFactory.ts` | Last-resort valid factory if LLM empty |
 | `src/lib/water/skills/index.ts` | Per-skill prompt extras |
 | `src/routes/codeSculpt.ts` | `/api/water/*` (+ legacy `/api/code-sculpt/*`) |
-| `src/lib/llmProviders.ts` | Anthropic / OpenAI / Gemini / OpenRouter / Cursor |
+| `src/providers/` | Connector registry, `callLLM`, live `listModels` |
+| `src/lib/llmProviders.ts` | Re-exports provider manager (`callLLM`) |
 
 Frontend mirror: `lib/waterSkills.ts`, `lib/api.ts` (`submitWater`), `components/WaterViewer.tsx`.
 

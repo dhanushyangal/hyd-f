@@ -1,31 +1,19 @@
-/** Shared model catalog — keep in sync with backend llmProviders.ts */
+/** Hydrilla cloud catalog + Water model id helpers. Water lists come from GET /api/user/models. */
 
-export type ApiKeyProvider = "anthropic" | "openai" | "gemini" | "openrouter" | "cursor";
+export type ApiKeyProvider = "anthropic" | "openai" | "google" | "openrouter" | "cursor";
 
-/** Model ids are catalog keys; OpenRouter free models use the real OR slug as id. */
 export type ModelId = string;
 
 export type CatalogModel = {
   id: ModelId;
   label: string;
-  group:
-    | "Hydrilla"
-    | "Cursor"
-    | "Anthropic"
-    | "OpenAI"
-    | "Google"
-    | "OpenRouter"
-    | "OpenRouter Free";
+  group: "Hydrilla" | string;
   kind: "mesh" | "code";
   provider: ApiKeyProvider | "hydrilla";
-  /** OpenRouter API model slug when calling the API */
-  openRouterSlug?: string;
-  /** Cursor Cloud Agents model.id — null/undefined = account default (Auto) */
-  cursorModelId?: string | null;
-  /** True when model accepts images (needed for Water fidelity) */
-  vision?: boolean;
-  free?: boolean;
   comingSoon?: boolean;
+  free?: boolean;
+  vision?: boolean;
+  source?: "user" | "platform";
 };
 
 export const MODEL_CATALOG: CatalogModel[] = [
@@ -38,241 +26,82 @@ export const MODEL_CATALOG: CatalogModel[] = [
     provider: "hydrilla",
     comingSoon: true,
   },
-  // Cursor: only Auto is curated. All other models come from GET /v1/models (live sync).
-  {
-    id: "cursor-auto",
-    label: "Cursor Auto",
-    group: "Cursor",
-    kind: "code",
-    provider: "cursor",
-    cursorModelId: null,
-    vision: true,
-  },
-  {
-    id: "claude-sonnet-5",
-    label: "Claude Sonnet 5",
-    group: "Anthropic",
-    kind: "code",
-    provider: "anthropic",
-    vision: true,
-  },
-  {
-    id: "claude-opus-5",
-    label: "Claude Opus 5",
-    group: "Anthropic",
-    kind: "code",
-    provider: "anthropic",
-    vision: true,
-  },
-  {
-    id: "claude-haiku-4-5",
-    label: "Claude Haiku 4.5",
-    group: "Anthropic",
-    kind: "code",
-    provider: "anthropic",
-    vision: true,
-  },
-  { id: "gpt-4.1", label: "GPT-4.1", group: "OpenAI", kind: "code", provider: "openai", vision: true },
-  {
-    id: "gpt-4.1-mini",
-    label: "GPT-4.1 Mini",
-    group: "OpenAI",
-    kind: "code",
-    provider: "openai",
-    vision: true,
-  },
-  {
-    id: "gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
-    group: "Google",
-    kind: "code",
-    provider: "gemini",
-    vision: true,
-  },
-  {
-    id: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    group: "Google",
-    kind: "code",
-    provider: "gemini",
-    vision: true,
-  },
-  // --- OpenRouter Free (BYOK, $0) ---
-  {
-    id: "openrouter/free",
-    label: "Auto Free (recommended)",
-    group: "OpenRouter Free",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "openrouter/free",
-    vision: true,
-    free: true,
-  },
-  {
-    id: "google/gemma-4-31b-it:free",
-    label: "Gemma 4 31B",
-    group: "OpenRouter Free",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "google/gemma-4-31b-it:free",
-    vision: true,
-    free: true,
-  },
-  {
-    id: "google/gemma-4-26b-a4b-it:free",
-    label: "Gemma 4 26B",
-    group: "OpenRouter Free",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "google/gemma-4-26b-a4b-it:free",
-    vision: true,
-    free: true,
-  },
-  {
-    id: "nvidia/nemotron-nano-12b-v2-vl:free",
-    label: "Nemotron Nano 12B VL",
-    group: "OpenRouter Free",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "nvidia/nemotron-nano-12b-v2-vl:free",
-    vision: true,
-    free: true,
-  },
-  {
-    id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    label: "Nemotron 3 Nano Omni",
-    group: "OpenRouter Free",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    vision: true,
-    free: true,
-  },
-  // --- OpenRouter paid (still BYOK) ---
-  {
-    id: "openrouter/anthropic/claude-sonnet-4",
-    label: "Claude Sonnet 4",
-    group: "OpenRouter",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "anthropic/claude-sonnet-4",
-    vision: true,
-  },
-  {
-    id: "openrouter/anthropic/claude-opus-4",
-    label: "Claude Opus 4",
-    group: "OpenRouter",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "anthropic/claude-opus-4",
-    vision: true,
-  },
-  {
-    id: "openrouter/openai/gpt-4.1",
-    label: "GPT-4.1",
-    group: "OpenRouter",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "openai/gpt-4.1",
-    vision: true,
-  },
-  {
-    id: "openrouter/openai/gpt-4.1-mini",
-    label: "GPT-4.1 Mini",
-    group: "OpenRouter",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "openai/gpt-4.1-mini",
-    vision: true,
-  },
-  {
-    id: "openrouter/google/gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
-    group: "OpenRouter",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "google/gemini-2.5-flash",
-    vision: true,
-  },
-  {
-    id: "openrouter/google/gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    group: "OpenRouter",
-    kind: "code",
-    provider: "openrouter",
-    openRouterSlug: "google/gemini-2.5-pro",
-    vision: true,
-  },
 ];
 
-/** Default display order — runtime picker reorders Water groups by unlocked keys. */
-export const MODEL_GROUPS: CatalogModel["group"][] = [
-  "Hydrilla",
-  "Cursor",
-  "OpenRouter Free",
-  "Anthropic",
-  "OpenAI",
-  "Google",
-  "OpenRouter",
-];
-
-export type OpenRouterFreeModel = {
-  id: string;
-  name: string;
-  vision: boolean;
-  contextLength: number | null;
-};
+export const MODEL_GROUPS = ["Hydrilla"] as const;
 
 export function getCatalogModel(id: string): CatalogModel | undefined {
   return MODEL_CATALOG.find((m) => m.id === id);
 }
 
-/** Map retired Claude 4.5 catalog prefs → current Claude 5 / Haiku 4.5 ids. */
 export function migrateCodeModelId(id: string | null | undefined): string | null {
   if (!id) return null;
-  if (id === "claude-sonnet-4-5") return "claude-sonnet-5";
-  if (id === "claude-opus-4-5") return "claude-opus-5";
-  return id;
+  const raw = id.trim();
+  if (!raw) return null;
+  if (raw === "claude-sonnet-4-5" || raw === "claude-sonnet-5") return "anthropic:claude-sonnet-5";
+  if (raw === "claude-opus-4-5" || raw === "claude-opus-5") return "anthropic:claude-opus-5";
+  if (raw === "claude-haiku-4-5") return "anthropic:claude-haiku-4-5";
+  if (raw === "gpt-4.1" || raw === "gpt-4.1-mini") return `openai:${raw}`;
+  if (raw.startsWith("gemini-")) return `google:${raw}`;
+  if (raw === "cursor-auto" || raw === "cursor-composer-2") return "cursor:auto";
+  if (raw.startsWith("cursor/")) return `cursor:${raw.slice("cursor/".length) || "auto"}`;
+  if (raw.startsWith("cursor-") && !raw.startsWith("cursor:")) {
+    const rest = raw.slice("cursor-".length);
+    return rest === "auto" ? "cursor:auto" : `cursor:${rest}`;
+  }
+  if (raw === "openrouter/free") return "openrouter:openrouter/free";
+  if (raw.startsWith("openrouter/") && !raw.startsWith("openrouter:")) {
+    return `openrouter:${raw.slice("openrouter/".length)}`;
+  }
+  if (raw.endsWith(":free") && !raw.startsWith("openrouter:") && !raw.startsWith("anthropic:")) {
+    return `openrouter:${raw}`;
+  }
+  return raw;
+}
+
+export function parseWaterModelId(
+  modelId: string
+): { provider: ApiKeyProvider; nativeId: string } | null {
+  const migrated = migrateCodeModelId(modelId) || modelId;
+  const colon = migrated.indexOf(":");
+  if (colon > 0) {
+    const prefix = migrated.slice(0, colon) === "gemini" ? "google" : migrated.slice(0, colon);
+    const native = migrated.slice(colon + 1);
+    if (
+      (prefix === "anthropic" ||
+        prefix === "openai" ||
+        prefix === "google" ||
+        prefix === "openrouter" ||
+        prefix === "cursor") &&
+      native
+    ) {
+      return { provider: prefix, nativeId: native };
+    }
+  }
+  if (migrated.startsWith("claude-")) return { provider: "anthropic", nativeId: migrated };
+  if (migrated.startsWith("gpt-")) return { provider: "openai", nativeId: migrated };
+  if (migrated.startsWith("gemini-")) return { provider: "google", nativeId: migrated };
+  return null;
 }
 
 export function isCodeModel(id: string): boolean {
-  const migrated = migrateCodeModelId(id) || id;
-  const m = getCatalogModel(migrated);
-  if (m) return m.kind === "code";
-  // Dynamic free / openrouter / cursor slugs from live sync
-  return (
-    migrated.endsWith(":free") ||
-    migrated === "openrouter/free" ||
-    migrated.startsWith("openrouter/") ||
-    migrated.startsWith("cursor-") ||
-    migrated.startsWith("cursor/") ||
-    migrated === "cursor-composer-2" // legacy prefs
-  );
+  if (id === "trilles" || id === "hunyuan3d") return false;
+  return parseWaterModelId(id) !== null;
 }
 
 export function providerForModelId(id: string): ApiKeyProvider | "hydrilla" | null {
-  const migrated = migrateCodeModelId(id) || id;
-  const m = getCatalogModel(migrated);
-  if (m) return m.provider;
-  if (migrated.startsWith("cursor-") || migrated.startsWith("cursor/")) return "cursor";
-  if (
-    migrated.endsWith(":free") ||
-    migrated === "openrouter/free" ||
-    migrated.startsWith("openrouter/")
-  ) {
-    return "openrouter";
-  }
-  return null;
+  if (id === "trilles" || id === "hunyuan3d") return "hydrilla";
+  return parseWaterModelId(id)?.provider ?? null;
 }
 
 export function providerLabel(provider: ApiKeyProvider | "hydrilla"): string {
   switch (provider) {
     case "anthropic":
-      return "Anthropic (Claude)";
+      return "Anthropic";
     case "openai":
       return "OpenAI";
-    case "gemini":
-      return "Google (Gemini)";
+    case "google":
+      return "Google";
     case "openrouter":
       return "OpenRouter";
     case "cursor":
@@ -282,112 +111,16 @@ export function providerLabel(provider: ApiKeyProvider | "hydrilla"): string {
   }
 }
 
-export const OPENROUTER_FREE_MODELS = MODEL_CATALOG.filter((m) => m.free);
-export const OPENROUTER_MODELS = MODEL_CATALOG.filter(
-  (m) => m.provider === "openrouter" && !m.free
-);
-
-/** Merge live free models into picker options (dedupe by id). */
-export function mergeFreeModels(
-  live: OpenRouterFreeModel[]
-): CatalogModel[] {
-  const byId = new Map<string, CatalogModel>();
-  for (const m of OPENROUTER_FREE_MODELS) byId.set(m.id, m);
-  for (const m of live) {
-    if (byId.has(m.id)) {
-      const prev = byId.get(m.id)!;
-      byId.set(m.id, { ...prev, vision: m.vision, label: m.name.replace(/\s*\(free\)\s*/i, "").trim() || prev.label });
-      continue;
-    }
-    byId.set(m.id, {
-      id: m.id,
-      label: m.name.replace(/\s*\(free\)\s*/i, "").trim() || m.id,
-      group: "OpenRouter Free",
-      kind: "code",
-      provider: "openrouter",
-      openRouterSlug: m.id,
-      vision: m.vision,
-      free: true,
-    });
+export function normalizeProviderId(value: string): ApiKeyProvider | null {
+  const v = value === "gemini" ? "google" : value;
+  if (
+    v === "anthropic" ||
+    v === "openai" ||
+    v === "google" ||
+    v === "openrouter" ||
+    v === "cursor"
+  ) {
+    return v;
   }
-  // Prefer Auto Free first, then vision models, then the rest
-  return [...byId.values()].sort((a, b) => {
-    if (a.id === "openrouter/free") return -1;
-    if (b.id === "openrouter/free") return 1;
-    if (a.vision !== b.vision) return a.vision ? -1 : 1;
-    return a.label.localeCompare(b.label);
-  });
-}
-
-export type CursorLiveModel = {
-  id: string;
-  displayName: string;
-  isAuto?: boolean;
-  aliases?: string[];
-};
-
-/**
- * Cursor picker = Auto + every model from GET /v1/models for the user’s key.
- * Same pattern as OpenRouter Free live sync. Picker ids: `cursor/<nativeId>`.
- * Docs: https://cursor.com/docs/cloud-agent/api/endpoints#list-models
- */
-export function mergeCursorModels(live: CursorLiveModel[]): CatalogModel[] {
-  const byId = new Map<string, CatalogModel>();
-  byId.set("cursor-auto", {
-    id: "cursor-auto",
-    label: "Cursor Auto",
-    group: "Cursor",
-    kind: "code",
-    provider: "cursor",
-    cursorModelId: null,
-    vision: true,
-  });
-
-  for (const m of live) {
-    const native = String(m.id || "").trim();
-    if (!native) continue;
-    const lower = native.toLowerCase();
-    const isAuto =
-      m.isAuto ||
-      lower === "default" ||
-      lower === "auto" ||
-      lower === "auto-smart" ||
-      lower.startsWith("auto-");
-
-    if (isAuto) {
-      const prev = byId.get("cursor-auto")!;
-      byId.set("cursor-auto", {
-        ...prev,
-        label: m.displayName?.trim() || prev.label,
-      });
-      continue;
-    }
-
-    const id = `cursor/${native}`;
-    byId.set(id, {
-      id,
-      label: m.displayName?.trim() || native,
-      group: "Cursor",
-      kind: "code",
-      provider: "cursor",
-      cursorModelId: native,
-      vision: true,
-    });
-  }
-
-  return [...byId.values()].sort((a, b) => {
-    if (a.id === "cursor-auto") return -1;
-    if (b.id === "cursor-auto") return 1;
-    return a.label.localeCompare(b.label);
-  });
-}
-
-/** True when the model can be selected without going to Settings. */
-export function isModelUnlocked(
-  opt: CatalogModel,
-  providerKeyOk: (provider: string) => boolean
-): boolean {
-  if (opt.comingSoon) return false;
-  if (opt.provider === "hydrilla") return true;
-  return providerKeyOk(opt.provider);
+  return null;
 }

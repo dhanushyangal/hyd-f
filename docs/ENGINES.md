@@ -48,7 +48,7 @@ Skills are **selectable in the workspace create bar** (next to Engine + Quality)
 | Env | `environment` | **stub** | Soon — not selectable |
 | World | `world` | **stub** | Soon — not selectable |
 
-Defaults: skill `object-studio`, tier `standard`.
+Defaults: skill `object-studio`, tier `fast`.
 
 ### Where each piece lives
 
@@ -87,16 +87,22 @@ Cursor Cloud Agents need longer per call (~2–4 min). Soft budgets are provider
 
 ## Water model architecture
 
-### Catalog vs live sync
+### Connectors (live lists)
 
-| Provider | How models appear | Picker id | API call |
-|----------|-------------------|-----------|----------|
-| Anthropic | Static catalog | UI: `claude-sonnet-5`, `claude-opus-5`, `claude-haiku-4-5` → API aliases (same ids). Legacy prefs `claude-*-4-5` migrate to 5.x / still resolve via alias | Messages API |
-| OpenAI | Static catalog | `gpt-4.1`, `gpt-4.1-mini` | Chat completions |
-| Gemini | Static catalog | `gemini-2.5-flash`, `gemini-2.5-pro` | generateContent |
-| OpenRouter Free | Seed + **live** free filter | OR slug / `openrouter/free` | Chat completions |
-| OpenRouter Paid | Static catalog | `openrouter/<slug>` | Chat completions |
-| Cursor | **Auto** + **live** `/v1/models` | `cursor-auto` or `cursor/<nativeId>` | Cloud Agents `POST /v1/agents` |
+Water models are not a static catalog. Each vendor is a connector (`backend/.../src/providers/`).  
+`GET /api/user/models` lists language models for every provider the user can call.
+
+Canonical picker id: `provider:nativeId` (example `anthropic:claude-sonnet-5`, `openrouter:google/gemma-4-31b-it:free`, `cursor:auto`).
+
+| Provider | How models appear | Generate |
+|----------|-------------------|----------|
+| Anthropic | Live `GET /v1/models` | AI SDK `generateText` |
+| OpenAI | Live `GET /v1/models` (language only) | AI SDK `generateText` |
+| Google | Live Gemini model list | AI SDK `generateText` |
+| OpenRouter | Live OpenRouter list (free vs paid grouped) | AI SDK OpenAI-compatible |
+| Cursor | Live Cloud Agents `GET /v1/models` | Cloud Agents adapter |
+
+Key resolve: **user key if usable, else platform key**. Invalid keys never generate.
 
 ### Preference (`defaultCodeModel`)
 
@@ -131,12 +137,9 @@ Migration: `backend/hydrilla_backend/sql/005_water_llm_tokens.sql`.
 
 ### Key verification
 
-| Provider | Probe |
-|----------|--------|
-| Anthropic / OpenAI / OpenRouter / Gemini | Respective `/v1/models` (or Gemini models list) |
-| Cursor | `GET api.cursor.com/v1/me` |
+`listModels` succeeding marks the key valid (Cursor also probes `GET /v1/me`). Keys never returned to the browser (only `last4`, status).
 
-Generate allowed when `configured && status !== "invalid"`. Keys never returned to the browser (only `last4`, status).
+Admin **Platform keys** (`/api/admin/api-keys`) are used only when the member has no usable key for that provider.
 
 ### Env / SQL
 
@@ -145,7 +148,8 @@ Generate allowed when `configured && status !== "invalid"`. Keys never returned 
 | `USER_API_KEYS_ENCRYPTION_SECRET` | Encrypt BYOK keys |
 | `sql/add_user_api_keys_and_code_sculpt.sql` | Base Water + keys tables |
 | `sql/add_cursor_provider.sql` | Allow `provider = 'cursor'` |
-| `sql/005_water_llm_tokens.sql` | Water LLM token columns |
+| `sql/007_provider_google.sql` | Rename `gemini` → `google` |
+| `sql/008_enabled_code_models.sql` | Persist Settings model toggles |
 
 ---
 
@@ -172,7 +176,8 @@ Never send Water jobs to the GLB proxy or GPU status poller.
 | Path | Role |
 |------|------|
 | **`docs/ENGINES.md`** (this file) | Cloud vs Water, **skills map**, models, prefs |
+| **`docs/WATER_PROVIDERS.md`** | Connectors, keys, Settings toggles, Engine picker |
 | **`docs/WATER_ORCHESTRATION.md`** | Pipeline, budgets, harness files |
-| **`docs/GENERATION_FLOWS.md`** | Cloud GPU / credits path |
+| **`docs/WATER_FULL_GUIDE.md`** | Full Water pipeline reference |
 | **`skills/water/SKILL.md`** | Agent skill (docs only) |
 | **Backend `WATER_DEPLOY.md`** | SQL + Vercel env for BYOK |

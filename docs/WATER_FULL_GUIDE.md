@@ -6,6 +6,7 @@ Related shorter docs:
 
 - [`WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md) — orchestration checklist
 - [`ENGINES.md`](./ENGINES.md) — Cloud vs Water overview
+- [`WATER_PROVIDERS.md`](./WATER_PROVIDERS.md) — keys, connectors, Engine picker
 - [`../skills/water/SKILL.md`](../skills/water/SKILL.md) — agent-facing skill summary
 
 ---
@@ -80,6 +81,9 @@ Canonical orchestrator:
 |------|------|
 | `frontend/lib/waterSkills.ts` | Skill list, tiers, pass unlock table, progress labels |
 | `frontend/lib/api.ts` | `submitWater`, `fetchWaterJob`, `fetchWaterUsage`, … |
+| `frontend/lib/waterModels.ts` | Featured pins, Settings toggles, Engine filter |
+| `frontend/lib/connectors.ts` | Fallback connector cards if API omits list |
+| `frontend/app/app/settings/page.tsx` | BYOK keys + model switches |
 | `frontend/app/workspace/page.tsx` | Engine bar, generate, Edit model, tokens strip, polling |
 | `frontend/components/WaterViewer.tsx` | Runs factory in iframe sandbox, exports |
 
@@ -107,7 +111,8 @@ Canonical orchestrator:
 | `backend/src/lib/water/skills/index.ts` | **Runtime skill prompt packs** |
 | `backend/src/lib/waterSkills.ts` | Backend parse/defaults for skill + tier |
 | `backend/src/lib/codeSculptPipeline.ts` | Shared gates (`intakeGate`, `validateSculptSpec`, `validateFactoryCode`, …) |
-| `backend/src/lib/llmProviders.ts` | `callLLM` across Anthropic / OpenAI / Gemini / OpenRouter / Cursor |
+| `backend/src/lib/llmProviders.ts` | Re-exports provider manager |
+| `backend/src/providers/` | Connectors, `callLLM` / `generateText`, live `listModels` |
 
 ### Preview asset
 
@@ -686,16 +691,18 @@ Model should rest on **y = 0**, centered X/Z, approx height from spec.
 
 ## 16. Providers and tokens
 
-Supported Water providers (via `callLLM`):
+Live catalog and Settings toggles: [`WATER_PROVIDERS.md`](./WATER_PROVIDERS.md).
 
-| Provider | Usage parsing (when present) |
+Supported Water providers (AI SDK `generateText`, except Cursor Cloud Agents):
+
+| Provider | Usage |
 |----------|-------------------------------|
-| Anthropic | `input_tokens` / `output_tokens` |
-| OpenAI / OpenRouter | `prompt_tokens` / `completion_tokens` (+ native fields when present) |
-| Gemini | `usageMetadata.promptTokenCount` / `candidatesTokenCount` |
-| Cursor | Agent `/usage` endpoint after FINISHED |
+| Anthropic / OpenAI / Google / OpenRouter | AI SDK `result.usage` |
+| Cursor | Agent `/usage` after FINISHED |
 
-Hydrilla platform credits stay **0** for Water.
+Key order: member BYOK first, platform key as fallback. Hydrilla platform credits stay **0** for Water.
+
+Engine picker shows only models turned **on** in Settings (plus a few featured defaults per key). Canonical ids: `provider:nativeId`.
 
 ---
 

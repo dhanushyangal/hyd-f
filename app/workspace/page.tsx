@@ -29,8 +29,7 @@ import {
   fetchWaterJob,
   saveWaterThumbnail,
   fetchUserApiKeys,
-  fetchOpenRouterFreeModels,
-  fetchCursorModels,
+  fetchWaterModels,
   saveUserModelPrefs,
   generatePreviewImage,
   registerJobWithPreview,
@@ -60,6 +59,7 @@ import {
   LineageItem,
   UserApiKeyMeta,
   providerKeyAvailable,
+  type WaterModelGroup,
 } from "../../lib/api";
 import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
 import { track, isPaywallError } from "../../lib/analytics";
@@ -70,18 +70,20 @@ import {
 } from "../../lib/pendingHeroPrompt";
 import {
   MODEL_CATALOG,
-  MODEL_GROUPS,
   getCatalogModel,
   isCodeModel,
-  mergeFreeModels,
-  mergeCursorModels,
   migrateCodeModelId,
   providerForModelId,
   type CatalogModel,
-  type CursorLiveModel,
   type ModelId,
-  type OpenRouterFreeModel,
 } from "../../lib/models";
+import {
+  ENABLED_WATER_MODELS_EVENT,
+  ENABLED_WATER_MODELS_KEY,
+  pickerVisibleIds,
+  readEnabledModelIds,
+  resolveEnabledModelIds,
+} from "../../lib/waterModels";
 import { ENGINE, formatEngineLabel, isWaterJob, isWaterJobId } from "../../lib/engines";
 import {
   WATER_SKILLS,
@@ -598,10 +600,11 @@ function WorkspacePage() {
   const [selectedWaterSkill, setSelectedWaterSkill] = useState<WaterSkillId>(DEFAULT_WATER_SKILL);
   const [selectedQualityTier, setSelectedQualityTier] = useState<QualityTier>(DEFAULT_QUALITY_TIER);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
+  const [enabledWaterIds, setEnabledWaterIds] = useState<string[]>([]);
   const [apiKeys, setApiKeys] = useState<UserApiKeyMeta[]>([]);
   const [sharedKeys, setSharedKeys] = useState<UserApiKeyMeta[]>([]);
-  const [liveFreeModels, setLiveFreeModels] = useState<OpenRouterFreeModel[]>([]);
-  const [liveCursorModels, setLiveCursorModels] = useState<CursorLiveModel[]>([]);
+  const [waterGroups, setWaterGroups] = useState<WaterModelGroup[]>([]);
   const [codeFactoryCode, setCodeFactoryCode] = useState<string | null>(null);
   const [codeSculptPass, setCodeSculptPass] = useState<string | null>(null);
   const [waterEditMode, setWaterEditMode] = useState(false);
@@ -614,12 +617,34 @@ function WorkspacePage() {
     model: string | null;
   } | null>(null);
   const [waterDropHighlight, setWaterDropHighlight] = useState(false);
-  const freePickerModels = mergeFreeModels(liveFreeModels);
-  const cursorPickerModels = mergeCursorModels(liveCursorModels);
+  const waterPickerModels: CatalogModel[] = useMemo(
+    () =>
+      waterGroups.flatMap((g) => {
+        const free = g.models.filter((m) => m.free);
+        const paid = g.models.filter((m) => !m.free);
+        const asCatalog = (models: typeof g.models, group: string): CatalogModel[] =>
+          models.map((m) => ({
+            id: m.id,
+            label: m.name,
+            group,
+            kind: "code" as const,
+            provider: g.provider,
+            free: m.free,
+            source: g.source,
+          }));
+        if (g.provider === "openrouter" && free.length && paid.length) {
+          return [
+            ...asCatalog(free, "OpenRouter Free"),
+            ...asCatalog(paid, "OpenRouter"),
+          ];
+        }
+        return asCatalog(g.models, g.name);
+      }),
+    [waterGroups]
+  );
   const selectedCatalog =
     getCatalogModel(selectedModel) ||
-    freePickerModels.find((m) => m.id === selectedModel) ||
-    cursorPickerModels.find((m) => m.id === selectedModel) ||
+    waterPickerModels.find((m) => m.id === selectedModel) ||
     undefined;
   const selectedProvider = providerForModelId(selectedModel);
   const selectedIsCode =
@@ -688,22 +713,14 @@ function WorkspacePage() {
             void saveUserModelPrefs({ defaultCodeModel: preferred }, tokenGetter).catch(() => {});
           }
         }
-        // Live-sync OpenRouter free models for the picker
         try {
-          const free = await fetchOpenRouterFreeModels(tokenGetter);
-          setLiveFreeModels(free.models);
+          const water = await fetchWaterModels(tokenGetter);
+          setWaterGroups(water.groups);
+          setEnabledWaterIds(
+            resolveEnabledModelIds(water.groups, data.prefs?.enabledCodeModels)
+          );
         } catch {
-          // Curated free list still works offline
-        }
-        // Live-sync Cursor Cloud Agents models when a key is configured
-        const cursorOk = providerKeyAvailable("cursor", data.keys, data.sharedKeys ?? []);
-        if (cursorOk) {
-          try {
-            const cursor = await fetchCursorModels(tokenGetter);
-            setLiveCursorModels(cursor.models);
-          } catch {
-            // Cursor Auto still available without live list
-          }
+          setWaterGroups([]);
         }
       } catch {
         // Settings migration may not be deployed yet — picker still works for Trilles
@@ -716,47 +733,53 @@ function WorkspacePage() {
     [apiKeys, sharedKeys]
   );
 
+  useEffect(() => {
+    const sync = () => {
+      const local = readEnabledModelIds();
+      setEnabledWaterIds(resolveEnabledModelIds(waterGroups, local));
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === ENABLED_WATER_MODELS_KEY) sync();
+    };
+    window.addEventListener(ENABLED_WATER_MODELS_EVENT, sync);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(ENABLED_WATER_MODELS_EVENT, sync);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [waterGroups]);
+
   const pickerItemsForGroup = useCallback(
-    (group: CatalogModel["group"]): CatalogModel[] => {
-      const items =
-        group === "OpenRouter Free"
-          ? freePickerModels
-          : group === "Cursor"
-            ? cursorPickerModels
-            : MODEL_CATALOG.filter((m) => m.group === group);
-      // Unlocked models first within the group; locked / coming-soon below.
-      return [...items].sort((a, b) => {
-        const aUnlocked =
-          !a.comingSoon && (a.provider === "hydrilla" || providerKeyOk(a.provider));
-        const bUnlocked =
-          !b.comingSoon && (b.provider === "hydrilla" || providerKeyOk(b.provider));
-        if (aUnlocked !== bUnlocked) return aUnlocked ? -1 : 1;
-        return 0;
+    (group: string): CatalogModel[] => {
+      if (group === "Hydrilla") return MODEL_CATALOG.filter((m) => m.group === "Hydrilla");
+      const raw = waterPickerModels.filter((m) => m.group === group);
+      const visible = pickerVisibleIds(enabledWaterIds, selectedModel);
+      const q = modelSearch.trim().toLowerCase();
+      return raw.filter((m) => {
+        if (!visible.has(m.id)) return false;
+        if (!q) return true;
+        return m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
       });
     },
-    [freePickerModels, cursorPickerModels, providerKeyOk]
+    [waterPickerModels, enabledWaterIds, modelSearch, selectedModel]
   );
 
-  /** Hydrilla cloud first, then Water groups with a valid key, then locked groups. */
   const orderedModelGroups = useMemo(() => {
-    const water = MODEL_GROUPS.filter((g) => g !== "Hydrilla");
-    const unlocked: CatalogModel["group"][] = [];
-    const locked: CatalogModel["group"][] = [];
-    for (const group of water) {
+    const waterNames = [...new Set(waterPickerModels.map((m) => m.group))];
+    const unlocked: string[] = [];
+    const locked: string[] = [];
+    for (const group of waterNames) {
       const items = pickerItemsForGroup(group);
-      const anyUnlocked = items.some(
-        (opt) => !opt.comingSoon && providerKeyOk(opt.provider)
-      );
+      const anyUnlocked = items.some((opt) => providerKeyOk(opt.provider));
       if (anyUnlocked) unlocked.push(group);
       else locked.push(group);
     }
-    return ["Hydrilla" as const, ...unlocked, ...locked];
-  }, [pickerItemsForGroup, providerKeyOk]);
+    return ["Hydrilla", ...unlocked, ...locked];
+  }, [pickerItemsForGroup, providerKeyOk, waterPickerModels]);
 
   const modelTypeLabel: Record<string, string> = Object.fromEntries([
     ...MODEL_CATALOG.map((m) => [m.id, m.label] as const),
-    ...freePickerModels.map((m) => [m.id, m.label] as const),
-    ...cursorPickerModels.map((m) => [m.id, m.label] as const),
+    ...waterPickerModels.map((m) => [m.id, m.label] as const),
   ]);
     const formatGenerationType = useCallback((value?: string | null): string => {
     return formatEngineLabel(value);
@@ -4612,7 +4635,13 @@ function WorkspacePage() {
                 </span>
               </div>
               <div className="relative min-w-[160px] max-w-[220px]">
-                <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
+                <DropdownMenu
+                  open={modelDropdownOpen}
+                  onOpenChange={(open) => {
+                    setModelDropdownOpen(open);
+                    if (!open) setModelSearch("");
+                  }}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button
                       type="button"
@@ -4632,6 +4661,9 @@ function WorkspacePage() {
                         {selectedCatalog?.kind === "code" && !providerKeyOk(selectedCatalog.provider) && (
                           <span className="text-red-500 shrink-0" title="API key missing">!</span>
                         )}
+                        {selectedCatalog?.kind === "code" && selectedCatalog.source === "platform" && (
+                          <span className="truncate text-[10px] text-neutral-400">Hydrilla key</span>
+                        )}
                         <span className="truncate">{selectedCatalog?.label ?? selectedModel}</span>
                       </span>
                       <svg className={`w-3.5 h-3.5 shrink-0 text-neutral-500 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -4640,23 +4672,29 @@ function WorkspacePage() {
                   <DropdownMenuContent
                     align="end"
                     sideOffset={8}
-                    className="w-[280px] max-h-[min(420px,70vh)] overflow-y-auto p-1.5"
+                    className="w-[300px] p-0"
+                    onCloseAutoFocus={(e) => e.preventDefault()}
                   >
+                    <div
+                      className="border-b border-neutral-100 px-2.5 py-2"
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <Input
+                        value={modelSearch}
+                        onChange={(e) => setModelSearch(e.target.value)}
+                        placeholder="Search"
+                        className="h-8 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="max-h-[min(320px,55vh)] overflow-y-auto p-1.5">
                     {orderedModelGroups.map((group, gi) => {
                       const items = pickerItemsForGroup(group);
                       if (!items.length) return null;
-                      const groupUnlocked =
-                        group === "Hydrilla" ||
-                        items.some((opt) => !opt.comingSoon && providerKeyOk(opt.provider));
                       return (
                         <DropdownMenuGroup key={group}>
                           {gi > 0 && <DropdownMenuSeparator />}
                           <DropdownMenuLabel>
-                            {group === "Hydrilla"
-                              ? "Hydrilla cloud · credits"
-                              : groupUnlocked
-                                ? `Water · ${group === "OpenRouter Free" ? "free keys" : group} · unlocked`
-                                : `Water · ${group === "OpenRouter Free" ? "free keys" : group} · locked`}
+                            {group === "Hydrilla" ? "Cloud" : group}
                           </DropdownMenuLabel>
                           {items.map((opt) => {
                             const needsKey = opt.provider !== "hydrilla";
@@ -4703,11 +4741,6 @@ function WorkspacePage() {
                                   <span className={`truncate ${locked ? "text-neutral-400" : ""}`}>
                                     {opt.label}
                                   </span>
-                                  {opt.free && opt.vision && !locked && (
-                                    <span className="text-[9px] uppercase tracking-wide text-emerald-600 shrink-0">
-                                      vision
-                                    </span>
-                                  )}
                                   {locked && (
                                     <span title={opt.comingSoon ? "Coming soon" : "Add API key in Settings"}>
                                       <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
@@ -4727,14 +4760,14 @@ function WorkspacePage() {
                         </DropdownMenuGroup>
                       );
                     })}
-                    <DropdownMenuSeparator />
-                    <div className="px-2.5 py-2">
+                    </div>
+                    <div className="border-t border-neutral-100 px-3 py-2">
                       <a
                         href="/app/settings"
                         className="text-[11px] font-medium text-neutral-700 hover:text-neutral-900 underline-offset-2 hover:underline"
                         onClick={() => setModelDropdownOpen(false)}
                       >
-                        Manage API keys →
+                        Models in Settings
                       </a>
                     </div>
                   </DropdownMenuContent>
