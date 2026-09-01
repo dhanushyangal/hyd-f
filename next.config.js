@@ -52,6 +52,19 @@ const nextConfig = {
       { source: "/privacy/", destination: "/privacy-policy", permanent: true },
       { source: "/terms", destination: "/terms-and-conditions", permanent: true },
       { source: "/terms/", destination: "/terms-and-conditions", permanent: true },
+      // Legacy blog query URLs → path-based routes (SEO + static caching)
+      {
+        source: "/blog",
+        has: [{ type: "query", key: "category", value: "(?<category>.*)" }],
+        destination: "/blog/category/:category",
+        permanent: true,
+      },
+      {
+        source: "/blog",
+        has: [{ type: "query", key: "page", value: "(?<page>[0-9]+)" }],
+        destination: "/blog/page/:page",
+        permanent: true,
+      },
     ];
   },
   async rewrites() {
@@ -68,6 +81,24 @@ const nextConfig = {
       {
         // Marketing home — allow CDN to reuse prerender briefly (pairs with revalidate on page).
         source: "/",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        source: "/blog",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        source: "/blog/:path*",
         headers: [
           {
             key: "Cache-Control",

@@ -105,6 +105,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={dmSans.variable}>
         <head>
           <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="" />
+          <link rel="preconnect" href="https://hydrilla-outputs-1.s3.amazonaws.com" crossOrigin="" />
+          <link rel="dns-prefetch" href="https://hydrilla-outputs-1.s3.amazonaws.com" />
           <link rel="preconnect" href={clerkHost} crossOrigin="" />
           <link rel="dns-prefetch" href={clerkHost} />
         </head>

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import type { BlogPost } from "@/lib/blog";
+import type { BlogListPost } from "@/lib/blog";
 import { blogPostPath, formatBlogDate } from "@/lib/blog";
 
-export function BlogPostCard({ post }: { post: BlogPost }) {
+export function BlogPostCard({ post }: { post: BlogListPost }) {
   const href = blogPostPath(post.slug);
 
   return (
@@ -62,7 +62,7 @@ export function BlogPostCard({ post }: { post: BlogPost }) {
   );
 }
 
-export function BlogFeaturedPost({ post }: { post: BlogPost }) {
+export function BlogFeaturedPost({ post }: { post: BlogListPost }) {
   const href = blogPostPath(post.slug);
 
   return (

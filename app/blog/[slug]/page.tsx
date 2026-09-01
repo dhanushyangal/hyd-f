@@ -1,13 +1,15 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { MarketingPage } from "@/components/layout/MarketingPage";
 import { ArticleBody } from "@/components/content/ArticleBody";
-import { blogPostPath, fetchBlogPost, fetchBlogPosts, formatBlogDate, getBlogContinueLinks } from "@/lib/blog";
+import { BlogContinueSection } from "@/components/blog/BlogContinueSection";
+import { blogPostPath, fetchBlogPost, fetchBlogPosts, formatBlogDate } from "@/lib/blog";
 import { createPageMetadata, getArticleJsonLd } from "@/lib/seo";
 import { DEFAULT_OG_IMAGE } from "@/lib/seo";
 
-export const revalidate = 60;
+export const revalidate = 3600;
 export const dynamicParams = true;
 
 type Props = { params: Promise<{ slug: string }> };
@@ -39,8 +41,6 @@ export default async function BlogArticlePage({ params }: Props) {
   const post = await fetchBlogPost(slug);
   if (!post) notFound();
 
-  const continueLinks = await getBlogContinueLinks(slug);
-
   const dateLabel = formatBlogDate(post.publishedAt);
   const metaParts = [post.category, dateLabel, post.author].filter(Boolean).join(" · ");
 
@@ -61,8 +61,13 @@ export default async function BlogArticlePage({ params }: Props) {
         title={post.headline}
         description={post.excerpt}
         meta={metaParts}
-        related={continueLinks}
         formats={false}
+        useBodyFontForTitle
+        relatedContent={
+          <Suspense fallback={null}>
+            <BlogContinueSection excludeSlug={slug} />
+          </Suspense>
+        }
       >
         {post.coverImage ? (
           <div className="relative mx-auto aspect-[2/1] max-w-3xl overflow-hidden rounded-xl border border-neutral-200">

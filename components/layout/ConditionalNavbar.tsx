@@ -30,7 +30,9 @@ export function ConditionalNavbar() {
     pathname === "/privacy-policy" ||
     pathname === "/terms-and-conditions" ||
     pathname === "/cookie-policy" ||
-    pathname?.startsWith("/usecase")
+    pathname?.startsWith("/usecase") ||
+    pathname === "/blog" ||
+    pathname?.startsWith("/blog/")
       ? "default"
       : "hero";
 

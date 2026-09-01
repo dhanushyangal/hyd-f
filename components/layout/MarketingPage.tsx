@@ -24,6 +24,10 @@ type MarketingPageProps = {
   formats?: boolean;
   meta?: string;
   related?: RelatedLink[];
+  /** Async/streamed related nav (e.g. blog Continue section). */
+  relatedContent?: ReactNode;
+  /** Use DM Sans for the title (faster LCP on marketing pages). Default false. */
+  useBodyFontForTitle?: boolean;
 };
 
 export function MarketingPage({
@@ -35,6 +39,8 @@ export function MarketingPage({
   formats = true,
   meta,
   related,
+  relatedContent,
+  useBodyFontForTitle = false,
 }: MarketingPageProps) {
   return (
     <>
@@ -51,7 +57,10 @@ export function MarketingPage({
               )}
               {meta ? <p className="mkt-meta">{meta}</p> : null}
             </div>
-            <h1 className="mkt-title" style={{ fontFamily: DISPLAY }}>
+            <h1
+              className="mkt-title"
+              style={useBodyFontForTitle ? undefined : { fontFamily: DISPLAY }}
+            >
               {title}
             </h1>
             <p className="mkt-lede">{description}</p>
@@ -67,6 +76,7 @@ export function MarketingPage({
           </div>
         </section>
         {children}
+        {relatedContent}
         {related && related.length > 0 ? (
           <nav className="mkt-related" aria-label="Related">
             <p className="mkt-related-label">Continue</p>

@@ -1,9 +1,8 @@
-export type BlogPost = {
+export type BlogListPost = {
   slug: string;
   title: string;
   headline: string;
   excerpt: string;
-  content: string;
   coverImage: string | null;
   category: string;
   author: string;
@@ -14,19 +13,31 @@ export type BlogPost = {
   seoImage: string | null;
 };
 
+export type BlogPost = BlogListPost & {
+  content: string;
+};
+
 export type BlogListResponse = {
-  posts: BlogPost[];
+  posts: BlogListPost[];
   total: number;
   page: number;
   limit: number;
   totalPages: number;
 };
 
+export type ContinueItem = {
+  slug: string;
+  title: string;
+  category: string;
+};
+
+const BLOG_REVALIDATE = 3600;
+
 function backendBase(): string {
   return (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
 }
 
-async function fetchJson<T>(path: string, revalidate = 60): Promise<T> {
+async function fetchJson<T>(path: string, revalidate = BLOG_REVALIDATE): Promise<T> {
   const res = await fetch(`${backendBase()}${path}`, {
     next: { revalidate },
   });
@@ -78,12 +89,21 @@ export async function fetchBlogCategories(): Promise<string[]> {
   }
 }
 
-const CLUSTER_ORDER = ["BlueFox", "Pipeline", "Plans", "General"];
+export async function fetchBlogContinue(excludeSlug?: string): Promise<ContinueItem[]> {
+  try {
+    const qs = excludeSlug ? `?exclude=${encodeURIComponent(excludeSlug)}` : "";
+    const data = await fetchJson<{ items: ContinueItem[] }>(`/api/blog/continue${qs}`);
+    return data.items;
+  } catch {
+    return [];
+  }
+}
 
 export function groupPostsByCategory(
-  posts: BlogPost[]
-): { category: string; posts: BlogPost[] }[] {
-  const map = new Map<string, BlogPost[]>();
+  posts: BlogListPost[]
+): { category: string; posts: BlogListPost[] }[] {
+  const CLUSTER_ORDER = ["BlueFox", "Pipeline", "Plans", "General"];
+  const map = new Map<string, BlogListPost[]>();
   for (const post of posts) {
     const list = map.get(post.category) ?? [];
     list.push(post);
@@ -119,35 +139,18 @@ export type ContinueLink = {
   hint?: string;
 };
 
-/** Continue nav: one latest post per category (newest first from API). */
+export function continueItemsToLinks(items: ContinueItem[]): ContinueLink[] {
+  return items.map((item) => ({
+    label: item.title,
+    href: blogPostPath(item.slug),
+    hint: item.category,
+  }));
+}
+
+/** Continue nav for article pages — lightweight /continue API. */
 export async function getBlogContinueLinks(excludeSlug?: string): Promise<ContinueLink[]> {
-  try {
-    const { posts } = await fetchBlogPosts({ limit: 100 });
-    const latestByCategory = new Map<string, BlogPost>();
-
-    for (const post of posts) {
-      if (excludeSlug && post.slug === excludeSlug) continue;
-      if (!latestByCategory.has(post.category)) {
-        latestByCategory.set(post.category, post);
-      }
-    }
-
-    const keys = [
-      ...CLUSTER_ORDER.filter((key) => latestByCategory.has(key)),
-      ...[...latestByCategory.keys()].filter((key) => !CLUSTER_ORDER.includes(key)),
-    ];
-
-    return keys.map((category) => {
-      const item = latestByCategory.get(category)!;
-      return {
-        label: item.title,
-        href: blogPostPath(item.slug),
-        hint: category,
-      };
-    });
-  } catch {
-    return [];
-  }
+  const items = await fetchBlogContinue(excludeSlug);
+  return continueItemsToLinks(items);
 }
 
 /** Simple HTML → markdown for GEO .md mirrors */
