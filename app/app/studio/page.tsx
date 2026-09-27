@@ -123,36 +123,6 @@ export default function StudioPage() {
     try {
       const tokenGetter = async () => await getToken();
       const ws = await fetchWorkspaces(tokenGetter);
-
-      // If user has zero workspaces, create one "Demo Workspace" so they have something to click.
-      if (typeof window !== "undefined" && ws.length === 0) {
-        const demoName = "Demo Workspace";
-        // Only lock during the create call to prevent duplicate POSTs (e.g. double effect).
-        // Do NOT use "true" as a permanent lock — if user deletes the demo, we create again.
-        const key = "hydrilla_demo_workspace_creating_v1";
-        const val = window.localStorage.getItem(key) || "";
-        const creatingTs = val.startsWith("creating:") ? Number(val.slice("creating:".length)) : NaN;
-        const isCreatingNow = Number.isFinite(creatingTs) && Date.now() - creatingTs < 30_000;
-
-        if (!isCreatingNow) {
-          window.localStorage.setItem(key, `creating:${Date.now()}`);
-          try {
-            const demo = await createWorkspaceApi(demoName, tokenGetter);
-            window.localStorage.removeItem(key);
-            setWorkspaces([demo]);
-            setLoading(false);
-            return;
-          } catch (err: unknown) {
-            window.localStorage.removeItem(key);
-            setActionError(
-              err instanceof Error
-                ? err.message
-                : "Could not create workspace. Check that the backend is running."
-            );
-          }
-        }
-      }
-
       setWorkspaces(ws);
     } catch (err: unknown) {
       setActionError(
@@ -267,9 +237,8 @@ export default function StudioPage() {
   }
 
   return (
-    <div className="app-content-page font-dm-sans bg-[#fafafa]">
+    <div className="app-content-page font-dm-sans bg-[var(--app-canvas)]">
       <section className="flex flex-col gap-8 sm:gap-10">
-        {/* Header — title and toolbar stay on separate rows until lg, so they never collide */}
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-6">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] sm:text-xs font-medium text-neutral-400 tracking-[0.14em] uppercase">

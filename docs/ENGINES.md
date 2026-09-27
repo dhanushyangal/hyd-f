@@ -179,5 +179,10 @@ Never send Water jobs to the GLB proxy or GPU status poller.
 | **`docs/WATER_PROVIDERS.md`** | Connectors, keys, Settings toggles, Engine picker |
 | **`docs/WATER_ORCHESTRATION.md`** | Pipeline, budgets, harness files |
 | **`docs/WATER_FULL_GUIDE.md`** | Full Water pipeline reference |
+| **`docs/CREATE_ORCHESTRATION_PLAN.md`** | **Adoption plan** — Grok orchestration pack vs this repo, phased build order |
+| **`docs/DECISIONS_LOCKED.md`** | Locked Create decisions (Water modes, characters, Pixal=BlueFox, orchestrator) |
+| **`docs/contracts/*.md`** | JobCard, EvidenceManifest, 12-ID tool surface |
+| **`agent/README.md`** | The two eve agents (Cloud + Water) that drive the Create tool surface |
+| **`docs/GROK-3D-HARNESS-BRIEF.md`** | Earlier strategy brief — superseded on naming by the plan above |
 | **`skills/water/SKILL.md`** | Agent skill (docs only) |
 | **Backend `WATER_DEPLOY.md`** | SQL + Vercel env for BYOK |

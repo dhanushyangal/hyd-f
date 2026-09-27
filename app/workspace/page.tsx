@@ -6,23 +6,43 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { motion } from "motion/react";
-import { Slider } from "../../components/ui/slider";
+import {
+  Box,
+  Download,
+  Grid3x3,
+  Image as ImageIcon,
+  Library,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelRightClose,
+  Plus,
+  RotateCw,
+  Search,
+} from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
+import { StudioOrb } from "../../components/workspace/StudioOrb";
+import { ChatComponent } from "../../components/workspace/ChatComponent";
+import type { WaterViewerHandle } from "../../components/WaterViewer";
+import { WaterPassRail } from "../../components/water/WaterPassRail";
+import { AssetInspector } from "../../components/workspace/AssetInspector";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu";
+  applyLookPatch,
+  DEFAULT_PART_MATERIAL,
+  DEFAULT_VIEWER_LOOK,
+  sanitizePartMaterials,
+  toHexColor,
+  type PartMaterial,
+  type PartMaterialMap,
+  type ViewerLook,
+} from "../../lib/viewer/look";
+import { useKeyedDebounce } from "../../lib/use-keyed-debounce";
+import { usePromptHistory } from "../../lib/prompt-history";
+import { ModeToggle } from "../../components/mode-toggle";
 import { Input } from "../../components/ui/input";
 import { Progress } from "../../components/ui/progress";
 import { ScrollArea } from "../../components/ui/scroll-area";
-import { Switch } from "../../components/ui/switch";
-import { Textarea } from "../../components/ui/textarea";
 import {
   submitImageTo3D,
   submitWater,
@@ -44,7 +64,6 @@ import {
   createWorkspaceApi,
   fetchStatus,
   fetchQueueInfo,
-  fetchJobLineage,
   getGlbUrl,
   getProxyGlbUrl,
   getProxiedImageUrl,
@@ -56,10 +75,11 @@ import {
   onFeaturesChange,
   BackendJob,
   QueueInfo,
-  LineageItem,
   UserApiKeyMeta,
   providerKeyAvailable,
   type WaterModelGroup,
+  type WaterSceneBundle,
+  patchWaterScene,
 } from "../../lib/api";
 import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
 import { track, isPaywallError } from "../../lib/analytics";
@@ -80,55 +100,34 @@ import {
 import {
   ENABLED_WATER_MODELS_EVENT,
   ENABLED_WATER_MODELS_KEY,
-  pickerVisibleIds,
   readEnabledModelIds,
   resolveEnabledModelIds,
 } from "../../lib/waterModels";
-import { ENGINE, formatEngineLabel, isWaterJob, isWaterJobId } from "../../lib/engines";
+import { isWaterJob, isWaterJobId } from "../../lib/engines";
 import {
-  WATER_SKILLS,
-  QUALITY_TIERS,
-  DEFAULT_WATER_SKILL,
-  DEFAULT_QUALITY_TIER,
-  WATER_SKILL_STORAGE_KEY,
   WATER_TIER_STORAGE_KEY,
-  isWaterSkillSelectable,
-  parseWaterSkillId,
   parseQualityTier,
-  passesForTier,
   waterPassLabel,
-  waterPassIndex,
-  type WaterSkillId,
   type QualityTier,
-  type BuildPassId,
 } from "../../lib/waterSkills";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const CREDITS_IMAGE = 2;
 const CREDITS_3D = 10;
 const WATER_POLL_INTERVAL_MS = 2_000;
-const WATER_POLL_MAX_MS: Record<QualityTier, number> = {
-  fast: 6 * 60 * 1000,
-  standard: 10 * 60 * 1000,
-  studio: 18 * 60 * 1000,
-};
+const WATER_POLL_MAX_MS = 18 * 60 * 1000;
 
 const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
 
-const sculptPassLabel = (pass?: string | null): string => waterPassLabel(pass);
 
-const sculptPassIndex = (pass?: string | null, unlocked?: BuildPassId[]): number =>
-  waterPassIndex(pass, unlocked);
+const sculptPassLabel = (pass?: string | null): string => waterPassLabel(pass);
 
 // Lazy-load ThreeViewer (Three.js is heavy; load only when 3D is shown)
 const ThreeViewer = dynamic(() => import("../../components/ThreeViewer").then((m) => ({ default: m.ThreeViewer })), {
   ssr: false,
   loading: () => (
-    <div className="flex-1 min-h-0 flex items-center justify-center bg-[#fafafa]">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-9 h-9 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
-        <p className="text-sm text-neutral-500">Loading 3D viewer…</p>
-      </div>
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-white">
+      <StudioOrb state="searching" size={64} />
     </div>
   ),
 });
@@ -138,8 +137,8 @@ const WaterViewer = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex-1 min-h-0 flex items-center justify-center bg-[#f4f4f5]">
-        <div className="w-9 h-9 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-white">
+        <StudioOrb state="searching" size={64} />
       </div>
     ),
   }
@@ -176,7 +175,7 @@ type CenterView =
 /** Show "GPU is unavailable" when both APIs have failed (fetch/network errors). */
 function toUserFacingGpuError(msg: string | undefined): string {
   if (!msg) return "GPU is unavailable";
-  if (/fetch failed|failed to fetch|networkerror|timeout|ECONNREFUSED|External service unavailable|GPU is unavailable/i.test(msg))
+  if (/fetch failed|failed to fetch|networkerror|ECONNREFUSED|External service unavailable|GPU is unavailable/i.test(msg))
     return "GPU is unavailable";
   return msg;
 }
@@ -211,8 +210,8 @@ interface GeneratingJob {
 export default function WorkspacePageWrapper() {
   return (
     <Suspense fallback={
-      <div className="h-screen flex items-center justify-center bg-[#fafafa]">
-        <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
+      <div className="flex h-screen items-center justify-center bg-white">
+        <StudioOrb state="connecting" size={64} />
       </div>
     }>
       <WorkspacePage />
@@ -493,13 +492,9 @@ function WorkspacePage() {
   // Parent job for iterative prompting lineage
   const [currentParentJobId, setCurrentParentJobId] = useState<string | null>(null);
 
-  // Generation Info panel state (header always visible when job selected; expanded = content open)
+  // Selected job (factory, source image, water scene)
   const [selectedJobInfo, setSelectedJobInfo] = useState<BackendJob | null>(null);
-  const [jobLineage, setJobLineage] = useState<LineageItem[]>([]);
-  const [genInfoExpanded, setGenInfoExpanded] = useState(true);
-  const [mobileGenInfoOpen, setMobileGenInfoOpen] = useState(false);
   const [mobileGeneratedToast, setMobileGeneratedToast] = useState(false);
-  const [lineagePreviewItem, setLineagePreviewItem] = useState<LineageItem | null>(null);
   const mobileGeneratedToastRef = useRef<NodeJS.Timeout | null>(null);
   /** Mobile-only: timestamp when user-started generation began (for minimum GPU-offline overlay duration). */
   const mobileGenStartedAtRef = useRef<number | null>(null);
@@ -575,6 +570,12 @@ function WorkspacePage() {
   const [clientMounted, setClientMounted] = useState(false);
   useEffect(() => {
     setClientMounted(true);
+    try {
+      const saved = window.localStorage.getItem(WATER_TIER_STORAGE_KEY);
+      if (saved) setWaterQualityTier(parseQualityTier(saved));
+    } catch {
+      /* ignore */
+    }
   }, []);
   const refreshCredits = useCallback(async () => {
     if (!isSignedIn || !getToken) return;
@@ -597,26 +598,23 @@ function WorkspacePage() {
 
   // AI Model selection — Hydrilla mesh engines + Bring-your-own Water models
   const [selectedModel, setSelectedModel] = useState<ModelId>("trilles");
-  const [selectedWaterSkill, setSelectedWaterSkill] = useState<WaterSkillId>(DEFAULT_WATER_SKILL);
-  const [selectedQualityTier, setSelectedQualityTier] = useState<QualityTier>(DEFAULT_QUALITY_TIER);
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const [modelSearch, setModelSearch] = useState("");
   const [enabledWaterIds, setEnabledWaterIds] = useState<string[]>([]);
   const [apiKeys, setApiKeys] = useState<UserApiKeyMeta[]>([]);
   const [sharedKeys, setSharedKeys] = useState<UserApiKeyMeta[]>([]);
   const [waterGroups, setWaterGroups] = useState<WaterModelGroup[]>([]);
   const [codeFactoryCode, setCodeFactoryCode] = useState<string | null>(null);
   const [codeSculptPass, setCodeSculptPass] = useState<string | null>(null);
-  const [waterEditMode, setWaterEditMode] = useState(false);
   const [waterEditTargetJobId, setWaterEditTargetJobId] = useState<string | null>(null);
-  const [waterEditPrompt, setWaterEditPrompt] = useState("");
-  const [waterTokenInfo, setWaterTokenInfo] = useState<{
-    inputTokens: number | null;
-    outputTokens: number | null;
-    totalTokens: number | null;
-    model: string | null;
-  } | null>(null);
   const [waterDropHighlight, setWaterDropHighlight] = useState(false);
+  const [waterQualityTier, setWaterQualityTier] = useState<QualityTier>("standard");
+  const [waterScene, setWaterScene] = useState<WaterSceneBundle | null>(null);
+  // Part editing for whichever viewer is open (Water iframe or Cloud GLB).
+  const [selectedPart, setSelectedPart] = useState<string | null>(null);
+  /** Authored material per mesh, reported by the viewer on load. */
+  const [authoredParts, setAuthoredParts] = useState<PartMaterialMap>({});
+  /** Live edits this session; win over saved scene values. */
+  const [partEdits, setPartEdits] = useState<PartMaterialMap>({});
+  const waterViewerRef = useRef<WaterViewerHandle>(null);
   const waterPickerModels: CatalogModel[] = useMemo(
     () =>
       waterGroups.flatMap((g) => {
@@ -664,6 +662,33 @@ function WorkspacePage() {
     }
   }, [selectedIsCode, inputMode, editAvailable]);
 
+  useEffect(() => {
+    if (centerView.type !== "code" && centerView.type !== "3d") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (event.key === "Escape") {
+        setSelectedPart(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [centerView.type]);
+
+  const viewerAssetKey =
+    centerView.type === "code" ? `code:${centerView.jobId}` : centerView.type === "3d" ? `3d:${centerView.glbUrl}` : "";
+  useEffect(() => {
+    setSelectedPart(null);
+    setAuthoredParts({});
+    setPartEdits({});
+  }, [viewerAssetKey]);
+
   // A failed mesh/GPU job must not remain as the active canvas when the user
   // switches to Water. It is unrelated to the Water engine.
   useEffect(() => {
@@ -678,18 +703,6 @@ function WorkspacePage() {
       setError(null);
     }
   }, [selectedIsCode, centerView]);
-
-  useEffect(() => {
-    if (!isSignedIn) return;
-    try {
-      const sk = parseWaterSkillId(localStorage.getItem(WATER_SKILL_STORAGE_KEY));
-      const tier = parseQualityTier(localStorage.getItem(WATER_TIER_STORAGE_KEY));
-      setSelectedWaterSkill(sk);
-      setSelectedQualityTier(tier);
-    } catch {
-      /* ignore */
-    }
-  }, [isSignedIn]);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -749,41 +762,10 @@ function WorkspacePage() {
     };
   }, [waterGroups]);
 
-  const pickerItemsForGroup = useCallback(
-    (group: string): CatalogModel[] => {
-      if (group === "Hydrilla") return MODEL_CATALOG.filter((m) => m.group === "Hydrilla");
-      const raw = waterPickerModels.filter((m) => m.group === group);
-      const visible = pickerVisibleIds(enabledWaterIds, selectedModel);
-      const q = modelSearch.trim().toLowerCase();
-      return raw.filter((m) => {
-        if (!visible.has(m.id)) return false;
-        if (!q) return true;
-        return m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
-      });
-    },
-    [waterPickerModels, enabledWaterIds, modelSearch, selectedModel]
-  );
-
-  const orderedModelGroups = useMemo(() => {
-    const waterNames = [...new Set(waterPickerModels.map((m) => m.group))];
-    const unlocked: string[] = [];
-    const locked: string[] = [];
-    for (const group of waterNames) {
-      const items = pickerItemsForGroup(group);
-      const anyUnlocked = items.some((opt) => providerKeyOk(opt.provider));
-      if (anyUnlocked) unlocked.push(group);
-      else locked.push(group);
-    }
-    return ["Hydrilla", ...unlocked, ...locked];
-  }, [pickerItemsForGroup, providerKeyOk, waterPickerModels]);
-
   const modelTypeLabel: Record<string, string> = Object.fromEntries([
     ...MODEL_CATALOG.map((m) => [m.id, m.label] as const),
     ...waterPickerModels.map((m) => [m.id, m.label] as const),
   ]);
-    const formatGenerationType = useCallback((value?: string | null): string => {
-    return formatEngineLabel(value);
-  }, []);
   const is3DGenerationType = useCallback((value?: string | null): boolean => {
     if (!value) return false;
     const normalized = value.replace(/_/g, " ").toLowerCase();
@@ -829,65 +811,65 @@ function WorkspacePage() {
     return job.status === "RUN" || job.status === "WAIT";
   }, [is3DGenerationType, isWaterJobFn, hasRealFactoryCode]);
 
-  // 3D viewer options (Environment, Material, lighting intensity/brightness)
-  const [envLighting, setEnvLighting] = useState<"studio" | "outdoor" | "neutral">("studio");
-  const [lightingDropdownOpen, setLightingDropdownOpen] = useState(false);
-  const [roughnessDropdownOpen, setRoughnessDropdownOpen] = useState(false);
-  const [wireframeMode, setWireframeMode] = useState(false);
-  const [lightIntensity, setLightIntensity] = useState(1); // 0.3–2, default 1
-  const [brightness, setBrightness] = useState(1);         // 0.5–2, tone mapping exposure
-  const [envBackground, setEnvBackground] = useState(true);
-  const [envGrid, setEnvGrid] = useState(false);
-  const [envShadow, setEnvShadow] = useState(true);
-  const [envAutoRotate, setEnvAutoRotate] = useState(false);
-  const [materialType, setMaterialType] = useState<"standard" | "matcap" | "toon" | "lambert" | "normal">("standard");
-  const [materialRoughness, setMaterialRoughness] = useState<"smooth" | "medium" | "rough">("medium");
+  const [look, setLook] = useState<ViewerLook>(DEFAULT_VIEWER_LOOK);
+  const updateLook = useCallback((patch: Partial<ViewerLook>) => setLook((prev) => applyLookPatch(prev, patch)), []);
+
+  const activeWaterJobId = centerView.type === "code" ? centerView.jobId : null;
+  const activeWaterJobRef = useRef(activeWaterJobId);
+  activeWaterJobRef.current = activeWaterJobId;
+  const waterSceneForJob = waterScene && waterScene.jobId === activeWaterJobId ? waterScene : null;
+  const savedParts = useMemo(
+    () => sanitizePartMaterials(waterSceneForJob?.instance?.partMaterials),
+    [waterSceneForJob]
+  );
+  const effectiveParts = useMemo(() => ({ ...savedParts, ...partEdits }), [savedParts, partEdits]);
+  const selectedPartMaterial: PartMaterial | null = selectedPart
+    ? { ...DEFAULT_PART_MATERIAL, ...authoredParts[selectedPart], ...effectiveParts[selectedPart] }
+    : null;
+
+  const handleViewerParts = useCallback((parts: PartMaterialMap) => {
+    setAuthoredParts(parts);
+    setSelectedPart((prev) => (prev && parts[prev] ? prev : Object.keys(parts)[0] ?? null));
+  }, []);
+
+  const savePartMaterial = useKeyedDebounce<{ jobId: string; name: string; material: PartMaterial }>(
+    (_key, { jobId, name, material }) => {
+      void patchWaterScene({
+        jobId,
+        op: "material",
+        name,
+        material,
+        getToken: async () => (await getToken()) ?? null,
+      })
+        .then((scene) => {
+          if (scene && activeWaterJobRef.current === jobId) setWaterScene(scene);
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : "Could not save part material");
+        });
+    },
+    250
+  );
+
+  const handlePartMaterial = (patch: Partial<PartMaterial>) => {
+    if (!selectedPart || !selectedPartMaterial) return;
+    const color = patch.color == null ? selectedPartMaterial.color : toHexColor(patch.color);
+    if (!color) return;
+    const next: PartMaterial = { ...selectedPartMaterial, ...patch, color };
+    setPartEdits((prev) => ({ ...prev, [selectedPart]: next }));
+    if (activeWaterJobId) {
+      savePartMaterial(`${activeWaterJobId}:${selectedPart}`, { jobId: activeWaterJobId, name: selectedPart, material: next });
+    }
+  };
   const [numGenerations, setNumGenerations] = useState(1);
 
-  // Prompt history (localStorage); max 20 entries, newest first
-  const PROMPT_HISTORY_KEY = "hydrilla-prompt-history";
-  const [promptHistory, setPromptHistory] = useState<string[]>([]);
-  const [historyDropdownOpen, setHistoryDropdownOpen] = useState(false);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PROMPT_HISTORY_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
-          setPromptHistory(parsed.slice(0, 20));
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
+  const historyJobs = useMemo(() => [...libraryImages, ...library3DAssets], [libraryImages, library3DAssets]);
+  const promptHistory = usePromptHistory(workspaceId, historyJobs);
 
   useEffect(() => {
     if (isSignedIn && workspaceId) refreshCredits();
   }, [isSignedIn, workspaceId, refreshCredits]);
-
-  const savePromptToHistory = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setPromptHistory((prev) => {
-      const next = [trimmed, ...prev.filter((p) => p !== trimmed)].slice(0, 20);
-      try {
-        localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(next));
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  }, []);
-
-  // When lighting preset changes, set suggested intensity/brightness (HDRI-style defaults)
-  useEffect(() => {
-    const presets = { neutral: [1, 1], studio: [1.2, 1.15], outdoor: [1.4, 1.25] } as const;
-    const [int, bri] = presets[envLighting];
-    setLightIntensity(int);
-    setBrightness(bri);
-  }, [envLighting]);
 
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
   const libraryPanelRef = useRef<HTMLElement>(null);
@@ -897,7 +879,7 @@ function WorkspacePage() {
   const [leftLibraryTab, setLeftLibraryTab] = useState<"images" | "3d">("images");
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [fullView, setFullView] = useState(false);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(300);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(280);
   const [resizingLeft, setResizingLeft] = useState(false);
   const resizeStartRef = useRef({ x: 0, leftW: 0 });
 
@@ -909,7 +891,7 @@ function WorkspacePage() {
 
   const MIN_PANEL = 200;
   const MAX_LEFT = 500;
-  const RIGHT_PANEL_WIDTH = 320; // fixed width, not resizable; collapse gives more space to viewer
+  const RIGHT_PANEL_WIDTH = 280; // fixed width, not resizable; collapse gives more space to viewer
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -1484,8 +1466,6 @@ function WorkspacePage() {
         model: selectedModel,
         provider,
         mode: referenceImageUrl ? "image_to_code" : "text_to_code",
-        skillId: selectedWaterSkill,
-        qualityTier: selectedQualityTier,
       });
       // Legacy event name kept for historical PostHog charts
       track("code_sculpt_started", {
@@ -1524,8 +1504,13 @@ function WorkspacePage() {
           imageUrl: referenceImageUrl,
           workspaceId,
           parentJobId: parentId,
-          skillId: selectedWaterSkill,
-          qualityTier: selectedQualityTier,
+          qualityTier: waterQualityTier,
+          factoryCode:
+            parentId && centerView.type === "code" && centerView.jobId === parentId
+              ? centerView.factoryCode
+              : parentId && codeFactoryCode
+                ? codeFactoryCode
+                : undefined,
           getToken: tokenGetter,
         });
 
@@ -1566,9 +1551,7 @@ function WorkspacePage() {
         refreshLibrary();
 
         const poll = async () => {
-          const maxAttempts = Math.ceil(
-            WATER_POLL_MAX_MS[selectedQualityTier] / WATER_POLL_INTERVAL_MS
-          );
+          const maxAttempts = Math.ceil(WATER_POLL_MAX_MS / WATER_POLL_INTERVAL_MS);
           for (let i = 0; i < maxAttempts; i++) {
             if (pollGen !== waterPollGenRef.current) return;
             await new Promise((r) => setTimeout(r, WATER_POLL_INTERVAL_MS));
@@ -1580,26 +1563,35 @@ function WorkspacePage() {
               if (job.status === "DONE" && job.factoryCode) {
                 setCodeFactoryCode(job.factoryCode);
                 setCodeSculptPass(job.sculptPass || "done");
-                setWaterTokenInfo({
-                  inputTokens: job.llmInputTokens,
-                  outputTokens: job.llmOutputTokens,
-                  totalTokens: job.llmTotalTokens,
-                  model: job.llmModel,
-                });
+                if (job.scene) setWaterScene(job.scene);
                 setCurrentGenerating(null);
                 setCenterView({ type: "code", factoryCode: job.factoryCode, jobId: result.job_id });
                 setMobileTab("canvas");
                 setMobileGeneratedToast(true);
                 setSelectedJobInfo((prev) =>
                   prev && prev.id === result.job_id
-                    ? { ...prev, status: "DONE", sculptPass: job.sculptPass || "done", hasFactoryCode: true }
+                    ? {
+                        ...prev,
+                        status: "DONE",
+                        sculptPass: job.sculptPass || "done",
+                        hasFactoryCode: true,
+                        durationMs: job.durationMs,
+                        visualEvidence: job.visualEvidence,
+                      }
                     : prev
                 );
                 setLibrary3DAssets((prev) =>
                   applyCodeThumbs(
                     prev.map((j) =>
                       j.id === result.job_id
-                        ? { ...j, status: "DONE" as const, hasFactoryCode: true, sculptPass: job.sculptPass || "done" }
+                        ? {
+                            ...j,
+                            status: "DONE" as const,
+                            hasFactoryCode: true,
+                            sculptPass: job.sculptPass || "done",
+                            durationMs: job.durationMs,
+                            visualEvidence: job.visualEvidence,
+                          }
                         : j
                     )
                   )
@@ -1615,7 +1607,9 @@ function WorkspacePage() {
                   message: job.errorMessage || "Water failed",
                 });
                 setSelectedJobInfo((prev) =>
-                  prev && prev.id === result.job_id ? { ...prev, status: "FAIL", errorMessage: job.errorMessage } : prev
+                  prev && prev.id === result.job_id
+                    ? { ...prev, status: "FAIL", errorMessage: job.errorMessage, durationMs: job.durationMs }
+                    : prev
                 );
                 setLibrary3DAssets((prev) =>
                   prev.map((j) => (j.id === result.job_id ? { ...j, status: "FAIL" as const } : j))
@@ -1674,8 +1668,6 @@ function WorkspacePage() {
     [
       hasWorkspaceContext,
       selectedModel,
-      selectedWaterSkill,
-      selectedQualityTier,
       providerKeyOk,
       prompt,
       getToken,
@@ -1684,6 +1676,9 @@ function WorkspacePage() {
       addPendingJob,
       removePendingJob,
       refreshLibrary,
+      waterQualityTier,
+      centerView,
+      codeFactoryCode,
     ]
   );
 
@@ -1881,7 +1876,6 @@ function WorkspacePage() {
       setError("Please create a workspace first");
       return;
     }
-    if (prompt.trim()) savePromptToHistory(prompt);
     if (!thenGenerate3D) {
       setLastPreviewImageUrl(null);
       setLastPreviewId(null);
@@ -2381,15 +2375,25 @@ function WorkspacePage() {
   // ──────────── Generation Info helpers ────────────
   const loadJobInfo = useCallback(async (job: BackendJob) => {
     setSelectedJobInfo(job);
-    setGenInfoExpanded(true);
-    // Fetch lineage in background
-    try {
-      const lineage = await fetchJobLineage(job.id, getToken);
-      setJobLineage(lineage);
-    } catch {
-      setJobLineage([]);
+    if (isWaterJobFn(job)) {
+      try {
+        const cs = await fetchWaterJob(job.id, async () => (await getToken()) ?? null);
+        setSelectedJobInfo((prev) =>
+          prev && prev.id === job.id
+            ? {
+                ...prev,
+                durationMs: cs.durationMs ?? prev.durationMs,
+                visualEvidence: cs.visualEvidence ?? prev.visualEvidence,
+                hasFactoryCode: Boolean(cs.factoryCode) || prev.hasFactoryCode,
+              }
+            : prev
+        );
+        if (cs.scene) setWaterScene(cs.scene);
+      } catch {
+        /* Details still shows the library row */
+      }
     }
-  }, [getToken]);
+  }, [getToken, isWaterJobFn]);
 
   // ──────────── Library click handlers ────────────
   const handleImageClick = (job: BackendJob) => {
@@ -2505,9 +2509,7 @@ function WorkspacePage() {
         // Resume poll
         void (async () => {
           const tokenGetter = async () => (await getToken()) ?? null;
-          const maxAttempts = Math.ceil(
-            WATER_POLL_MAX_MS.studio / WATER_POLL_INTERVAL_MS
-          );
+          const maxAttempts = Math.ceil(WATER_POLL_MAX_MS / WATER_POLL_INTERVAL_MS);
           for (let i = 0; i < maxAttempts; i++) {
             if (pollGen !== waterPollGenRef.current) return;
             await new Promise((r) => setTimeout(r, WATER_POLL_INTERVAL_MS));
@@ -2525,13 +2527,27 @@ function WorkspacePage() {
                 setMobileGeneratedToast(true);
                 setSelectedJobInfo((prev) =>
                   prev && prev.id === job.id
-                    ? { ...prev, status: "DONE", sculptPass: cs.sculptPass, hasFactoryCode: true }
+                    ? {
+                        ...prev,
+                        status: "DONE",
+                        sculptPass: cs.sculptPass,
+                        hasFactoryCode: true,
+                        durationMs: cs.durationMs,
+                        visualEvidence: cs.visualEvidence,
+                      }
                     : prev
                 );
                 setLibrary3DAssets((prev) =>
                   prev.map((j) =>
                     j.id === job.id
-                      ? { ...j, status: "DONE" as const, hasFactoryCode: true, sculptPass: cs.sculptPass }
+                      ? {
+                          ...j,
+                          status: "DONE" as const,
+                          hasFactoryCode: true,
+                          sculptPass: cs.sculptPass,
+                          durationMs: cs.durationMs,
+                          visualEvidence: cs.visualEvidence,
+                        }
                       : j
                   )
                 );
@@ -2542,7 +2558,9 @@ function WorkspacePage() {
                 setLoading(false);
                 setCenterView({ type: "error", message: cs.errorMessage || "Water failed" });
                 setSelectedJobInfo((prev) =>
-                  prev && prev.id === job.id ? { ...prev, status: "FAIL" } : prev
+                  prev && prev.id === job.id
+                    ? { ...prev, status: "FAIL", durationMs: cs.durationMs }
+                    : prev
                 );
                 return;
               }
@@ -2590,12 +2608,6 @@ function WorkspacePage() {
         void (async () => {
           try {
             const cs = await fetchWaterJob(job.id, async () => (await getToken()) ?? null);
-            setWaterTokenInfo({
-              inputTokens: cs.llmInputTokens,
-              outputTokens: cs.llmOutputTokens,
-              totalTokens: cs.llmTotalTokens,
-              model: cs.llmModel,
-            });
             if (cs.sculptPass) setCodeSculptPass(cs.sculptPass);
           } catch {
             /* ignore */
@@ -2616,12 +2628,6 @@ function WorkspacePage() {
           if (cs.factoryCode) {
             setCodeFactoryCode(cs.factoryCode);
             setCodeSculptPass(cs.sculptPass);
-            setWaterTokenInfo({
-              inputTokens: cs.llmInputTokens,
-              outputTokens: cs.llmOutputTokens,
-              totalTokens: cs.llmTotalTokens,
-              model: cs.llmModel,
-            });
             setCurrentGenerating(null);
             setLoading(false);
             setCenterView({ type: "code", factoryCode: cs.factoryCode, jobId: job.id });
@@ -2698,66 +2704,6 @@ function WorkspacePage() {
     [isWaterJobFn, handle3DClick]
   );
 
-  /** Build minimal BackendJob from LineageItem for loadJobInfo / handle3DClick */
-  const lineageItemToJob = useCallback((item: LineageItem): BackendJob => ({
-    id: item.id,
-    userId: null,
-    status: (item.status as BackendJob["status"]) || "DONE",
-    prompt: item.prompt ?? null,
-    imageUrl: null,
-    generateType: item.generateType || "Normal",
-    resultGlbUrl: item.resultGlbUrl ?? null,
-    previewImageUrl: item.previewImageUrl ?? null,
-    errorMessage: null,
-    createdAt: item.createdAt,
-    updatedAt: item.createdAt,
-    parentJobId: item.parentJobId ?? null,
-    parentJobIds: item.parentJobIds ?? [],
-    sourceImages: item.sourceImages ?? null,
-  }), []);
-
-  /** Click a lineage step: show in center (3D or preview) and allow "continue from here" */
-  const handleLineageStepClick = useCallback((item: LineageItem) => {
-    const job = lineageItemToJob(item);
-    if (item.resultGlbUrl) {
-      handle3DClick(job);
-      return;
-    }
-    const imageUrl = item.previewImageUrl ?? (item as { imageUrl?: string }).imageUrl;
-    if (imageUrl) {
-      setLastPreviewImageUrl(imageUrl);
-      setLastPreviewId(item.id);
-      setCurrentParentJobId(item.id);
-      setLeftLibraryTab("images");
-      setCenterView({ type: "preview", imageUrl, previewId: item.id });
-      if (inputMode === "image") {
-        setModeStates((prev) => ({
-          ...prev,
-          image: {
-            ...prev.image,
-            image1: imageUrl,
-            file1: null,
-            jobId1: item.id,
-            prompt: "",
-          },
-        }));
-      } else {
-        setInputMode("text_1img");
-        setModeStates((prev) => ({
-          ...prev,
-          text_1img: {
-            ...prev.text_1img,
-            image1: imageUrl,
-            file1: null,
-            jobId1: item.id,
-            prompt: prev.text_1img.prompt ?? "",
-          },
-        }));
-      }
-    }
-    loadJobInfo(job);
-  }, [lineageItemToJob, loadJobInfo, inputMode]);
-
   // ──────────── Filtered library ────────────
   // Merge optimistic pending entries with server jobs. Pendings appear first so the
   // loader shows immediately on user action, and stay visible until the server returns
@@ -2773,7 +2719,137 @@ function WorkspacePage() {
     (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleSelectInputMode = (mode: InputMode) => {
+    if (mode === "text") {
+      setInputMode("text");
+      return;
+    }
+    if (mode === "image") {
+      if (selectedIsCode) return;
+      setInputMode("image");
+      return;
+    }
+    if (mode === "text_2img") {
+      if (selectedIsCode || !combineAvailable) return;
+      setInputMode("text_2img");
+      return;
+    }
+    if (selectedIsCode) {
+      setInputMode("text_1img");
+      let parentId: string | null =
+        (centerView.type === "code" ? centerView.jobId : null) ||
+        waterEditTargetJobId ||
+        (selectedJobInfo && isWaterJobFn(selectedJobInfo) ? selectedJobInfo.id : null);
+      if (!parentId) {
+        const recent = library3DAssets.find(
+          (j) => (isWaterJobFn(j) || isWaterJobId(j.id)) && j.status === "DONE" && hasRealFactoryCode(j)
+        );
+        parentId = recent?.id ?? null;
+      }
+      if (!parentId) {
+        setError("Open or select a Water model to edit first");
+        return;
+      }
+      setWaterEditTargetJobId(parentId);
+      setError(null);
+      if (centerView.type !== "code" || centerView.jobId !== parentId) {
+        const job =
+          library3DAssets.find((j) => j.id === parentId) ||
+          (selectedJobInfo?.id === parentId ? selectedJobInfo : null);
+        if (job) {
+          handle3DClick(job);
+        } else {
+          setCenterView({
+            type: "generating",
+            progress: 40,
+            message: "Loading Water model…",
+          });
+          void (async () => {
+            try {
+              const cs = await fetchWaterJob(parentId!, async () => (await getToken()) ?? null);
+              if (cs.factoryCode) {
+                setCodeFactoryCode(cs.factoryCode);
+                if (cs.sculptPass) setCodeSculptPass(cs.sculptPass);
+                setCurrentGenerating(null);
+                setLoading(false);
+                setCenterView({
+                  type: "code",
+                  factoryCode: cs.factoryCode,
+                  jobId: parentId!,
+                });
+              } else {
+                setCenterView({
+                  type: "error",
+                  message: "Water model is not ready to edit yet",
+                });
+              }
+            } catch {
+              setCenterView({
+                type: "error",
+                message: "Could not load Water model",
+              });
+            }
+          })();
+        }
+      }
+      return;
+    }
+    if (editAvailable) setInputMode("text_1img");
+  };
+
+  const handleSelectModel = (id: ModelId, option: CatalogModel) => {
+    setSelectedModel(id);
+    if (option.provider !== "hydrilla") {
+      void (async () => {
+        try {
+          const tokenGetter = async () => (await getToken()) ?? null;
+          await saveUserModelPrefs({ defaultCodeModel: id }, tokenGetter);
+        } catch {
+          /* session selection still works */
+        }
+      })();
+    }
+  };
+
+  const handleChatGenerate = () => {
+    if (selectedIsCode) {
+      void runWaterFromPanel();
+    } else if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
+      void handleGenerate3D();
+    } else {
+      void handleGenerateImage();
+    }
+    // Handlers above capture `prompt` synchronously, so the composer can reset right away.
+    if (prompt.trim() && hasWorkspaceContext) {
+      promptHistory.record(prompt, selectedIsCode ? "water" : "cloud");
+      setPrompt("");
+    }
+  };
+
   const isGenerating = loading || generatingPreview || (currentGenerating?.status === "generating");
+  const chatCostLabel = selectedIsCode
+    ? "Water · 0 credits"
+    : `${
+        inputMode === "text_2img" && prompt.trim()
+          ? 4
+          : inputMode === "text_1img" && prompt.trim()
+            ? 3
+            : inputMode === "text" || (inputMode !== "image" && prompt.trim().length > 0 && (image1 || image2))
+              ? CREDITS_IMAGE
+              : CREDITS_3D
+      } / ${creditsLoading ? "…" : creditsTotal} credits`;
+  const chatGenerateLabel = selectedIsCode
+    ? inputMode === "text_1img"
+      ? "Refine with Water"
+      : "Generate with Water"
+    : inputMode === "image"
+      ? "Generate 3D"
+      : "Generate";
+  const waterEditParentId = resolveWaterEditParentId();
+  const waterEditParentJob =
+    (waterEditParentId && library3DAssets.find((j) => j.id === waterEditParentId)) ||
+    (waterEditParentId && selectedJobInfo?.id === waterEditParentId ? selectedJobInfo : null) ||
+    null;
   const mobileCanvasGenerating =
     centerView.type === "generating" ||
     Boolean(
@@ -2810,17 +2886,14 @@ function WorkspacePage() {
 
   if (resolvingWorkspace) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#fafafa]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-neutral-200 border-t-neutral-800 rounded-full animate-spin" />
-          <p className="text-sm text-neutral-500">Loading workspace…</p>
-        </div>
+      <div className="flex h-screen items-center justify-center bg-white">
+        <StudioOrb state="connecting" size={64} />
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#fafafa] text-neutral-950 font-dm-sans">
+    <div className="h-screen flex flex-col overflow-hidden bg-white text-neutral-950 font-dm-sans">
       {/* No top navbar — left nav in left sidebar, right nav (name, My Library, profile, collapse) in right sidebar */}
 
       {/* New Workspace name modal */}
@@ -2881,75 +2954,6 @@ function WorkspacePage() {
         </div>
       )}
 
-      {/* Lineage item preview popup — click Creation Lineage step to preview; Select shows in main view */}
-      {lineagePreviewItem && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-4"
-          onClick={() => setLineagePreviewItem(null)}
-        >
-          <div
-            className="bg-white/95 backdrop-blur-xl rounded-[22px] shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] border border-neutral-200/60 max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-3.5 border-b border-neutral-100/80 flex items-center justify-between">
-              <span className="text-[13px] font-semibold tracking-tight text-neutral-900 capitalize">
-                {lineagePreviewItem.generateType?.replace(/_/g, " ") || "Image"}
-                {lineagePreviewItem.resultGlbUrl && " · 3D"}
-              </span>
-              <button
-                type="button"
-                onClick={() => setLineagePreviewItem(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors"
-                aria-label="Close"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="flex-1 min-h-0 overflow-auto p-5 flex flex-col items-center">
-              {lineagePreviewItem.previewImageUrl ? (
-                <img
-                  src={displayImageUrl(lineagePreviewItem.previewImageUrl)}
-                  alt="Preview"
-                  className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-2xl border border-neutral-200/80 bg-neutral-50"
-                />
-              ) : lineagePreviewItem.resultGlbUrl && lineagePreviewItem.sourceImages?.[0] ? (
-                <img
-                  src={displayImageUrl(lineagePreviewItem.sourceImages[0])}
-                  alt="Source"
-                  className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-2xl border border-neutral-200/80 bg-neutral-50"
-                />
-              ) : (
-                <div className="w-48 h-48 rounded-2xl border border-neutral-200 bg-neutral-50 flex items-center justify-center">
-                  <svg className="w-10 h-10 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
-                </div>
-              )}
-              {lineagePreviewItem.prompt && (
-                <p className="text-[13px] text-neutral-500 mt-4 text-center line-clamp-2 w-full" title={lineagePreviewItem.prompt}>{lineagePreviewItem.prompt}</p>
-              )}
-            </div>
-            <div className="p-4 border-t border-neutral-100/80 flex gap-2.5">
-              <button
-                type="button"
-                onClick={() => setLineagePreviewItem(null)}
-                className="flex-1 h-10 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-full hover:bg-neutral-200 transition-colors"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleLineageStepClick(lineagePreviewItem);
-                  setLineagePreviewItem(null);
-                }}
-                className="flex-1 h-10 text-sm font-semibold text-white bg-neutral-900 rounded-full hover:bg-neutral-800 transition-colors"
-              >
-                Select
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Compact-only: top bar — back + name + tools (phones + tablets) */}
       <header className="lg:hidden flex items-center justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 border-b border-neutral-200 bg-white shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -2971,15 +2975,7 @@ function WorkspacePage() {
           <div className="hidden min-[400px]:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800" title="Credits remaining">
             <svg className="w-3.5 h-3.5 shrink-0 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span className="text-[12px] font-semibold tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
-          </div>
-          <Link
-            href="/rigging"
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
-            aria-label="3D Rigging"
-            title="3D Rigging"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.5-6.5L17 8m-10 8l-2.5 2.5M20.5 18.5L18 16M5.5 5.5L8 8" /><circle cx="12" cy="12" r="2" /></svg>
-          </Link>
+            </div>
           <Link
             href="/generations"
             className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
@@ -2994,7 +2990,7 @@ function WorkspacePage() {
       {/* Compact: large generating card on Create tab */}
       {mobileTab === "create" && mobileCanvasGenerating && (
         <div
-          className="lg:hidden fixed inset-x-0 z-[35] flex items-center justify-center px-4 pointer-events-auto bg-black/25"
+          className="lg:hidden fixed inset-x-0 z-[35] flex items-center justify-center px-4 pointer-events-none"
           style={{
             top: "calc(3.75rem + env(safe-area-inset-top, 0px))",
             bottom: "calc(5rem + env(safe-area-inset-bottom, 0px))",
@@ -3003,8 +2999,8 @@ function WorkspacePage() {
           aria-live="polite"
           aria-busy="true"
         >
-          <div className="w-full max-w-sm min-h-[min(48vh,300px)] rounded-[28px] bg-white text-neutral-900 shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] flex flex-col items-center justify-center gap-5 px-8 py-10 mx-auto border border-neutral-200">
-            <div className="w-12 h-12 border-2 border-neutral-200 border-t-neutral-900 rounded-full animate-spin shrink-0" />
+          <div className="flex flex-col items-center justify-center gap-5 px-8 py-10 mx-auto">
+            <StudioOrb state="weaving" size={64} />
             <div className="text-center space-y-1.5">
               <p className="text-[15px] font-semibold leading-snug tracking-tight">{mobileGeneratingMessage}</p>
               <p className="text-sm text-neutral-500 tabular-nums">{Math.round(mobileGeneratingProgress)}%</p>
@@ -3034,7 +3030,7 @@ function WorkspacePage() {
           type="button"
           onClick={() => setLeftPanelOpen(true)}
           className={cn(
-            "absolute left-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-r-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] lg:flex",
+            "absolute left-4 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-2xl border border-neutral-200/60 bg-white px-2.5 py-4 text-neutral-700 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.14)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] lg:flex",
             leftPanelOpen
               ? "pointer-events-none -translate-x-2 opacity-0"
               : "pointer-events-auto translate-x-0 opacity-100"
@@ -3055,12 +3051,13 @@ function WorkspacePage() {
             minWidth: leftPanelOpen ? leftPanelWidth : 0,
             transition: resizingLeft
               ? "none"
-              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1)",
+              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease",
           }}
           className={cn(
-            "flex shrink-0 flex-col overflow-hidden border-r border-neutral-200/70 bg-white will-change-[width]",
+            "flex shrink-0 flex-col overflow-hidden border border-neutral-200/60 bg-white will-change-[width]",
             "max-lg:hidden",
-            !leftPanelOpen && "border-transparent"
+            "lg:absolute lg:bottom-4 lg:left-4 lg:top-4 lg:z-30 lg:rounded-[26px] lg:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.14)]",
+            !leftPanelOpen && "border-transparent lg:pointer-events-none lg:opacity-0"
           )}
         >
           {/* Fixed inner width keeps content from reflowing while the panel animates */}
@@ -3071,33 +3068,21 @@ function WorkspacePage() {
             <Link href="/app/studio" className="text-[17px] font-semibold text-neutral-900 tracking-[-0.03em] shrink-0 hover:opacity-70 transition-opacity">
               Hydrilla
             </Link>
-            <Button
-              type="button"
-              onClick={() => { setNewWorkspaceName(""); setShowNewWorkspaceModal(true); }}
-              variant="ghost"
-              size="sm"
-              className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium"
-              title="New Workspace"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              <span>New</span>
-            </Button>
-          </div>
-          <div className="hidden lg:flex px-3 py-3 border-b border-neutral-200/60 items-center gap-2">
-            <Button type="button" onClick={() => setLeftPanelOpen(false)} variant="ghost" size="sm" className="h-9 w-9 shrink-0 rounded-full p-0" title="Close library" aria-label="Close library panel">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </Button>
-            <div className="relative flex-1 min-w-0">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <Input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search"
-                className="h-9 rounded-full bg-neutral-50/80 border-neutral-200/80 pl-9 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/[0.04]"
-              />
+            <div className="flex items-center gap-0.5">
+              <Button
+                type="button"
+                onClick={() => { setNewWorkspaceName(""); setShowNewWorkspaceModal(true); }}
+                variant="ghost"
+                size="sm"
+                className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium"
+                title="New Workspace"
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+                <span>New</span>
+              </Button>
+              <Button type="button" onClick={() => setLeftPanelOpen(false)} variant="ghost" size="sm" className="h-8 w-8 shrink-0 rounded-full p-0" title="Close library" aria-label="Close library panel">
+                <PanelLeftClose className="h-4 w-4" strokeWidth={2} />
+              </Button>
             </div>
           </div>
           {/* Tab bar — Images | 3D */}
@@ -3133,7 +3118,7 @@ function WorkspacePage() {
                   leftLibraryTab === "images" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
                 )}
               >
-                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                <ImageIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                 <span>Images</span>
               </Button>
               <Button
@@ -3152,7 +3137,7 @@ function WorkspacePage() {
                   leftLibraryTab === "3d" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
                 )}
               >
-                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
+                <Box className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                 <span>3D</span>
               </Button>
             </div>
@@ -3189,10 +3174,10 @@ function WorkspacePage() {
                           e.dataTransfer.effectAllowed = "copy";
                         }}
                         onClick={() => handleImageClick(item)}
-                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center justify-center"
+                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-400 transition-colors duration-150 cursor-pointer bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center justify-center active:scale-[0.98]"
                       >
                         {(item.previewImageUrl || item.imageUrl) ? (
-                          <img src={displayImageUrl(item.previewImageUrl || item.imageUrl)} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none transition-transform duration-500 group-hover/card:scale-[1.03]" />
+                          <img src={displayImageUrl(item.previewImageUrl || item.imageUrl)} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
                         ) : (
                           <span className="text-neutral-500 text-[10px] text-center px-1 truncate max-w-full font-medium">{item.prompt || "Image"}</span>
                         )}
@@ -3249,14 +3234,14 @@ function WorkspacePage() {
                           e.dataTransfer.effectAllowed = "copy";
                         }}
                         onClick={() => handle3DClick(item)}
-                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer bg-neutral-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-left"
+                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-400 transition-colors duration-150 cursor-pointer bg-neutral-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-left active:scale-[0.98]"
                       >
                         {item.previewImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={displayImageUrl(item.previewImageUrl)}
                             alt={item.prompt || "3D Asset"}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-[1.03]"
+                            className="w-full h-full object-cover"
                           />
                         ) : isWaterJobFn(item) ? (
                           <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-neutral-50 to-neutral-100 text-neutral-300">
@@ -3302,6 +3287,18 @@ function WorkspacePage() {
             )}
             </div>
           </ScrollArea>
+          <div className="hidden lg:block shrink-0 border-t border-neutral-200/60 px-3 py-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" strokeWidth={2} />
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search…"
+                className="h-9 rounded-full border-neutral-200/80 bg-neutral-50/80 pl-9 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/[0.04]"
+              />
+            </div>
+          </div>
             </div>
             {/* Left resize handle — desktop only */}
             {leftPanelOpen && (
@@ -3320,21 +3317,127 @@ function WorkspacePage() {
         </aside>
 
         {/* Center - Preview / 3D / generating; on mobile: visible only when Canvas tab */}
-        <main className={cn("flex-1 flex flex-col min-w-0 min-h-0 bg-[#fafafa] overflow-y-auto", mobileTab === "canvas" ? "max-lg:flex" : "max-lg:hidden")}>
+        <main className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white", mobileTab === "canvas" ? "max-lg:flex" : "max-lg:hidden")}>
+          {(centerView.type === "3d" || centerView.type === "code") && (
+            <div
+              className="pointer-events-none absolute top-4 z-[25] hidden items-center justify-center lg:flex"
+              style={{
+                left: leftPanelOpen ? leftPanelWidth + 32 : 16,
+                right: rightPanelOpen ? RIGHT_PANEL_WIDTH + 32 : 16,
+                transition: resizingLeft
+                  ? "none"
+                  : "left 150ms cubic-bezier(0.22, 1, 0.36, 1), right 150ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            >
+              <div className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-neutral-200/70 bg-white px-1.5 py-1 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
+                {centerView.type === "3d" ? (
+                  <>
+                    <button
+                      type="button"
+                      title={look.grid ? "Hide grid" : "Show grid"}
+                      aria-label="Grid"
+                      onClick={() => updateLook({ grid: !look.grid })}
+                      className={cn("flex h-8 w-8 items-center justify-center rounded-full", look.grid ? "bg-neutral-950 text-white" : "text-neutral-500 hover:bg-neutral-100")}
+                    >
+                      <Grid3x3 className="h-4 w-4" strokeWidth={1.85} />
+                    </button>
+                    <button
+                      type="button"
+                      title={look.autoRotate ? "Pause rotation" : "Auto rotate"}
+                      aria-label="Auto rotate"
+                      onClick={() => updateLook({ autoRotate: !look.autoRotate })}
+                      className={cn("flex h-8 w-8 items-center justify-center rounded-full", look.autoRotate ? "bg-neutral-950 text-white" : "text-neutral-500 hover:bg-neutral-100")}
+                    >
+                      <RotateCw className="h-4 w-4" strokeWidth={1.85} />
+                    </button>
+                    <button
+                      type="button"
+                      title={look.wireframe ? "Wireframe on" : "Wireframe"}
+                      aria-label="Wireframe"
+                      onClick={() => updateLook({ wireframe: !look.wireframe })}
+                      className={cn("flex h-8 w-8 items-center justify-center rounded-full", look.wireframe ? "bg-neutral-950 text-white" : "text-neutral-500 hover:bg-neutral-100")}
+                    >
+                      <Box className="h-4 w-4" strokeWidth={1.85} />
+                    </button>
+                    <span className="mx-1 h-4 w-px bg-neutral-200" />
+                    <button
+                      type="button"
+                      title="Export GLB"
+                      aria-label="Export GLB"
+                      onClick={() => {
+                        track("model_downloaded", { format: "glb" });
+                        void downloadGlbWithAuth(
+                          centerView.glbUrl,
+                          `hydrilla-${centerView.jobId || "model"}.glb`,
+                          async () => (await getToken()) ?? null
+                        ).catch((err) => {
+                          console.error(err);
+                          alert(err instanceof Error ? err.message : "Failed to download model");
+                        });
+                      }}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-neutral-950 px-3 text-[12px] font-semibold text-white hover:bg-neutral-800"
+                    >
+                      <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                      Export
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    title="Export GLB"
+                    aria-label="Export GLB"
+                    onClick={() => {
+                      void waterViewerRef.current?.exportFormat("glb").then((result) => {
+                        if (result?.ok) track("model_downloaded", { format: "glb", engine: "water" });
+                      });
+                    }}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-neutral-950 px-3 text-[12px] font-semibold text-white hover:bg-neutral-800"
+                  >
+                    <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                    Export
+                  </button>
+                )}
+                <button
+                  type="button"
+                  title={fullView ? "Exit full view" : "Full view"}
+                  aria-label={fullView ? "Exit full view" : "Full view"}
+                  onClick={() => {
+                    if (fullView) {
+                      setFullView(false);
+                      setLeftPanelOpen(true);
+                      setRightPanelOpen(true);
+                    } else {
+                      setFullView(true);
+                      setLeftPanelOpen(false);
+                      setRightPanelOpen(false);
+                    }
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100"
+                >
+                  {fullView ? <Minimize2 className="h-4 w-4" strokeWidth={1.85} /> : <Maximize2 className="h-4 w-4" strokeWidth={1.85} />}
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0">
           {centerView.type === "empty" && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[20px] border border-neutral-200/80 bg-white text-neutral-400 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(0,0,0,0.12)]">
                 <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               </div>
-              <h2 className="mb-2 text-[26px] font-semibold tracking-[-0.03em] text-neutral-900">What will you create today?</h2>
-              <p className="mb-6 max-w-sm text-sm leading-6 text-neutral-500">Start with a text prompt, or choose an image from your library to edit or turn into 3D.</p>
+              <h2 className="mb-2 text-[26px] font-semibold tracking-[-0.03em] text-neutral-900">
+                {selectedIsCode ? "Build one great asset" : "What will you create today?"}
+              </h2>
+              <p className="mb-6 max-w-sm text-sm leading-6 text-neutral-500">
+                {selectedIsCode
+                  ? "Describe it in the composer below. Water builds the parts in sequence, then gives you direct control."
+                  : "Describe it in the composer below, or choose an image from your library to edit or turn into 3D."}
+              </p>
               <Button
                 type="button"
                 onClick={() => {
                   setFullView(false);
-                  setRightPanelOpen(true);
-                  setMobileTab("create");
-                  // Focus after the panel starts opening so the field is mounted/visible.
+                  setMobileTab("canvas");
                   requestAnimationFrame(() => {
                     requestAnimationFrame(() => promptTextareaRef.current?.focus());
                   });
@@ -3347,9 +3450,9 @@ function WorkspacePage() {
             </div>
           )}
 
-          {centerView.type === "preview" && !(currentGenerating && centerView.previewId === currentGenerating.jobId) && (
+          {centerView.type === "preview" && (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 min-h-0 flex items-center justify-center p-5 bg-[#fafafa]">
+            <div className="flex-1 min-h-0 flex items-center justify-center p-5 bg-white">
                 <div className="relative w-full max-w-full h-full max-h-full rounded-[24px] overflow-hidden border border-neutral-200/70 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.14)] bg-white flex items-center justify-center">
                   <img src={displayImageUrl(centerView.imageUrl)} alt="Preview" className="max-w-full max-h-full w-auto h-auto object-contain" />
                 </div>
@@ -3374,49 +3477,25 @@ function WorkspacePage() {
             </div>
           )}
 
+          {centerView.type === "generating" && <div className="flex-1 min-h-0 bg-white" />}
+
           {(centerView.type === "generating" ||
             (centerView.type === "preview" &&
               currentGenerating?.status === "generating" &&
               centerView.previewId === currentGenerating.jobId)) && (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 text-center">
-              <Card className="w-full max-w-md border-neutral-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_20px_48px_-20px_rgba(0,0,0,0.14)]">
-                <CardContent className="px-7 py-9 sm:px-9">
-                  <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50">
-                    <div className="h-6 w-6 rounded-full border-2 border-neutral-300 border-t-neutral-900 animate-spin" />
-                  </div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400 mb-2">
-                    {currentGenerating?.jobId?.startsWith("cs_") || selectedIsCode
-                      ? "Water"
-                      : "Hydrilla"}
-                  </p>
-                  <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-neutral-900 leading-snug">
-                    {centerView.type === "generating" ? centerView.message : "Generating 3D model…"}
-                  </h2>
+            <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center">
+              <StudioOrb state="weaving" size={64} />
+              <p className="mt-5 max-w-sm text-center text-[15px] font-medium tracking-tight text-neutral-800">
+                {centerView.type === "generating" ? centerView.message : "Generating 3D model…"}
+              </p>
                   {(currentGenerating?.jobId?.startsWith("wt_") ||
                     currentGenerating?.jobId?.startsWith("cs_") ||
                     selectedIsCode) && (
-                    <div className="mt-5 flex items-center justify-center gap-1.5 flex-wrap max-w-sm mx-auto">
-                      {(["assessment", "spec", ...passesForTier(selectedQualityTier), "done"] as string[]).map(
-                        (step, idx) => {
-                          const activeIdx = sculptPassIndex(
-                            codeSculptPass,
-                            passesForTier(selectedQualityTier)
-                          );
-                          const done = idx < activeIdx;
-                          const active = idx === activeIdx;
-                          return (
-                            <div
-                              key={step}
-                              className={cn(
-                                "h-1.5 rounded-full transition-all duration-500",
-                                active ? "w-8 bg-neutral-900" : done ? "w-4 bg-neutral-400" : "w-4 bg-neutral-200"
-                              )}
-                              title={sculptPassLabel(step)}
-                            />
-                          );
-                        }
-                      )}
-                    </div>
+                    <WaterPassRail
+                      tier={waterQualityTier}
+                      pass={codeSculptPass}
+                      className="mt-5 justify-center"
+                    />
                   )}
                   {currentGenerating?.status === "generating" &&
                     currentGenerating?.queueInfo &&
@@ -3437,16 +3516,16 @@ function WorkspacePage() {
                           )}
                       </p>
                     )}
-                  <div className="mt-6 space-y-2">
+                  <div className="mt-6 w-48 space-y-2">
                     <Progress
-                      className="h-1.5 w-full"
+                      className="h-1 w-full"
                       value={
                         centerView.type === "generating"
                           ? centerView.progress
                           : currentGenerating?.progress ?? 0
                       }
                     />
-                    <p className="text-[12px] tabular-nums text-neutral-500">
+                    <p className="text-center text-[12px] tabular-nums text-neutral-400">
                       {Math.round(
                         centerView.type === "generating"
                           ? centerView.progress
@@ -3462,7 +3541,6 @@ function WorkspacePage() {
                         if (!currentGenerating?.jobId) return;
                         const jobId = currentGenerating.jobId;
                         try {
-                          // Invalidate Water pollers so a late DONE cannot overwrite cancelled UI
                           waterPollGenRef.current += 1;
                           await cancelJob(jobId, () => getToken());
                           if (progressIntervalRef.current) {
@@ -3479,13 +3557,11 @@ function WorkspacePage() {
                           });
                         }
                       }}
-                      className="mt-6 h-9 px-4 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
+                      className="pointer-events-auto mt-6 h-9 px-4 text-sm font-medium text-neutral-500 hover:text-neutral-800"
                     >
-                      Cancel generation
+                      Cancel
                     </button>
                   )}
-                </CardContent>
-              </Card>
             </div>
           )}
 
@@ -3509,153 +3585,39 @@ function WorkspacePage() {
                 if (!droppedId) return;
                 const target = library3DAssets.find((j) => j.id === droppedId);
                 if (!target) {
-                  setError("Drop a Water job to edit");
+                  setError("Drop a Water asset from the library");
                   return;
                 }
-                setWaterEditMode(true);
-                setWaterEditPrompt("");
-                applyWaterEditParent(target);
+                handle3DClick(target);
               }}
             >
-              {/* Tokens stay top-left; Download controls top-right in WaterViewer; Edit CTA bottom-center */}
-              {waterTokenInfo && (waterTokenInfo.model || waterTokenInfo.totalTokens != null) && (
-                <div className="absolute top-3 left-3 z-[120] pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur border border-neutral-200/70 shadow-sm text-[11px] text-neutral-600 tabular-nums max-w-[min(100%-1.5rem,420px)]">
-                  <span className="font-medium text-neutral-800">Tokens</span>
-                  <span>
-                    in{" "}
-                    {waterTokenInfo.inputTokens && waterTokenInfo.inputTokens > 0
-                      ? waterTokenInfo.inputTokens
-                      : "—"}
-                  </span>
-                  <span>
-                    out{" "}
-                    {waterTokenInfo.outputTokens && waterTokenInfo.outputTokens > 0
-                      ? waterTokenInfo.outputTokens
-                      : "—"}
-                  </span>
-                  <span className="font-semibold text-neutral-900">
-                    Σ{" "}
-                    {waterTokenInfo.totalTokens && waterTokenInfo.totalTokens > 0
-                      ? waterTokenInfo.totalTokens
-                      : "—"}
-                  </span>
-                  {waterTokenInfo.model && (
-                    <span className="max-w-[120px] truncate text-neutral-400" title={waterTokenInfo.model}>
-                      {waterTokenInfo.model}
-                    </span>
-                  )}
-                  <Link
-                    href="/app/usage#water-tokens"
-                    className="text-sky-700 hover:underline font-medium shrink-0"
-                  >
-                    All
-                  </Link>
-                </div>
-              )}
-
-              {!waterEditMode && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[120] pointer-events-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const id =
-                        centerView.type === "code" ? centerView.jobId : null;
-                      setWaterEditTargetJobId(id);
-                      setWaterEditPrompt("");
-                      setWaterEditMode(true);
-                    }}
-                    className="h-11 px-6 rounded-full bg-neutral-900 text-white text-[14px] font-semibold shadow-[0_10px_28px_-8px_rgba(0,0,0,0.45)] hover:bg-neutral-800 ring-2 ring-white/90"
-                  >
-                    Edit model
-                  </button>
-                </div>
-              )}
-
-              {waterEditMode && (
-                <div className="absolute bottom-3 left-3 right-3 z-[120] pointer-events-auto">
-                  <div
-                    className={cn(
-                      "rounded-2xl border bg-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] p-3 sm:p-4",
-                      waterDropHighlight ? "border-sky-400 ring-2 ring-sky-200" : "border-neutral-200"
-                    )}
-                  >
-                    <div className="mb-2 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-                          Water edit
-                        </p>
-                        <p className="text-[13px] font-medium text-neutral-800 truncate">
-                          {(() => {
-                            const id = waterEditTargetJobId || (centerView.type === "code" ? centerView.jobId : null);
-                            const t = library3DAssets.find((j) => j.id === id) || selectedJobInfo;
-                            return t?.prompt || id || "Water job";
-                          })()}
-                        </p>
-                        <p className="text-[11px] text-neutral-500 mt-0.5">
-                          Drag another Water job here, or type a refine prompt.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWaterEditMode(false);
-                          setWaterEditPrompt("");
-                        }}
-                        className="h-9 px-3.5 shrink-0 rounded-full bg-neutral-900 text-white text-[12px] font-semibold hover:bg-neutral-800"
-                      >
-                        Exit edit
-                      </button>
-                    </div>
-                    <Textarea
-                      value={waterEditPrompt}
-                      onChange={(e) => setWaterEditPrompt(e.target.value)}
-                      placeholder="Describe how to refine this Water model…"
-                      className="min-h-[72px] text-sm resize-none bg-neutral-50 border-neutral-200"
-                    />
-                    <div className="mt-3 flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 px-4 font-semibold"
-                        onClick={() => {
-                          setWaterEditMode(false);
-                          setWaterEditPrompt("");
-                        }}
-                      >
-                        Exit
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-9 px-5 font-semibold flex-1 sm:flex-none"
-                        disabled={!waterEditPrompt.trim() || loading}
-                        onClick={() => {
-                          const parentId =
-                            waterEditTargetJobId ||
-                            (centerView.type === "code" ? centerView.jobId : null);
-                          if (!parentId) return;
-                          setWaterEditMode(false);
-                          void runWater({
-                            parentId,
-                            promptOverride: waterEditPrompt.trim(),
-                          });
-                          setWaterEditPrompt("");
-                        }}
-                      >
-                        Refine
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <WaterViewer
+                ref={waterViewerRef}
                 factoryCode={centerView.factoryCode || codeFactoryCode}
-                passLabel={codeSculptPass}
                 jobId={centerView.jobId}
                 className="flex-1 min-h-0"
-                hideToolbar={waterEditMode}
+                hideToolbar
+                badgeLeft={isCompact ? 12 : leftPanelOpen ? leftPanelWidth + 32 : 16}
+                instance={waterSceneForJob?.instance ?? null}
+                look={look}
+                partMaterials={effectiveParts}
+                onParts={handleViewerParts}
+                selectedPart={selectedPart}
+                onPick={setSelectedPart}
+                onInstanceTransform={(t) => {
+                  const jobId = centerView.type === "code" ? centerView.jobId : null;
+                  if (!jobId) return;
+                  void patchWaterScene({
+                    jobId,
+                    op: "move",
+                    position: t.position,
+                    rotation: t.rotation,
+                    scale: t.scale,
+                    getToken: async () => (await getToken()) ?? null,
+                  }).then((scene) => {
+                    if (scene) setWaterScene(scene);
+                  }).catch(() => undefined);
+                }}
                 onDownloaded={(format) => track("model_downloaded", { format, engine: "water" })}
                 onThumbnail={(dataUrl) => {
                   const jobId = centerView.type === "code" ? centerView.jobId : null;
@@ -3690,296 +3652,13 @@ function WorkspacePage() {
                 <div className={fullView ? "w-full h-full min-w-0 min-h-0" : "h-full w-full"}>
                 <ThreeViewer
                   glbUrl={centerView.glbUrl}
-                  background={envBackground}
-                  grid={envGrid}
-                  shadow={envShadow}
-                  autoRotate={envAutoRotate}
-                  lighting={envLighting}
-                  lightIntensity={lightIntensity}
-                  brightness={brightness}
-                  materialType={materialType}
-                  materialRoughness={materialRoughness}
-                  wireframeMode={wireframeMode}
-                  onWireframeChange={setWireframeMode}
+                  look={look}
+                  partMaterials={effectiveParts}
+                  onParts={handleViewerParts}
+                  selectedPart={selectedPart}
+                  onPick={setSelectedPart}
                 />
                 </div>
-                {/* Material + Roughness bar on top of 3D scene; z-[100] so it stays above WebGL canvas layer and works as soon as model loads */}
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/90 backdrop-blur-xl border border-neutral-200/70 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.18)] pointer-events-auto">
-                  {[
-                    { id: "standard" as const, label: "PBR", title: "PBR (Physically Based)" },
-                    { id: "matcap" as const, label: "Matcap", title: "Matcap" },
-                    { id: "toon" as const, label: "Toon", title: "Toon shading" },
-                    { id: "lambert" as const, label: "Lambert", title: "Lambert (diffuse)" },
-                    { id: "normal" as const, label: "Normal", title: "Normal map" },
-                  ].map(({ id, label, title }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      title={title}
-                      aria-label={title}
-                      onClick={() => setMaterialType(id)}
-                      className={`p-2 rounded-full transition-all duration-200 ${materialType === id ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"}`}
-                    >
-                      {id === "standard" && (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
-                      )}
-                      {id === "matcap" && (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
-                      )}
-                      {id === "toon" && (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /><path d="M12 3v6" /><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" /></svg>
-                      )}
-                      {id === "lambert" && (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
-                      )}
-                      {id === "normal" && (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h6v6H3z" /><path d="M15 3h6v6h-6z" /><path d="M3 15h6v6H3z" /><path d="M15 15h6v6h-6z" /></svg>
-                      )}
-                    </button>
-                  ))}
-                  <div className="ml-1 pl-2 border-l border-neutral-200 flex items-center">
-                    <button
-                      type="button"
-                      title={wireframeMode ? "Wireframe On" : "Wireframe Off"}
-                      aria-label={wireframeMode ? "Wireframe On" : "Wireframe Off"}
-                      onClick={() => setWireframeMode((v) => !v)}
-                      className={`p-2 rounded-full transition-all duration-200 ${wireframeMode ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"}`}
-                    >
-                      <svg className={`w-5 h-5 ${wireframeMode ? "opacity-100" : "opacity-70"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={wireframeMode ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-                      </svg>
-                    </button>
-                  </div>
-                  {materialType === "standard" && (
-                    <div className="relative ml-1 pl-2 border-l border-neutral-200">
-                      <button
-                        type="button"
-                        title="Roughness"
-                        aria-label="Roughness"
-                        onClick={() => setRoughnessDropdownOpen((o) => !o)}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-neutral-700 hover:bg-neutral-100 capitalize"
-                      >
-                        <span>{materialRoughness}</span>
-                        <svg className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${roughnessDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                      </button>
-                      {roughnessDropdownOpen && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setRoughnessDropdownOpen(false)} aria-hidden />
-                          <div className="absolute top-full left-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
-                            {(["smooth", "medium", "rough"] as const).map((opt) => (
-                              <button key={opt} type="button" onClick={() => { setMaterialRoughness(opt); setRoughnessDropdownOpen(false); }} className={`w-full px-2.5 py-1.5 text-xs text-left capitalize transition-colors ${materialRoughness === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* Actions: mobile = Download + info icon; desktop = Download + Full View + optional Create another 3D / Edit */}
-              <div className="relative">
-              <div className="flex items-center justify-center gap-2.5 p-3.5 border-t border-neutral-200/60 bg-white/90 backdrop-blur-xl flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    track("model_downloaded", { format: "glb" });
-                    void downloadGlbWithAuth(
-                      centerView.glbUrl,
-                      `hydrilla-${centerView.jobId || "model"}.glb`,
-                      async () => (await getToken()) ?? null
-                    ).catch((err) => {
-                      console.error(err);
-                      alert(err instanceof Error ? err.message : "Failed to download model");
-                    });
-                  }}
-                  className="inline-flex items-center h-10 px-4 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors"
-                >
-                  <span className="lg:hidden">Download</span>
-                  <span className="hidden lg:inline">Download GLB</span>
-                </button>
-                {/* Mobile-only: info icon to open generation info popover above */}
-                {selectedJobInfo && (
-                  <button
-                    type="button"
-                    onClick={() => setMobileGenInfoOpen((v) => !v)}
-                    className="lg:hidden flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 hover:bg-neutral-200 transition-colors"
-                    aria-label="Generation info"
-                  >
-                    <svg className="w-5 h-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  </button>
-                )}
-                <span className="hidden lg:inline-flex items-center gap-3 flex-wrap">
-                  {fullView ? (
-                    <button type="button" onClick={() => { setFullView(false); setLeftPanelOpen(true); setRightPanelOpen(true); }} className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors">Exit full view</button>
-                  ) : (
-                    <button type="button" onClick={() => { setFullView(true); setLeftPanelOpen(false); setRightPanelOpen(false); }} className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors">Full View</button>
-                  )}
-                  {selectedJobInfo?.sourceImages?.[0] && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const src = selectedJobInfo!.sourceImages![0];
-                          setLastPreviewImageUrl(src);
-                          setLastPreviewId(null);
-                          setCenterView({ type: "preview", imageUrl: src });
-                        }}
-                        className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors"
-                      >
-                        Create another 3D
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const src = selectedJobInfo!.sourceImages![0];
-                          setLastPreviewImageUrl(src);
-                          setLastPreviewId(null);
-                          setCenterView({ type: "preview", imageUrl: src });
-                          setInputMode("text_1img");
-                          setModeStates((prev) => ({
-                            ...prev,
-                            text_1img: {
-                              ...prev.text_1img,
-                              image1: src,
-                              file1: null,
-                              jobId1: null,
-                              prompt: prev.text_1img.prompt || "",
-                            },
-                          }));
-                        }}
-                        className="h-10 px-4 text-sm font-medium bg-neutral-100 text-neutral-800 rounded-full hover:bg-neutral-200 transition-colors"
-                      >
-                        Edit this image
-                      </button>
-                    </>
-                  )}
-                </span>
-              </div>
-              {/* Mobile-only: popover above the action row with generation info */}
-              {mobileGenInfoOpen && selectedJobInfo && (
-                <>
-                  <div className="fixed inset-0 z-40 lg:hidden" aria-hidden onClick={() => setMobileGenInfoOpen(false)} />
-                  <div className="absolute bottom-full left-0 right-0 z-50 lg:hidden mb-1 mx-2 max-h-[60vh] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-100 bg-neutral-50">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Generation Info</span>
-                      <button type="button" onClick={() => setMobileGenInfoOpen(false)} className="p-1 rounded hover:bg-neutral-200" aria-label="Close">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    </div>
-                    <div className="p-3 space-y-3 max-h-[50vh] overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                        <div className="text-neutral-400 font-medium">Type</div>
-                        <div className="text-neutral-700">{formatGenerationType(selectedJobInfo.generateType)}</div>
-                        <div className="text-neutral-400 font-medium">Status</div>
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${selectedJobInfo.status === "DONE" ? "bg-emerald-500" : selectedJobInfo.status === "FAIL" ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
-                            <span className="text-neutral-700 font-medium">
-                              {{ DONE: "Completed", FAIL: "Failed", RUN: "Processing", WAIT: "Pending" }[selectedJobInfo.status] || selectedJobInfo.status || "Unknown"}
-                            </span>
-                          </div>
-                          {isWaterJobFn(selectedJobInfo) && (selectedJobInfo.sculptPass || codeSculptPass) && selectedJobInfo.status !== "DONE" && (
-                            <span className="text-[10px] text-neutral-500 pl-3">
-                              {sculptPassLabel(selectedJobInfo.sculptPass || codeSculptPass)}
-                            </span>
-                          )}
-                          {isWaterJobFn(selectedJobInfo) && selectedJobInfo.status === "DONE" && (
-                            <span className="text-[10px] text-neutral-500 pl-3">Blockout ready</span>
-                          )}
-                        </div>
-                        {selectedJobInfo.resultGlbUrl && selectedJobInfo.sourceImages?.[0] && (
-                          <>
-                            <div className="text-neutral-400 font-medium">Source image</div>
-                            <div className="flex items-center gap-1.5">
-                              <img src={displayImageUrl(selectedJobInfo.sourceImages[0])} alt="Source" className="w-8 h-8 rounded object-cover border border-neutral-200" />
-                            </div>
-                          </>
-                        )}
-                        {selectedJobInfo.prompt && (
-                          <>
-                            <div className="text-neutral-400 font-medium">Prompt</div>
-                            <div className="text-neutral-700 truncate" title={selectedJobInfo.prompt}>{selectedJobInfo.prompt}</div>
-                          </>
-                        )}
-                        <div className="text-neutral-400 font-medium">Created</div>
-                        <div className="text-neutral-700">{selectedJobInfo.createdAt ? new Date(selectedJobInfo.createdAt).toLocaleString() : "—"}</div>
-                        <div className="text-neutral-400 font-medium">Job ID</div>
-                        <div className="text-neutral-700 font-mono text-[10px] truncate" title={selectedJobInfo.id}>{selectedJobInfo.id}</div>
-                      </div>
-                      {jobLineage.length >= 1 && (
-                        <div className="pt-2 border-t border-neutral-100">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 mb-2">Creation Lineage</p>
-                          <div className="relative pl-4">
-                            <div className="absolute left-[7px] top-1 bottom-1 w-px bg-neutral-200" />
-                            {jobLineage.map((item, idx) => {
-                              const isCurrent = item.id === selectedJobInfo.id;
-                              const parentCount = (item.parentJobIds && item.parentJobIds.length > 0) ? item.parentJobIds.length : (item.parentJobId ? 1 : 0);
-                              const sourceCount = item.sourceImages?.length ?? 0;
-                              const isMerge = parentCount > 1 || (item.generateType === "Combined" && sourceCount >= 2);
-                              const showSourceImages = isMerge && sourceCount > 0;
-                              const show3DSourceImage = item.resultGlbUrl && sourceCount >= 1 && item.sourceImages?.[0];
-                              const mergeLabel = parentCount > 1 ? `${parentCount} parents` : sourceCount >= 2 ? "2 sources" : null;
-                              const isSingleCombined = jobLineage.length === 1 && item.generateType === "Combined";
-                              const stepLabel = isSingleCombined ? "Step 1" : idx === 0 ? "Origin" : `Step ${idx}`;
-                              return (
-                                <button
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => { setLineagePreviewItem(item); setMobileGenInfoOpen(false); }}
-                                  className={`relative flex items-start gap-2.5 pb-2.5 last:pb-0 w-full text-left cursor-pointer rounded px-1 -mx-1 hover:bg-neutral-50 transition-colors ${isCurrent ? "opacity-100" : "opacity-70"}`}
-                                >
-                                  {isMerge ? (
-                                    <div className={`absolute -left-[18px] top-0 w-3.5 h-3.5 rotate-45 border-2 flex-shrink-0 ${isCurrent ? "border-black bg-black" : "border-neutral-400 bg-white"}`} />
-                                  ) : (
-                                    <div className={`absolute -left-4 top-0.5 w-3 h-3 rounded-full border-2 flex-shrink-0 ${isCurrent ? "border-black bg-black" : "border-neutral-300 bg-white"}`} />
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className={`text-[10px] font-semibold ${isCurrent ? "text-black" : "text-neutral-500"}`}>{stepLabel}</span>
-                                      <span className="text-[10px] text-neutral-400">{formatGenerationType(item.generateType)}</span>
-                                      {mergeLabel && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">{mergeLabel}</span>}
-                                      {item.resultGlbUrl && <span className="text-[10px] px-1 py-0.5 rounded bg-neutral-100 text-neutral-500">3D</span>}
-                                    </div>
-                                    {item.prompt && <p className="text-[10px] text-neutral-500 truncate mt-0.5" title={item.prompt}>{item.prompt}</p>}
-                                    {showSourceImages && item.sourceImages && (
-                                      <div className="flex gap-1 mt-1">
-                                        {item.sourceImages.map((src, i) => (
-                                          <img key={i} src={displayImageUrl(src)} alt={`Source ${i + 1}`} className="w-5 h-5 rounded object-cover border border-neutral-200" />
-                                        ))}
-                                      </div>
-                                    )}
-                                    {show3DSourceImage && (
-                                      <div className="flex items-center gap-1 mt-1">
-                                        <span className="text-[10px] text-neutral-400">Source image</span>
-                                        <img src={displayImageUrl(item.sourceImages![0])} alt="Source" className="w-5 h-5 rounded object-cover border border-neutral-200" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  {item.previewImageUrl ? (
-                                    <img src={displayImageUrl(item.previewImageUrl)} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-neutral-200" />
-                                  ) : item.resultGlbUrl ? (
-                                    <div className="w-7 h-7 rounded flex-shrink-0 border border-neutral-200 bg-neutral-100 flex items-center justify-center">
-                                      <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                                    </div>
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      {jobLineage.length === 0 && (
-                        <div className="pt-2 border-t border-neutral-100">
-                          <p className="text-[10px] text-neutral-400 italic">No iterative history — this is an original generation.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
               </div>
             </div>
           )}
@@ -4011,135 +3690,24 @@ function WorkspacePage() {
             </div>
           )}
 
-          {/* ──────────── Generation Info — compact, minimal ──────────── */}
-          {selectedJobInfo && centerView.type !== "empty" && (
-            <div className="flex-shrink-0 border-t border-neutral-200/70 bg-white/95 backdrop-blur-xl max-lg:hidden">
-              <button
-                type="button"
-                onClick={() => setGenInfoExpanded((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400 hover:bg-neutral-50/80 transition-colors"
-              >
-                <span className="flex items-center gap-2 normal-case tracking-normal">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                    Details
-                  </span>
-                  <span className="text-[12px] font-medium text-neutral-700">
-                    {formatGenerationType(selectedJobInfo.generateType)}
-                  </span>
-                  {(selectedJobInfo.status === "RUN" ||
-                    selectedJobInfo.status === "WAIT" ||
-                    selectedJobInfo.status === "FAIL") && (
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        selectedJobInfo.status === "FAIL"
-                          ? "bg-red-500"
-                          : "bg-amber-400 animate-pulse"
-                      )}
-                    />
-                  )}
-                </span>
-                <svg
-                  className={`w-3.5 h-3.5 transition-transform ${genInfoExpanded ? "rotate-180" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {genInfoExpanded && (
-                <div className="px-4 pb-3.5 space-y-3 max-h-[180px] overflow-y-auto">
-                  <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2 text-[12px]">
-                    {selectedJobInfo.prompt && (
-                      <p className="min-w-0 flex-[1_1_100%] text-neutral-800 leading-snug line-clamp-2" title={selectedJobInfo.prompt}>
-                        {selectedJobInfo.prompt}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-1.5 text-neutral-500">
-                      <span className="text-neutral-400">Status</span>
-                      <span className="font-medium text-neutral-700">
-                        {selectedJobInfo.status === "DONE"
-                          ? isWaterJobFn(selectedJobInfo)
-                            ? "Ready"
-                            : "Done"
-                          : selectedJobInfo.status === "FAIL"
-                            ? "Failed"
-                            : selectedJobInfo.status === "WAIT"
-                              ? "Queued"
-                              : sculptPassLabel(selectedJobInfo.sculptPass || codeSculptPass)}
-                      </span>
-                    </div>
-                    {selectedJobInfo.createdAt && (
-                      <div className="flex items-center gap-1.5 text-neutral-500">
-                        <span className="text-neutral-400">Created</span>
-                        <span className="font-medium text-neutral-700 tabular-nums">
-                          {new Date(selectedJobInfo.createdAt).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {jobLineage.length > 1 && (
-                    <div className="pt-2 border-t border-neutral-100">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400 mb-2">
-                        Lineage
-                      </p>
-                      <div className="flex gap-2 overflow-x-auto pb-0.5">
-                        {jobLineage.map((item, idx) => {
-                          const isCurrent = item.id === selectedJobInfo.id;
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => setLineagePreviewItem(item)}
-                              className={cn(
-                                "shrink-0 rounded-xl border px-2.5 py-2 text-left transition-colors min-w-[112px] max-w-[140px]",
-                                isCurrent
-                                  ? "border-neutral-900 bg-neutral-950 text-white"
-                                  : "border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700"
-                              )}
-                            >
-                              <p className={cn("text-[10px] font-semibold", isCurrent ? "text-white/70" : "text-neutral-400")}>
-                                {idx === 0 ? "Origin" : `Step ${idx}`}
-                              </p>
-                              <p className="text-[11px] truncate mt-0.5">
-                                {formatGenerationType(item.generateType)}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          </div>
         </main>
 
-        {/* Right panel toggle — always mounted for smooth show/hide */}
         <button
           type="button"
           onClick={() => setRightPanelOpen(true)}
           className={cn(
-            "absolute right-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-l-2xl border border-neutral-200/80 bg-white px-2.5 py-4 text-neutral-700 shadow-[-4px_0_20px_rgba(0,0,0,0.06)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] lg:flex",
+            "absolute right-4 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-2xl border border-neutral-200/60 bg-white px-2.5 py-4 text-neutral-700 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.14)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] lg:flex",
             rightPanelOpen
               ? "pointer-events-none translate-x-2 opacity-0"
               : "pointer-events-auto translate-x-0 opacity-100"
           )}
-          title="Open create panel"
-          aria-label="Open create panel"
+          title="Open scene controls"
+          aria-label="Open scene controls"
           tabIndex={rightPanelOpen ? -1 : 0}
         >
           <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Create</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Scene</span>
         </button>
 
         {/* Right Panel — fixed inner width on desktop; full-bleed on phone/tablet */}
@@ -4161,12 +3729,13 @@ function WorkspacePage() {
                 : 0,
             transition: isCompact
               ? "none"
-              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1)",
+              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease",
           }}
           className={cn(
-            "flex-shrink-0 flex flex-col bg-white border-l border-neutral-200/70 overflow-hidden will-change-[width]",
+            "flex-shrink-0 flex flex-col bg-white border border-neutral-200/60 overflow-hidden will-change-[width]",
+            "lg:absolute lg:bottom-4 lg:right-4 lg:top-4 lg:z-30 lg:rounded-[26px] lg:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.14)]",
             "max-lg:border-l-0 max-lg:border-t max-lg:border-neutral-200 max-lg:bg-white",
-            !rightPanelOpen && "max-lg:border-transparent",
+            !rightPanelOpen && "max-lg:border-transparent lg:pointer-events-none lg:opacity-0",
             mobileTab === "create"
               ? "max-lg:!w-full max-lg:!min-w-0 max-lg:flex-1 max-lg:min-h-0 max-lg:overflow-auto"
               : "max-lg:hidden"
@@ -4178,887 +3747,145 @@ function WorkspacePage() {
           >
           <div className="h-full min-w-0 flex-1 overflow-y-auto flex flex-col [tab-size:4]">
           {/* Right navbar: workspace name, credits, My Library, Profile, Collapse — desktop only */}
-          <div className="hidden lg:flex h-14 flex-shrink-0 px-3 border-b border-neutral-200/60 items-center gap-1.5 min-w-0">
+          <div className="hidden lg:flex h-[72px] flex-shrink-0 px-3 border-b border-neutral-200/60 items-center gap-2 min-w-0">
+            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-full">
+              {clientMounted ? <UserButton afterSignOutUrl="/" /> : <div className="w-8 h-8 rounded-full bg-neutral-200 animate-pulse" aria-hidden />}
+            </div>
             <Input
               type="text"
               value={workspaceName}
               onChange={(e) => handleWorkspaceNameChange(e.target.value)}
               placeholder="Name workspace"
-              className="h-9 flex-1 min-w-0 border-transparent bg-transparent px-2 text-[13px] font-semibold tracking-tight shadow-none focus-visible:border-neutral-200 focus-visible:ring-0"
+              className="h-9 min-w-0 flex-1 border-transparent bg-transparent px-1 text-[13px] font-semibold tracking-tight shadow-none focus-visible:border-neutral-200 focus-visible:ring-0"
             />
-            <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-full bg-neutral-900/[0.04] border border-neutral-200/60" title="Credits remaining">
-              <svg className="w-3.5 h-3.5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded-full bg-neutral-900/[0.04] border border-neutral-200/60" title="Credits remaining">
               <span className="text-[12px] font-semibold text-neutral-800 tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
             </div>
-            <Link href="/rigging" className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0" title="3D Rigging" aria-label="3D Rigging">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.5-6.5L17 8m-10 8l-2.5 2.5M20.5 18.5L18 16M5.5 5.5L8 8" /><circle cx="12" cy="12" r="2" /></svg>
-            </Link>
             <Link href="/library" className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+              <Library className="h-4 w-4" strokeWidth={2} />
             </Link>
-            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-full">
-              {clientMounted ? <UserButton afterSignOutUrl="/" /> : <div className="w-8 h-8 rounded-full bg-neutral-200 animate-pulse" aria-hidden />}
-            </div>
+            <ModeToggle />
             <button type="button" onClick={() => setRightPanelOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors duration-200 shrink-0" title="Collapse panel" aria-label="Collapse panel">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+              <PanelRightClose className="h-4 w-4" strokeWidth={2} />
             </button>
           </div>
           <ScrollArea className="flex-1 min-h-0 w-full">
-          <div className="mx-auto w-full max-w-xl lg:max-w-none px-4 sm:px-6 lg:px-5 pt-4 sm:pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8 space-y-4 sm:space-y-5 leading-[1.15]">
-            {/* Input mode — Water: Text | Edit; Cloud: Text | Image | Edit | Combine */}
-            <div
-              role="tablist"
-              aria-label="Input mode"
-              className={cn(
-                "grid gap-1 rounded-2xl border border-neutral-200 bg-neutral-100 p-1 text-neutral-500",
-                selectedIsCode ? "grid-cols-2" : "grid-cols-4"
-              )}
-            >
-              <Button
-                type="button"
-                role="tab"
-                size="sm"
-                variant={inputMode === "text" ? "outline" : "ghost"}
-                onClick={() => setInputMode("text")}
-                title={selectedIsCode ? "New Water from text" : "Text prompt only"}
-                className={cn(
-                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
-                  inputMode === "text" && "border-transparent bg-white text-neutral-950 shadow-sm"
-                )}
-              >
-                <span className="text-xs font-bold leading-none sm:text-sm">T</span>
-                <span>Text</span>
-              </Button>
-              {!selectedIsCode && (
-                <Button
-                  type="button"
-                  role="tab"
-                  size="sm"
-                  variant={inputMode === "image" ? "outline" : "ghost"}
-                  onClick={() => setInputMode("image")}
-                  title="Upload an image to generate a 3D model"
-                  className={cn(
-                    "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
-                    inputMode === "image" && "border-transparent bg-white text-neutral-950 shadow-sm"
-                  )}
-                >
-                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  <span>Image</span>
-                </Button>
-              )}
-              <Button
-                type="button"
-                role="tab"
-                size="sm"
-                variant={inputMode === "text_1img" ? "outline" : "ghost"}
-                disabled={!selectedIsCode && !editAvailable}
-                onClick={() => {
-                  if (selectedIsCode) {
-                    setInputMode("text_1img");
-                    // Prefer open Water canvas → selected job → most recent ready Water asset
-                    let parentId: string | null =
-                      (centerView.type === "code" ? centerView.jobId : null) ||
-                      waterEditTargetJobId ||
-                      (selectedJobInfo && isWaterJobFn(selectedJobInfo)
-                        ? selectedJobInfo.id
-                        : null);
-                    if (!parentId) {
-                      const recent = library3DAssets.find(
-                        (j) =>
-                          (isWaterJobFn(j) || isWaterJobId(j.id)) &&
-                          j.status === "DONE" &&
-                          hasRealFactoryCode(j)
-                      );
-                      parentId = recent?.id ?? null;
-                    }
-                    if (!parentId) {
-                      setError("Open or select a Water model to edit first");
-                      return;
-                    }
-                    setWaterEditTargetJobId(parentId);
-                    setError(null);
-                    // Always show the 3D Water object — never an image preview
-                    if (centerView.type !== "code" || centerView.jobId !== parentId) {
-                      const job =
-                        library3DAssets.find((j) => j.id === parentId) ||
-                        (selectedJobInfo?.id === parentId ? selectedJobInfo : null);
-                      if (job) {
-                        handle3DClick(job);
-                      } else {
-                        setCenterView({
-                          type: "generating",
-                          progress: 40,
-                          message: "Loading Water model…",
-                        });
-                        void (async () => {
-                          try {
-                            const cs = await fetchWaterJob(
-                              parentId!,
-                              async () => (await getToken()) ?? null
-                            );
-                            if (cs.factoryCode) {
-                              setCodeFactoryCode(cs.factoryCode);
-                              if (cs.sculptPass) setCodeSculptPass(cs.sculptPass);
-                              setCurrentGenerating(null);
-                              setLoading(false);
-                              setCenterView({
-                                type: "code",
-                                factoryCode: cs.factoryCode,
-                                jobId: parentId!,
-                              });
-                            } else {
-                              setCenterView({
-                                type: "error",
-                                message: "Water model is not ready to edit yet",
-                              });
-                            }
-                          } catch {
-                            setCenterView({
-                              type: "error",
-                              message: "Could not load Water model",
-                            });
-                          }
-                        })();
-                      }
-                    }
-                    return;
-                  }
-                  if (editAvailable) setInputMode("text_1img");
-                }}
-                title={
-                  selectedIsCode
-                    ? "Refine an existing Water model"
-                    : editAvailable
-                      ? "Text + 1 image"
-                      : "Requires high-GPU mode (Flux)"
-                }
-                className={cn(
-                  "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
-                  inputMode === "text_1img" && "border-transparent bg-white text-neutral-950 shadow-sm"
-                )}
-              >
-                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
-                <span>Edit</span>
-              </Button>
-              {!selectedIsCode && (
-                <Button
-                  type="button"
-                  role="tab"
-                  size="sm"
-                  variant={inputMode === "text_2img" ? "outline" : "ghost"}
-                  disabled={!combineAvailable}
-                  onClick={() => combineAvailable && setInputMode("text_2img")}
-                  title={
-                    combineAvailable
-                      ? "Text + 2 images"
-                      : "Requires high-GPU mode (Flux)"
-                  }
-                  className={cn(
-                    "h-11 sm:h-10 gap-1 rounded-xl border-transparent px-1 text-[11px] sm:text-xs font-semibold",
-                    inputMode === "text_2img" && "border-transparent bg-white text-neutral-950 shadow-sm"
-                  )}
-                >
-                  <div className="flex -space-x-0.5 shrink-0">
-                    <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
-                    <div className="w-2 h-2 rounded-sm bg-current opacity-70" />
-                  </div>
-                  <span>Combine</span>
-                </Button>
-              )}
-            </div>
-
-            {/* Water Edit — parent model thumbnail + drag/drop to change */}
-            {selectedIsCode && inputMode === "text_1img" && (() => {
-              const parentId = resolveWaterEditParentId();
-              const parentJob =
-                (parentId && library3DAssets.find((j) => j.id === parentId)) ||
-                (parentId && selectedJobInfo?.id === parentId ? selectedJobInfo : null) ||
-                null;
-              const previewUrl =
-                parentJob?.previewImageUrl ||
-                parentJob?.imageUrl ||
-                null;
-              const title =
-                parentJob?.prompt?.trim() ||
-                (parentId ? `Water · ${parentId.slice(0, 10)}…` : "No model selected");
-              return (
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-semibold tracking-tight text-neutral-800">
-                    Model to refine
-                  </label>
-                  <p className="text-[11px] text-neutral-500 -mt-1">
-                    Drag a Water model from the library to change which one you edit.
-                  </p>
-                  <div
-                    className={cn(
-                      "relative min-h-[148px] rounded-2xl border border-dashed flex flex-col overflow-hidden transition-all",
-                      waterDropHighlight
-                        ? "border-sky-400 bg-sky-50/80 ring-2 ring-sky-200 scale-[1.01]"
-                        : "border-neutral-300 bg-neutral-50/80 hover:border-neutral-400 hover:bg-white"
-                    )}
-                    onDragOver={(e) => {
-                      if (![...e.dataTransfer.types].includes("application/job-id")) return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "copy";
-                      setWaterDropHighlight(true);
-                    }}
-                    onDragLeave={() => setWaterDropHighlight(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setWaterDropHighlight(false);
-                      const droppedId = e.dataTransfer.getData("application/job-id");
-                      if (!droppedId) return;
-                      const target = library3DAssets.find((j) => j.id === droppedId);
-                      if (!target) {
-                        setError("Drop a Water model from the library");
-                        return;
-                      }
-                      applyWaterEditParent(target);
-                    }}
-                  >
-                    {previewUrl ? (
-                      <div className="relative flex-1 min-h-[148px] w-full">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={displayImageUrl(previewUrl)}
-                          alt={title}
-                          className="absolute inset-0 h-full w-full object-cover"
-                        />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 pb-2.5 pt-8">
-                          <p className="text-[12px] font-semibold text-white truncate">{title}</p>
-                          <p className="text-[10px] text-white/75">Drop another Water model to switch</p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="absolute top-2 right-2 h-7 rounded-full bg-white/95 px-2.5 text-[11px] font-semibold shadow-sm"
-                          onClick={() => {
-                            // Empty string = cleared; do not fall back to open canvas job
-                            setWaterEditTargetJobId("");
-                          }}
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    ) : parentId ? (
-                      <div className="flex flex-1 min-h-[148px] flex-col items-center justify-center gap-2 px-4 py-6 text-center">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-neutral-200 bg-white text-neutral-400 shadow-sm">
-                          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                          </svg>
-                        </div>
-                        <p className="text-xs font-semibold text-neutral-700 truncate max-w-full">{title}</p>
-                        <p className="text-[10px] text-neutral-400">No thumbnail yet — 3D is open in the canvas</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-1 min-h-[148px] flex-col items-center justify-center gap-2 px-4 py-6 text-center">
-                        <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 shadow-sm">
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
-                          </svg>
-                        </span>
-                        <p className="text-xs font-semibold text-neutral-700">Drop a Water model here</p>
-                        <p className="text-[10px] text-neutral-400">Drag from the 3D library on the left</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Image slots — cloud only (Water Edit uses parent model dropzone above) */}
-            {!selectedIsCode &&
-              (inputMode === "image" || inputMode === "text_1img" || inputMode === "text_2img") && (
-              <div className="space-y-2">
-                <label className="block text-[13px] font-semibold tracking-tight text-neutral-800">{inputMode === "text_2img" ? "Image 1 & 2" : inputMode === "image" ? "Source image" : "Image"}</label>
-                <div className="flex gap-2">
-                  <div className={inputMode === "text_2img" ? "flex-1 min-w-0" : "flex-1"}>
-                    {inputMode === "text_2img" && <span className="text-xs text-neutral-500 block mb-1">Image 1</span>}
-                    {inputMode === "image" && <p className="text-xs text-neutral-500 mb-2">Upload or drop an image, or choose one from the library. Generate runs image → 3D.</p>}
-                    <ImageDropzone slot={1} image={image1} onDrop={(e) => handleDrop(e, 1)} onPaste={(e) => handlePaste(e, 1)} onFileSelect={(e) => handleFileSelect(e, 1)} onClear={() => handleClearImage(1)} isDragging={isDragging} onDragOver={() => setIsDragging(true)} onDragLeave={() => setIsDragging(false)} />
-                  </div>
-                  {inputMode === "text_2img" && (
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs text-neutral-500 block mb-1">Image 2</span>
-                      <ImageDropzone slot={2} image={image2} onDrop={(e) => handleDrop(e, 2)} onPaste={(e) => handlePaste(e, 2)} onFileSelect={(e) => handleFileSelect(e, 2)} onClear={() => handleClearImage(2)} isDragging={isDragging} onDragOver={() => setIsDragging(true)} onDragLeave={() => setIsDragging(false)} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Prompt — hidden in Image mode (upload → 3D only) */}
-            {inputMode !== "image" && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-[13px] font-semibold tracking-tight text-neutral-800">Prompt</label>
-                <div className="flex items-center gap-1 text-neutral-400">
-                  <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Redo"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
-                  <button type="button" className="p-1.5 rounded-md hover:bg-neutral-100 hover:text-neutral-600 transition-colors" title="Suggestions"><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></button>
-                  <DropdownMenu open={historyDropdownOpen} onOpenChange={setHistoryDropdownOpen}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-neutral-500 hover:text-neutral-900"
-                        title="Prompt history"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      sideOffset={8}
-                      className="w-[min(340px,calc(100vw-2rem))] max-h-[min(320px,70vh)] overflow-y-auto p-0"
-                    >
-                      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-100 bg-white px-3.5 py-2.5">
-                        <DropdownMenuLabel className="p-0">Prompt history</DropdownMenuLabel>
-                        {promptHistory.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setPromptHistory([]);
-                              try {
-                                localStorage.removeItem(PROMPT_HISTORY_KEY);
-                              } catch {
-                                // ignore
-                              }
-                            }}
-                            className="text-[11px] font-medium text-neutral-400 hover:text-red-600"
-                          >
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      {promptHistory.length === 0 ? (
-                        <div className="px-4 py-8 text-center">
-                          <p className="text-sm font-medium text-neutral-600">No prompts yet</p>
-                          <p className="mt-1 text-xs text-neutral-400">
-                            Your recent generations will appear here.
-                          </p>
-                        </div>
-                      ) : (
-                        <DropdownMenuGroup className="py-1.5">
-                          {promptHistory.map((item, i) => (
-                            <DropdownMenuItem
-                              key={i}
-                              onSelect={() => {
-                                setPrompt(item.slice(0, 800));
-                                promptTextareaRef.current?.focus();
-                              }}
-                              className="flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left cursor-pointer"
-                            >
-                              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-[10px] font-semibold text-neutral-500">
-                                {i + 1}
-                              </span>
-                              <span className="min-w-0 flex-1 text-[13px] leading-snug text-neutral-700 line-clamp-2">
-                                {item || "(empty)"}
-                              </span>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuGroup>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-              <div className="relative">
-                <Textarea
-                  ref={promptTextareaRef}
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value.slice(0, 800))}
-                  maxLength={800}
-                  placeholder={
-                    selectedIsCode
-                      ? inputMode === "text_1img"
-                        ? "Describe how to refine this Water model…"
-                        : "Describe the object to build in Three.js, e.g., a vintage folding camera with a leather body and chrome dials."
-                      : inputMode === "text"
-                        ? "Describe the object you want to generate. You can use your native language, e.g., a medieval axe."
-                        : inputMode === "text_1img"
-                          ? "Describe how to edit this image..."
-                          : "Describe how to combine these images..."
-                  }
-                  className="min-h-[132px] sm:min-h-[148px] resize-none rounded-2xl border-neutral-200 bg-neutral-50 pb-8 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/10"
-                  rows={4}
-                />
-                <span className="absolute bottom-2.5 right-3 text-[11px] text-neutral-400 tabular-nums">{prompt.length}/800</span>
-              </div>
-            </div>
-            )}
-
-            {/* Error — validation & workspace (always); centerView errors on phone Create tab (canvas hidden) */}
-            {error && (
-              <div className="px-3 py-2.5 text-sm bg-red-50 text-red-600 rounded-xl border border-red-200">{error}</div>
-            )}
-            {mobileTab === "create" && centerView.type === "error" && (
-              <div className="lg:hidden space-y-3 px-0.5">
-                <div className="px-3 py-3 text-sm bg-red-50 text-red-700 rounded-xl border border-red-200 flex gap-3 items-start">
-                  <span className="shrink-0 mt-0.5 text-red-500" aria-hidden>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  </span>
-                  <p className="min-w-0 flex-1 leading-relaxed">{centerView.message}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    if (lastPreviewImageUrl && lastPreviewId) {
-                      setCenterView({ type: "preview", imageUrl: lastPreviewImageUrl, previewId: lastPreviewId });
-                    } else {
-                      setCenterView({ type: "empty" });
-                    }
-                  }}
-                  className="w-full py-2.5 text-sm font-semibold text-white bg-neutral-950 rounded-xl hover:bg-neutral-800 transition-colors"
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-
-            {/* Engine — Hydrilla cloud (our models / credits) vs Water (BYOK) */}
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <label className="text-sm font-semibold text-neutral-800">Engine</label>
-                <span
-                  className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600"
-                  title="Cloud = models we provide (credits → GLB). Water = your API key (0 credits → Three.js)."
-                  aria-label="Info"
-                >
-                  <span className="text-[10px] font-bold leading-none">i</span>
-                </span>
-              </div>
-              <div className="relative min-w-[160px] max-w-[220px]">
-                <DropdownMenu
-                  open={modelDropdownOpen}
-                  onOpenChange={(open) => {
-                    setModelDropdownOpen(open);
-                    if (!open) setModelSearch("");
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-auto w-full justify-between gap-1.5 rounded-full px-3 py-2 sm:px-2.5 sm:py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-50"
-                    >
-                      <span className="truncate flex items-center gap-1.5 min-w-0">
-                        <span
-                          className={
-                            selectedIsCode
-                              ? "shrink-0 rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800"
-                              : "shrink-0 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-600"
-                          }
-                        >
-                          {selectedIsCode ? "Water" : "Cloud"}
-                        </span>
-                        {selectedCatalog?.kind === "code" && !providerKeyOk(selectedCatalog.provider) && (
-                          <span className="text-red-500 shrink-0" title="API key missing">!</span>
-                        )}
-                        {selectedCatalog?.kind === "code" && selectedCatalog.source === "platform" && (
-                          <span className="truncate text-[10px] text-neutral-400">Hydrilla key</span>
-                        )}
-                        <span className="truncate">{selectedCatalog?.label ?? selectedModel}</span>
-                      </span>
-                      <svg className={`w-3.5 h-3.5 shrink-0 text-neutral-500 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    sideOffset={8}
-                    className="w-[300px] p-0"
-                    onCloseAutoFocus={(e) => e.preventDefault()}
-                  >
-                    <div
-                      className="border-b border-neutral-100 px-2.5 py-2"
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <Input
-                        value={modelSearch}
-                        onChange={(e) => setModelSearch(e.target.value)}
-                        placeholder="Search"
-                        className="h-8 rounded-lg text-xs"
-                      />
-                    </div>
-                    <div className="max-h-[min(320px,55vh)] overflow-y-auto p-1.5">
-                    {orderedModelGroups.map((group, gi) => {
-                      const items = pickerItemsForGroup(group);
-                      if (!items.length) return null;
-                      return (
-                        <DropdownMenuGroup key={group}>
-                          {gi > 0 && <DropdownMenuSeparator />}
-                          <DropdownMenuLabel>
-                            {group === "Hydrilla" ? "Cloud" : group}
-                          </DropdownMenuLabel>
-                          {items.map((opt) => {
-                            const needsKey = opt.provider !== "hydrilla";
-                            const keyOk = !needsKey || providerKeyOk(opt.provider);
-                            const disabled = Boolean(opt.comingSoon);
-                            const locked = disabled || (needsKey && !keyOk);
-                            return (
-                              <DropdownMenuItem
-                                key={opt.id}
-                                disabled={disabled}
-                                onSelect={() => {
-                                  if (disabled) return;
-                                  if (needsKey && !keyOk) {
-                                    setError("Add your API key in Settings first");
-                                    window.location.href = "/app/settings";
-                                    return;
-                                  }
-                                  setSelectedModel(opt.id);
-                                  // Persist Water default so Settings + next session match the picker
-                                  if (opt.provider !== "hydrilla") {
-                                    void (async () => {
-                                      try {
-                                        const tokenGetter = async () =>
-                                          (await getToken()) ?? null;
-                                        await saveUserModelPrefs(
-                                          { defaultCodeModel: opt.id },
-                                          tokenGetter
-                                        );
-                                      } catch {
-                                        // session selection still works
-                                      }
-                                    })();
-                                  }
-                                }}
-                                className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs cursor-pointer ${
-                                  locked
-                                    ? "text-neutral-400"
-                                    : selectedModel === opt.id
-                                      ? "bg-neutral-100 text-neutral-800 font-semibold"
-                                      : "text-neutral-700"
-                                }`}
-                              >
-                                <span className="flex items-center gap-2 min-w-0">
-                                  <span className={`truncate ${locked ? "text-neutral-400" : ""}`}>
-                                    {opt.label}
-                                  </span>
-                                  {locked && (
-                                    <span title={opt.comingSoon ? "Coming soon" : "Add API key in Settings"}>
-                                      <svg className="w-3.5 h-3.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                      </svg>
-                                    </span>
-                                  )}
-                                </span>
-                                {!locked && selectedModel === opt.id && (
-                                  <svg className="w-3.5 h-3.5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </DropdownMenuItem>
-                            );
-                          })}
-                        </DropdownMenuGroup>
-                      );
-                    })}
-                    </div>
-                    <div className="border-t border-neutral-100 px-3 py-2">
-                      <a
-                        href="/app/settings"
-                        className="text-[11px] font-medium text-neutral-700 hover:text-neutral-900 underline-offset-2 hover:underline"
-                        onClick={() => setModelDropdownOpen(false)}
-                      >
-                        Models in Settings
-                      </a>
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-
-            {/* Water Skill + Quality tier — only when a BYOK model is selected */}
-            {selectedIsCode && (
-              <>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 leading-[1.15]">
-                  <div className="flex items-center gap-1.5 min-w-0 pt-1">
-                    <label className="text-sm font-semibold text-neutral-800">Skill</label>
-                    <span
-                      className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600"
-                      title="Water Skill chooses the harness: Object Studio, Character, Animation, Game…"
-                      aria-label="Info"
-                    >
-                      <span className="text-[10px] font-bold leading-none">i</span>
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-1.5 max-w-[min(100%,320px)]">
-                    {WATER_SKILLS.map((skill) => {
-                      const selectable = isWaterSkillSelectable(skill);
-                      const active = selectedWaterSkill === skill.id;
-                      return (
-                        <button
-                          key={skill.id}
-                          type="button"
-                          disabled={!selectable}
-                          title={
-                            selectable
-                              ? skill.description
-                              : `${skill.description} (${skill.badge || "Soon"})`
-                          }
-                          onClick={() => {
-                            if (!selectable) return;
-                            setSelectedWaterSkill(skill.id);
-                            try {
-                              localStorage.setItem(WATER_SKILL_STORAGE_KEY, skill.id);
-                            } catch {
-                              /* ignore */
-                            }
-                          }}
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors border",
-                            !selectable && "opacity-45 cursor-not-allowed border-neutral-200 text-neutral-400",
-                            selectable && active && "border-neutral-900 bg-neutral-900 text-white",
-                            selectable &&
-                              !active &&
-                              "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-                          )}
-                        >
-                          {skill.shortLabel}
-                          {skill.badge ? (
-                            <span className="ml-1 text-[9px] uppercase tracking-wide opacity-80">
-                              {skill.badge}
-                            </span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <label className="text-sm font-semibold text-neutral-800">Quality</label>
-                    <span
-                      className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600"
-                      title="Fast = blockout. Standard = through materials. Studio = full 8-pass professional sculpt."
-                      aria-label="Info"
-                    >
-                      <span className="text-[10px] font-bold leading-none">i</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center rounded-xl bg-white border border-neutral-200 overflow-hidden">
-                    {QUALITY_TIERS.map((tier) => {
-                      const active = selectedQualityTier === tier.id;
-                      return (
-                        <button
-                          key={tier.id}
-                          type="button"
-                          title={`${tier.description} · ${tier.hint}`}
-                          onClick={() => {
-                            setSelectedQualityTier(tier.id);
-                            try {
-                              localStorage.setItem(WATER_TIER_STORAGE_KEY, tier.id);
-                            } catch {
-                              /* ignore */
-                            }
-                          }}
-                          className={cn(
-                            "px-3 py-2 text-[11px] font-semibold transition-colors",
-                            active
-                              ? "bg-neutral-900 text-white"
-                              : "text-neutral-600 hover:bg-neutral-50"
-                          )}
-                        >
-                          {tier.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Number of Generations — Hydrilla cloud only; Water always builds one model */}
-            <div
-              className={cn(
-                "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]",
-                selectedIsCode && "hidden"
-              )}
-            >
-              <div className="flex items-center gap-1.5">
-                <label className="text-sm font-semibold text-neutral-800">Number of Generations</label>
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-neutral-200/80 text-neutral-600" title="How many variants to generate" aria-label="Info">
-                  <span className="text-[10px] font-bold leading-none">i</span>
-                </span>
-              </div>
-              <div className="flex items-center rounded-xl bg-white border border-neutral-200 overflow-hidden">
-                <button type="button" onClick={() => setNumGenerations((n) => Math.max(1, n - 1))} className="px-3 py-2.5 sm:px-2 sm:py-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 transition-colors" title="Decrease number of generations" aria-label="Decrease number of generations">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                </button>
-                <span className="min-w-[2.5ch] text-center text-sm font-semibold text-neutral-800 py-1.5">{numGenerations}</span>
-                <button type="button" onClick={() => setNumGenerations((n) => Math.min(10, n + 1))} className="px-3 py-2.5 sm:px-2 sm:py-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 transition-colors" title="Increase number of generations" aria-label="Increase number of generations">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Cost line — Hydrilla cloud uses credits; Water is BYOK */}
-            {(() => {
-              if (selectedIsCode) {
-                const tier = QUALITY_TIERS.find((t) => t.id === selectedQualityTier);
-                return (
-                  <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-neutral-200/80 bg-white px-3 py-2 text-[12px] text-neutral-600">
-                    <div className="flex items-center gap-2">
-                      <span className="tabular-nums text-neutral-500">{tier?.hint || "~2–4 min"}</span>
-                      <span className="h-1 w-1 rounded-full bg-neutral-300" aria-hidden />
-                      <span className="font-semibold tracking-tight text-neutral-800">Water · 0 credits</span>
-                    </div>
-                    <span className="text-[10px] text-neutral-400">
-                      {WATER_SKILLS.find((s) => s.id === selectedWaterSkill)?.label} ·{" "}
-                      {tier?.label} ({passesForTier(selectedQualityTier).length} build passes)
-                    </span>
-                  </div>
-                );
+          <div className="mx-auto w-full max-w-xl lg:max-w-none px-4 sm:px-6 lg:px-5 pt-3 sm:pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:pb-6">
+            <AssetInspector
+              kind={
+                centerView.type === "3d" || centerView.type === "code"
+                  ? centerView.type
+                  : centerView.type === "preview"
+                    ? "preview"
+                    : "empty"
               }
-              const isImageOrEdit =
-                inputMode === "text" ||
-                (inputMode !== "image" && prompt.trim().length > 0 && (image1 || image2));
-              const cost =
-                inputMode === "text_2img" && prompt.trim()
-                  ? 4
-                  : inputMode === "text_1img" && prompt.trim()
-                    ? 3
-                    : isImageOrEdit
-                      ? CREDITS_IMAGE
-                      : CREDITS_3D;
-              const total = creditsLoading ? 0 : creditsTotal;
-              return (
-                <div className="flex items-center justify-center gap-2 text-sm text-neutral-600">
-                  <span className="tabular-nums text-neutral-500">{isImageOrEdit ? "~30s" : "~1 min"}</span>
-                  <span className="h-1 w-1 rounded-full bg-neutral-300" aria-hidden />
-                  <span className="flex items-center gap-1.5 font-medium text-neutral-800">
-                    <svg className="w-4 h-4 text-neutral-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <span className="tabular-nums">{cost} / {total}</span>
-                    <span className="text-neutral-500 font-normal">credits</span>
-                  </span>
-                </div>
-              );
-            })()}
-
-            {/* Generate — primary action, premium black button with vectorized icon.
-                When the user is in pure-image mode (or text_1img with no prompt) the
-                only thing this button does is "make a 3D from this image", so we
-                route it through `handleGenerate3D` — the same code path the working
-                left-library "Generate 3D Model" button uses. Going through
-                `handleGenerateImage()` previously cleared `lastPreviewImageUrl/Id`
-                and produced the "spinner never finishes" bug for fresh uploads. */}
-            <Button
-              type="button"
-              onClick={() => {
-                // Water: text → Three.js. Edit → refine parent. Never FLUX/GPU.
-                if (selectedIsCode) {
-                  void runWaterFromPanel();
-                  return;
-                }
-                if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
-                  void handleGenerate3D();
-                } else {
-                  void handleGenerateImage();
-                }
-              }}
-              disabled={isGenerating}
-              size="lg"
-              variant="default"
-              className="w-full h-12 sm:h-[52px] rounded-full text-[15px]"
-            >
-              {isGenerating ? (
-                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /><span className="tracking-tight">Generating...</span></>
-              ) : (
-                <>
-                  <img src="/vectorized_019cb4b0-6961-73df-8fbb-bdaa166fad56.svg" alt="" className="w-5 h-5 object-contain opacity-95 invert brightness-110" />
-                  <span className="tracking-tight font-semibold">
-                    {selectedIsCode
-                      ? inputMode === "text_1img"
-                        ? "Refine with Water"
-                        : "Generate with Water"
-                      : inputMode === "image"
-                        ? "Generate 3D"
-                        : "Generate"}
-                  </span>
-                </>
-              )}
-            </Button>
-
-            {/* Environment controls only when 3D model is currently open in center */}
-            {centerView.type === "3d" && (
-              <div className="space-y-3 pt-1 border-t border-neutral-100">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-[0.14em]">Environment</span>
-                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-neutral-200 text-neutral-500" title="Viewer environment" aria-label="Info"><span className="text-[9px] font-bold leading-none">i</span></span>
-                </div>
-                <div className="space-y-2.5">
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                    <label className="text-sm font-medium text-neutral-800">Lighting</label>
-                    <div className="relative min-w-[100px]">
-                      <button
-                        type="button"
-                        onClick={() => setLightingDropdownOpen((o) => !o)}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-neutral-200 text-left text-sm font-medium text-neutral-800 hover:bg-neutral-50 transition-colors duration-200 capitalize"
-                      >
-                        <span>{envLighting}</span>
-                        <svg className={`w-4 h-4 shrink-0 text-neutral-400 transition-transform duration-200 ${lightingDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                      </button>
-                      {lightingDropdownOpen && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setLightingDropdownOpen(false)} aria-hidden />
-                          <div className="absolute top-full right-0 mt-1 z-20 py-0.5 min-w-[100%] rounded-lg bg-white border border-neutral-200 shadow-lg overflow-hidden">
-                            {(["neutral", "studio", "outdoor"] as const).map((opt) => (
-                              <button key={opt} type="button" onClick={() => { setEnvLighting(opt); setLightingDropdownOpen(false); }} className={`w-full px-3 py-2 text-sm text-left capitalize transition-colors ${envLighting === opt ? "bg-neutral-100 text-neutral-900 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                    <label className="text-sm font-medium text-neutral-800">Light intensity</label>
-                    <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
-                      <Slider value={lightIntensity} onValueChange={setLightIntensity} min={0.3} max={2} step={0.1} className="min-w-0 flex-1" aria-label="Light intensity" />
-                      <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{lightIntensity.toFixed(1)}</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                    <label className="text-sm font-medium text-neutral-800">Brightness</label>
-                    <div className="flex items-center gap-2 min-w-[100px] flex-1 max-w-[200px]">
-                      <Slider value={brightness} onValueChange={setBrightness} min={0.5} max={2} step={0.05} className="min-w-0 flex-1" aria-label="Brightness" />
-                      <span className="text-xs text-neutral-600 tabular-nums w-8 shrink-0 text-right">{brightness.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                    <label className="text-sm font-medium text-neutral-800">Background</label>
-                    <Switch checked={envBackground} onCheckedChange={setEnvBackground} aria-label="Background" title={envBackground ? "Transparent background" : "Solid background"} />
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                    <label className="text-sm font-medium text-neutral-800">Grid</label>
-                    <Switch checked={envGrid} onCheckedChange={setEnvGrid} aria-label="Grid" title={envGrid ? "Hide grid" : "Show grid"} />
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                    <label className="text-sm font-medium text-neutral-800">Shadow</label>
-                    <Switch checked={envShadow} onCheckedChange={setEnvShadow} aria-label="Shadow" title={envShadow ? "Hide shadows" : "Show shadows"} />
-                  </div>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 leading-[1.15]">
-                    <label className="text-sm font-medium text-neutral-800">Auto rotate</label>
-                    <Switch checked={envAutoRotate} onCheckedChange={setEnvAutoRotate} aria-label="Auto rotate" title={envAutoRotate ? "Pause rotation" : "Auto rotate"} />
-                  </div>
-                </div>
-              </div>
-            )}
-
+              parts={Object.keys(authoredParts)}
+              selectedPart={selectedPart}
+              onSelectPart={setSelectedPart}
+              look={look}
+              onLookChange={updateLook}
+              partMaterial={selectedPartMaterial}
+              onPartMaterial={handlePartMaterial}
+            />
           </div>
           </ScrollArea>
           </div>
           </div>
         </aside>
+
+        <div
+          className="pointer-events-none absolute z-40 flex justify-center px-3 max-lg:left-0 max-lg:right-0 bottom-3 lg:bottom-5"
+          style={
+            isCompact
+              ? undefined
+              : {
+                  left: leftPanelOpen ? leftPanelWidth + 32 : 16,
+                  right: rightPanelOpen ? RIGHT_PANEL_WIDTH + 32 : 16,
+                }
+          }
+        >
+          <div className="pointer-events-auto w-full max-w-[760px]">
+            <ChatComponent
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              textareaRef={promptTextareaRef}
+              inputMode={inputMode}
+              onInputModeChange={handleSelectInputMode}
+              selectedIsCode={selectedIsCode}
+              editAvailable={editAvailable}
+              combineAvailable={combineAvailable}
+              selectedModel={selectedModel}
+              selectedLabel={selectedCatalog?.label ?? selectedModel}
+              waterPickerModels={waterPickerModels}
+              enabledWaterIds={enabledWaterIds}
+              providerKeyOk={providerKeyOk}
+              onSelectModel={handleSelectModel}
+              qualityTier={waterQualityTier}
+              onQualityTierChange={(tier) => {
+                setWaterQualityTier(tier);
+                try {
+                  window.localStorage.setItem(WATER_TIER_STORAGE_KEY, tier);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              numGenerations={numGenerations}
+              onNumGenerationsChange={setNumGenerations}
+              promptHistory={promptHistory.entries}
+              onSelectHistory={(item) => {
+                setPrompt(item);
+                promptTextareaRef.current?.focus();
+              }}
+              onClearHistory={promptHistory.clear}
+              image1={image1}
+              image2={image2}
+              isDragging={isDragging}
+              onImageDrop={handleDrop}
+              onImagePaste={handlePaste}
+              onImageFileSelect={handleFileSelect}
+              onImageClear={handleClearImage}
+              onDragOver={() => setIsDragging(true)}
+              onDragLeave={() => setIsDragging(false)}
+              waterEdit={
+                selectedIsCode && inputMode === "text_1img"
+                  ? {
+                      parentId: waterEditParentId,
+                      title:
+                        waterEditParentJob?.prompt?.trim() ||
+                        (waterEditParentId ? `Water · ${waterEditParentId.slice(0, 10)}…` : "No model selected"),
+                      previewUrl: waterEditParentJob?.previewImageUrl || waterEditParentJob?.imageUrl || null,
+                      highlight: waterDropHighlight,
+                      onDragOver: (e) => {
+                        if (![...e.dataTransfer.types].includes("application/job-id")) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
+                        setWaterDropHighlight(true);
+                      },
+                      onDragLeave: () => setWaterDropHighlight(false),
+                      onDrop: (e) => {
+                        e.preventDefault();
+                        setWaterDropHighlight(false);
+                        const droppedId = e.dataTransfer.getData("application/job-id");
+                        if (!droppedId) return;
+                        const target = library3DAssets.find((j) => j.id === droppedId);
+                        if (!target) {
+                          setError("Drop a Water model from the library");
+                          return;
+                        }
+                        applyWaterEditParent(target);
+                      },
+                      onClear: () => setWaterEditTargetJobId(""),
+                    }
+                  : null
+              }
+              onGenerate={handleChatGenerate}
+              generating={isGenerating}
+              error={error}
+              costLabel={chatCostLabel}
+              generateLabel={chatGenerateLabel}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Compact: bottom Canvas | Create with sliding pill */}
@@ -5101,41 +3928,10 @@ function WorkspacePage() {
             )}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16m8-8H4" /></svg>
-            Create
+            Scene
           </Button>
         </div>
       </nav>
-    </div>
-  );
-}
-
-function ImageDropzone({ slot, image, onDrop, onPaste, onFileSelect, onClear, isDragging, onDragOver, onDragLeave }: {
-  slot: 1 | 2; image: string | null; onDrop: (e: React.DragEvent) => void; onPaste: (e: React.ClipboardEvent) => void;
-  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void; onClear: () => void; isDragging: boolean; onDragOver: () => void; onDragLeave: () => void;
-}) {
-  const inputId = `workspace-image-upload-${slot}`;
-  return (
-    <div
-      className={`flex-1 min-h-[132px] rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 transition-all ${isDragging ? "border-neutral-900 bg-neutral-100 scale-[1.01]" : "border-neutral-300 bg-neutral-50/80 hover:border-neutral-400 hover:bg-white"}`}
-      onDrop={onDrop} onDragOver={(e) => { e.preventDefault(); onDragOver(); }} onDragLeave={onDragLeave} onPaste={onPaste}
-    >
-      <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden" id={inputId} onChange={onFileSelect} />
-      {image ? (
-        <div className="relative w-full h-full min-h-[108px] rounded-xl overflow-hidden group border border-neutral-200 bg-white">
-          <img src={displayImageUrl(image)} alt="Upload" className="w-full h-full object-cover" />
-          <Button type="button" onClick={onClear} size="sm" className="absolute top-1.5 right-1.5 h-7 w-7 rounded-full bg-neutral-950/80 p-0 hover:bg-neutral-950" aria-label="Clear image">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </Button>
-        </div>
-      ) : (
-        <label htmlFor={inputId} className="cursor-pointer text-center rounded-xl px-4 py-3 focus-within:ring-2 focus-within:ring-neutral-900/10">
-          <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 shadow-sm">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg>
-          </span>
-          <p className="text-xs font-semibold text-neutral-700">Upload, drop, or paste</p>
-          <p className="text-[10px] text-neutral-400 mt-1">You can also drag from the library</p>
-        </label>
-      )}
     </div>
   );
 }

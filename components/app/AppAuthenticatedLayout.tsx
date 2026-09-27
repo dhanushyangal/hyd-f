@@ -21,11 +21,11 @@ export function AppAuthenticatedLayout({ children }: { children: ReactNode }) {
       </SignedOut>
       <SignedIn>
         <AppLayoutProvider>
-          <div className="h-screen flex bg-[#fafafa]">
+          <div className="app-themed h-screen flex bg-[var(--app-canvas)]">
             <AppSidebar />
             <div className="flex-1 flex flex-col min-h-0 min-w-0">
               <AppNavbar />
-              <div className="flex-1 min-h-0 overflow-auto bg-[#fafafa]">
+              <div className="flex-1 min-h-0 overflow-auto bg-[var(--app-canvas)]">
                 {children}
               </div>
             </div>

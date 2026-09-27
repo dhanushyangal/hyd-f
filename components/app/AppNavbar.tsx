@@ -2,13 +2,14 @@
 
 import { UserButton } from "@clerk/nextjs";
 import { Bell, Menu } from "lucide-react";
+import { ModeToggle } from "@/components/mode-toggle";
 import { useAppLayout } from "../../context/AppLayoutContext";
 
 export function AppNavbar() {
   const { openMobileSidebar } = useAppLayout();
 
   return (
-    <header className="h-14 shrink-0 flex items-center justify-between px-4 md:px-6 bg-[#fafafa] border-b border-neutral-200/60 font-dm-sans">
+    <header className="h-14 shrink-0 flex items-center justify-between px-4 md:px-6 bg-[var(--app-canvas)] border-b border-neutral-200/60 font-dm-sans">
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
@@ -22,9 +23,10 @@ export function AppNavbar() {
       </div>
 
       <div className="flex items-center gap-1.5">
+        <ModeToggle />
         <button
           type="button"
-          className="hidden sm:flex items-center justify-center rounded-full text-neutral-500 hover:text-neutral-900 hover:bg-white border border-transparent hover:border-neutral-200/70 transition-colors h-9 w-9 shrink-0"
+          className="flex items-center justify-center rounded-full text-neutral-500 hover:text-neutral-900 hover:bg-white border border-transparent hover:border-neutral-200/70 transition-colors h-9 w-9 shrink-0"
           aria-label="Notifications"
           title="Notifications"
         >

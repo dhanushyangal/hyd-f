@@ -86,14 +86,7 @@ function CreditsCard() {
       href="/app/pricing"
       prefetch
       onClick={closeMobileSidebar}
-      className="group block rounded-2xl p-3.5 font-dm-sans transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
-      style={{
-        background:
-          "linear-gradient(165deg, #ffffff 0%, #f7f7f8 55%, #f2f2f4 100%)",
-        border: "1px solid rgba(17,17,17,0.06)",
-        boxShadow:
-          "0 1px 2px rgba(17,17,17,0.04), 0 8px 24px -12px rgba(17,17,17,0.12)",
-      }}
+      className="credits-card group block rounded-2xl border border-neutral-200/80 bg-white p-3.5 font-dm-sans shadow-[0_1px_2px_rgba(17,17,17,0.04),0_8px_24px_-12px_rgba(17,17,17,0.12)] transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
     >
       <div className="flex items-center justify-between gap-2 mb-3">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-700">
@@ -274,7 +267,7 @@ export function AppSidebar() {
                 style={{
                   minHeight: "var(--sidebar-item-height)",
                   gap: "12px",
-                  color: isActive ? "#111" : "hsl(var(--sidebar-fg-muted))",
+                  color: isActive ? "hsl(var(--sidebar-fg))" : "hsl(var(--sidebar-fg-muted))",
                 }}
               >
                 <Icon

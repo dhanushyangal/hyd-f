@@ -1,44 +1,29 @@
 ---
 name: water
-description: Hydrilla Water Studio — BYOK multi-pass procedural Three.js with selectable skills (Object, Character, Animation, Game) and quality tiers (Fast / Standard / Studio).
+description: Hydrilla Water Studio — BYOK multi-pass procedural Three.js. Packs (object / character / animation / game) are bound by the Create orchestrator, not by UI chips.
 ---
 
 # Water — Hydrilla skill
 
 Build a **code-only**, gated, procedural Three.js model from text (image optional), using the **Water Studio** harness:
 
-`planner → locked passes → generator → evaluator` (Anthropic-style separation).
+`compile → route → bind pack → planner → locked passes → generator ≠ evaluator`
+
+The workspace Create bar is **prompt + engine only**. Object / Character / Anim / Fast chips are retired. Pack and quality profile come from `backend/.../lib/water/orchestrator/packs.ts`.
+
+Product generate: `POST /api/water/generate` (Clerk + BYOK).
+eve brain: `agent/agents/create-water` (11 skills, 12 frozen tools). Do not add a 13th tool.
 
 | Doc | Use |
 |-----|------|
-| [`docs/ENGINES.md`](../../docs/ENGINES.md) | Cloud vs Water, models, prefs, skills, tokens |
+| [`docs/ENGINES.md`](../../docs/ENGINES.md) | Cloud vs Water |
 | [`docs/WATER_ORCHESTRATION.md`](../../docs/WATER_ORCHESTRATION.md) | Pipeline, passes, harness |
 
-## When it runs
+## Adding a pack
 
-User picks a **Water** LLM model + **Skill** + **Quality** tier, then Generate.
-
-| Skill | Status |
-|-------|--------|
-| Object Studio | live — hard-surface / props |
-| Character | live — anatomy-aware |
-| Animation Ready | partial — sockets / static rest pose |
-| Game Ready | partial — colliders / LOD hooks |
-
-| Tier | Passes |
-|------|--------|
-| Fast | blockout |
-| Standard | → material |
-| Studio | full 8: blockout → structural → form → material → surface → lighting → interaction → optimization |
-
-## Harness (do not collapse to one-shot)
-
-1. **Planner** — SculptSpec + qualityContract + detailInventory  
-2. **Generator** — current pass only; evolve previous factory  
-3. **Evaluator** — deterministic code gate, then skeptic LLM (skipped on Fast)  
-4. Max **one refine** per pass; soft time budget → partial DONE  
-
-Runtime prompts live in `backend/.../lib/water/skills/` — **not** this markdown file.
+1. Prompt pack in `backend/.../lib/water/skills/index.ts`
+2. Binding in `orchestrator/packs.ts` (first match wins; default last)
+3. Matching eve skill under `agent/agents/create-water/agent/skills/`
 
 ## Contract (must hold)
 
@@ -46,10 +31,6 @@ Runtime prompts live in `backend/.../lib/water/skills/` — **not** this markdow
 - `export function createModel(): THREE.Group`
 - `root.userData.sculptRuntime`
 - Factory is **static** (no time-based animation; no `userData.tick`)
-- No fetch / eval / loaders / dynamic import  
+- No fetch / eval / loaders / dynamic import
 
 Preview: `public/water-sandbox.html`.
-
-## Agent notes
-
-When editing Water, preserve pass order and generator≠evaluator split. Prefer extending skill packs over stuffing everything into one system prompt.

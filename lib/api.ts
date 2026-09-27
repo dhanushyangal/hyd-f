@@ -154,6 +154,60 @@ export interface Workspace {
   jobCount?: number;
 }
 
+export type WaterVisualEvidence = {
+  gatePassed?: boolean;
+  fidelity?: number | null;
+  failCodes?: string[];
+  promoteEligible?: boolean;
+  reasons?: string[];
+  source?: "factory" | "unexecuted" | string;
+  meshNames?: string[];
+  turntables?: Array<{ angle: number; dataUrl: string }>;
+  sheetDataUrl?: string | null;
+};
+
+type WaterMaterialPatch = { color?: string; roughness?: number; metalness?: number };
+
+export type WaterSceneInstance = {
+  nodeId: string;
+  assetId: string;
+  name: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  material?: WaterMaterialPatch | null;
+  /** Per-mesh overrides keyed by factory mesh name. */
+  partMaterials?: Record<string, WaterMaterialPatch>;
+};
+
+export type WaterSceneBundle = {
+  jobId: string;
+  projectId: string;
+  sceneId: string;
+  assetId: string;
+  nodeId: string;
+  ir: {
+    version: 0;
+    camera: { position: [number, number, number]; target: [number, number, number]; fov: number };
+    lights: Array<{ type: string; intensity: number; position?: [number, number, number] }>;
+    instances: WaterSceneInstance[];
+  };
+  /** This job's instance within the (shared) project scene. */
+  instance: WaterSceneInstance;
+  meshNames: string[];
+  triangleCount: number | null;
+  drawCalls: number | null;
+  qualityTier: "fast" | "standard" | "studio" | null;
+  pack: string | null;
+};
+
+export type WaterChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
+
 export interface BackendJob {
   id: string;
   userId: string | null;
@@ -174,6 +228,9 @@ export interface BackendJob {
   /** Library list may set this instead of shipping full factoryCode */
   hasFactoryCode?: boolean;
   sculptPass?: string | null;
+  /** Wall-clock generate time in ms. Null while running. */
+  durationMs?: number | null;
+  visualEvidence?: WaterVisualEvidence | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1808,14 +1865,12 @@ export async function submitWater(params: {
   imageUrl?: string | null;
   workspaceId?: string | null;
   parentJobId?: string | null;
-  skillId?: string | null;
-  qualityTier?: string | null;
+  qualityTier?: "fast" | "standard" | "studio";
+  factoryCode?: string | null;
   getToken?: () => Promise<string | null>;
 }): Promise<{
   job_id: string;
   mode: "text_to_code" | "image_to_code";
-  skillId?: string;
-  qualityTier?: string;
 }> {
   const res = await fetch(`${backendBase}/api/water/generate`, {
     method: "POST",
@@ -1826,8 +1881,8 @@ export async function submitWater(params: {
       imageUrl: params.imageUrl || undefined,
       workspaceId: params.workspaceId || undefined,
       parentJobId: params.parentJobId || undefined,
-      skillId: params.skillId || undefined,
       qualityTier: params.qualityTier || undefined,
+      factoryCode: params.factoryCode || undefined,
     }),
   });
   const body = await res.json().catch(() => ({}));
@@ -1841,8 +1896,6 @@ export async function submitWater(params: {
   return {
     job_id: (body as { jobId?: string }).jobId || "",
     mode: (body as { mode?: "text_to_code" | "image_to_code" }).mode || "text_to_code",
-    skillId: (body as { skillId?: string }).skillId,
-    qualityTier: (body as { qualityTier?: string }).qualityTier,
   };
 }
 
@@ -1863,7 +1916,10 @@ export async function fetchWaterJob(
   llmInputTokens: number | null;
   llmOutputTokens: number | null;
   llmTotalTokens: number | null;
+  durationMs: number | null;
   prompt: string | null;
+  visualEvidence: WaterVisualEvidence | null;
+  scene: WaterSceneBundle | null;
 }> {
   const res = await fetch(`${backendBase}/api/water/jobs/${jobId}`, {
     headers: await authHeaders(getToken),
@@ -1887,7 +1943,10 @@ export async function fetchWaterJob(
     llmInputTokens: job.llmInputTokens ?? null,
     llmOutputTokens: job.llmOutputTokens ?? null,
     llmTotalTokens: job.llmTotalTokens ?? null,
+    durationMs: typeof job.durationMs === "number" ? job.durationMs : null,
     prompt: job.prompt ?? null,
+    visualEvidence: (job.visualEvidence as WaterVisualEvidence | null) ?? null,
+    scene: (job.scene as WaterSceneBundle | null) ?? null,
   };
 }
 
@@ -1936,4 +1995,115 @@ export async function saveWaterThumbnail(
     throw new Error((body as { error?: string }).error || "Failed to save thumbnail");
   }
   return (body as { previewImageUrl?: string }).previewImageUrl || dataUrl;
+}
+
+export async function saveWaterFactory(
+  jobId: string,
+  factoryCode: string,
+  getToken?: () => Promise<string | null>
+): Promise<{
+  factoryCode: string;
+  visual: WaterVisualEvidence;
+}> {
+  const res = await fetch(`${backendBase}/api/water/jobs/${jobId}/factory`, {
+    method: "PATCH",
+    headers: await authHeaders(getToken),
+    body: JSON.stringify({ factoryCode }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      (body as { message?: string; error?: string }).message ||
+        (body as { error?: string }).error ||
+        "Failed to save factory"
+    );
+  }
+  return body as {
+    factoryCode: string;
+    visual: WaterVisualEvidence;
+  };
+}
+
+export async function sendWaterChat(params: {
+  jobId: string;
+  message: string;
+  modelId: string;
+  getToken?: () => Promise<string | null>;
+}): Promise<{
+  kind: string;
+  reply: string;
+  refinePrompt: string | null;
+  scene: WaterSceneBundle | null;
+  visual: WaterVisualEvidence | null;
+}> {
+  const res = await fetch(`${backendBase}/api/water/chat`, {
+    method: "POST",
+    headers: await authHeaders(params.getToken),
+    body: JSON.stringify({
+      jobId: params.jobId,
+      message: params.message,
+      modelId: params.modelId,
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Follow-up failed");
+  }
+  return body as {
+    kind: string;
+    reply: string;
+    refinePrompt: string | null;
+    scene: WaterSceneBundle | null;
+    visual: WaterVisualEvidence | null;
+  };
+}
+
+export async function fetchWaterMessages(
+  jobId: string,
+  getToken?: () => Promise<string | null>
+): Promise<WaterChatMessage[]> {
+  const res = await fetch(`${backendBase}/api/water/jobs/${jobId}/messages`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) return [];
+  return ((body as { messages?: Array<{ id: string; role: string; content: string; created_at: string }> }).messages || []).map(
+    (m) => ({
+      id: m.id,
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: m.content,
+      createdAt: m.created_at,
+    })
+  );
+}
+
+export async function patchWaterScene(params: {
+  jobId: string;
+  op: "move" | "rotate" | "scale" | "material";
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
+  /** Mesh name — with `material`, saves a per-part override. */
+  name?: string;
+  material?: WaterMaterialPatch;
+  getToken?: () => Promise<string | null>;
+}): Promise<WaterSceneBundle | null> {
+  const res = await fetch(`${backendBase}/api/water/jobs/${params.jobId}/scene`, {
+    method: "PATCH",
+    headers: await authHeaders(params.getToken),
+    body: JSON.stringify({
+      op: params.op,
+      position: params.position,
+      rotation: params.rotation,
+      scale: params.scale,
+      name: params.name,
+      material: params.material,
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to update scene");
+  }
+  return ((body as { scene?: WaterSceneBundle }).scene || null);
 }

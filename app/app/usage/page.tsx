@@ -274,7 +274,7 @@ export default function UsagePage() {
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   return (
-    <div className="app-content-page font-dm-sans bg-[#fafafa]">
+    <div className="app-content-page font-dm-sans bg-[var(--app-canvas)]">
       <section className="flex flex-col gap-8 sm:gap-10 max-w-6xl mx-auto w-full">
         {/* Header */}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">

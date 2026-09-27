@@ -11,7 +11,9 @@ export function RequireAuthLayout({ children }: { children: ReactNode }) {
       <SignedOut>
         <RedirectToSignIn />
       </SignedOut>
-      <SignedIn>{children}</SignedIn>
+      <SignedIn>
+        <div className="app-themed min-h-screen bg-[var(--app-canvas)]">{children}</div>
+      </SignedIn>
     </>
   );
 }

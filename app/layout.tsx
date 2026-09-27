@@ -102,7 +102,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       signInFallbackRedirectUrl="/app/studio"
       signUpFallbackRedirectUrl="/app/studio"
     >
-    <html lang="en" className={dmSans.variable}>
+    <html lang="en" className={dmSans.variable} suppressHydrationWarning>
         <head>
           <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="" />
           <link rel="preconnect" href="https://hydrilla-outputs-1.s3.amazonaws.com" crossOrigin="" />
@@ -110,7 +110,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <link rel="preconnect" href={clerkHost} crossOrigin="" />
           <link rel="dns-prefetch" href={clerkHost} />
         </head>
-        <body className="min-h-screen bg-white">
+        <body className="min-h-screen">
           <ClientProviders>
             <ConditionalNavbar />
             <main>{children}</main>

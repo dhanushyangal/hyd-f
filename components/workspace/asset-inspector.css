@@ -1,0 +1,42 @@
+.asset-dials.dialkit-root {
+  --dial-surface: #f4f4f5;
+  --dial-surface-hover: #ececee;
+  --dial-surface-active: #e4e4e7;
+  --dial-surface-subtle: #fafafa;
+  --dial-text-root: #171717;
+  --dial-text-section: #737373;
+  --dial-text-label: #525252;
+  --dial-text-focus: #171717;
+  --dial-text-primary: #171717;
+  --dial-text-secondary: #737373;
+  --dial-text-tertiary: #a3a3a3;
+  --dial-border: #e5e5e5;
+  --dial-border-hover: #d4d4d8;
+  --dial-focus-ring: #171717;
+  --dial-glass-bg: transparent;
+  --dial-dropdown-bg: #ffffff;
+  --dial-backdrop-blur: 0px;
+  --dial-radius: 10px;
+  --dial-row-height: 32px;
+  --dial-row-gap: 4px;
+  --dial-shadow: none;
+  --dial-shadow-collapsed: none;
+  --dial-shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font-family: inherit;
+}
+
+.asset-dials .dialkit-panel,
+.asset-dials .dialkit-panel-inner {
+  position: static;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  max-height: none;
+}
+
+.asset-dials .dialkit-folder-title-row {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 10px;
+}

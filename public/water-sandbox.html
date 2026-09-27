@@ -15,7 +15,7 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #f4f4f5;
+        background: #ffffff;
         font-family: ui-sans-serif, system-ui, sans-serif;
       }
       #c {
@@ -71,27 +71,289 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xf4f4f5);
-      const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
-      camera.position.set(2.4, 1.6, 2.8);
+      scene.background = new THREE.Color(0xffffff);
+      const perspCam = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+      perspCam.position.set(2.4, 1.6, 2.8);
+      const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 200);
+      orthoCam.position.copy(perspCam.position);
+      let camera = perspCam;
 
       const controls = new OrbitControls(camera, canvas);
       controls.enableDamping = true;
+      controls.enableRotate = true;
+      controls.enableZoom = true;
+      controls.enablePan = true;
       controls.target.set(0, 0.4, 0);
       let interactive = true;
+
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      let loadToken = 0;
 
       const pmrem = new THREE.PMREMGenerator(renderer);
       scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-      scene.add(new THREE.HemisphereLight(0xffffff, 0xb0b0b0, 0.55));
-      const key = new THREE.DirectionalLight(0xffffff, 1.35);
+      // Intensities arrive from the parent (lib/viewer/look.ts → water-look).
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambient);
+      const hemi = new THREE.HemisphereLight(0xffffff, 0xf4f4f5, 0.55);
+      scene.add(hemi);
+      const key = new THREE.DirectionalLight(0xffffff, 1.2);
       key.position.set(4, 8, 5);
+      key.castShadow = true;
+      key.shadow.mapSize.set(2048, 2048);
+      key.shadow.bias = -0.0005;
       scene.add(key);
+      scene.add(key.target);
+      const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+      fill.position.set(-4, 5, -4);
+      scene.add(fill);
+      const rim = new THREE.DirectionalLight(0xffffff, 0.25);
+      rim.position.set(0, 3, -8);
+      scene.add(rim);
+
+      const grid = new THREE.GridHelper(8, 16, 0xd4d4d4, 0xe5e5e5);
+      grid.visible = false;
+      scene.add(grid);
+
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(60, 60),
+        new THREE.ShadowMaterial({ opacity: 0.16 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Selected-part highlight (spec from lib/viewer/highlight.ts via water-highlight).
+      // Kept outside `root` so exports never include it.
+      const highlightGroup = new THREE.Group();
+      scene.add(highlightGroup);
+      let highlightMats = null;
+      let highlightName = null;
+
+      function ensureHighlightMaterials(spec) {
+        if (highlightMats || !spec) return highlightMats;
+        highlightMats = {
+          rim: new THREE.ShaderMaterial({
+            uniforms: {
+              uColor: { value: new THREE.Color(spec.color) },
+              uRim: { value: spec.rimStrength },
+              uFill: { value: spec.fill },
+              uTime: { value: 0 },
+              uPeriod: { value: spec.pulsePeriod },
+            },
+            vertexShader: spec.vertexShader,
+            fragmentShader: spec.fragmentShader,
+            transparent: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1,
+            toneMapped: false,
+          }),
+          edge: new THREE.LineBasicMaterial({
+            color: spec.color,
+            transparent: true,
+            opacity: spec.edgeOpacity,
+            depthWrite: false,
+            toneMapped: false,
+          }),
+          edgeThreshold: spec.edgeThreshold,
+        };
+        return highlightMats;
+      }
+
+      function followMesh(overlay, mesh) {
+        overlay.matrixAutoUpdate = false;
+        overlay.matrix.copy(mesh.matrixWorld);
+        overlay.userData.follow = mesh;
+        overlay.renderOrder = 2;
+        overlay.raycast = () => {};
+        return overlay;
+      }
+
+      function applyHighlight() {
+        for (const child of highlightGroup.children) {
+          if (child.isLineSegments) child.geometry.dispose();
+        }
+        highlightGroup.clear();
+        if (!root || !highlightName || !highlightMats) return;
+        root.updateMatrixWorld(true);
+        root.traverse((child) => {
+          if (!child.isMesh || child.isSkinnedMesh || child.name !== highlightName) return;
+          highlightGroup.add(followMesh(new THREE.Mesh(child.geometry, highlightMats.rim), child));
+          highlightGroup.add(
+            followMesh(
+              new THREE.LineSegments(
+                new THREE.EdgesGeometry(child.geometry, highlightMats.edgeThreshold),
+                highlightMats.edge
+              ),
+              child
+            )
+          );
+        });
+      }
 
       let root = null;
-      let start = performance.now();
+      /** Largest model dimension / 2 — scales the ortho frustum like ThreeViewer's normalized GLBs. */
+      let modelScale = 1;
+      let resolvedLook = null;
+      /** name → { color, roughness, metalness }; meshes not listed use their authored material. */
+      let partMaterials = {};
+
+      function materialsOf(mesh) {
+        if (!mesh || !mesh.material) return [];
+        return Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      }
+
+      function readPartMaterial(mat) {
+        return {
+          color: mat && mat.color && mat.color.isColor ? "#" + mat.color.getHexString() : "#888888",
+          roughness: typeof mat?.roughness === "number" ? mat.roughness : 0.5,
+          metalness: typeof mat?.metalness === "number" ? mat.metalness : 0,
+        };
+      }
+
+      /** Name unnamed meshes, give each mesh its own materials, and remember authored values. */
+      function prepareMeshes(obj) {
+        const authored = {};
+        let unnamed = 0;
+        obj.traverse((child) => {
+          if (!child.isMesh) return;
+          if (!child.name) child.name = `Part ${++unnamed}`;
+          child.castShadow = true;
+          const mats = materialsOf(child).map((m) => (m && m.clone ? m.clone() : m));
+          if (mats.length) child.material = Array.isArray(child.material) ? mats : mats[0];
+          for (const m of mats) if (m) m.userData.base = readPartMaterial(m);
+          if (!authored[child.name] && mats[0]) authored[child.name] = readPartMaterial(mats[0]);
+        });
+        return authored;
+      }
+
+      function applyPartMaterials() {
+        if (!root) return;
+        const wire = Boolean(resolvedLook?.wireframe);
+        root.traverse((child) => {
+          if (!child.isMesh) return;
+          const override = partMaterials[child.name];
+          for (const mat of materialsOf(child)) {
+            if (!mat) continue;
+            const target = override || mat.userData.base;
+            if (target) {
+              if (mat.color && mat.color.isColor && target.color) mat.color.set(target.color);
+              if ("roughness" in mat) mat.roughness = target.roughness;
+              if ("metalness" in mat) mat.metalness = target.metalness;
+            }
+            if ("wireframe" in mat) mat.wireframe = wire;
+          }
+        });
+      }
+
+      function updateCamera() {
+        const spec = resolvedLook?.camera || { ortho: false, fov: 45, frustum: 2.2 };
+        const w = window.innerWidth;
+        const h = Math.max(window.innerHeight, 1);
+        const aspect = w / h;
+        const next = spec.ortho ? orthoCam : perspCam;
+        if (next !== camera) {
+          next.position.copy(camera.position);
+          next.quaternion.copy(camera.quaternion);
+          camera = next;
+          controls.object = camera;
+        }
+        if (camera === orthoCam) {
+          const f = spec.frustum * modelScale;
+          camera.left = -f * aspect;
+          camera.right = f * aspect;
+          camera.top = f;
+          camera.bottom = -f;
+        } else {
+          camera.fov = spec.fov;
+          camera.aspect = aspect;
+        }
+        camera.updateProjectionMatrix();
+      }
+
+      function applyLook(look) {
+        if (!look || typeof look !== "object") return;
+        resolvedLook = look;
+        renderer.toneMappingExposure = Number(look.exposure) || 1;
+        scene.background = look.background ? new THREE.Color(look.background) : null;
+        grid.visible = Boolean(look.grid);
+        ground.visible = Boolean(look.shadow);
+        key.castShadow = Boolean(look.shadow);
+        controls.autoRotate = Boolean(look.autoRotate);
+        const lights = look.lights || {};
+        ambient.intensity = Number(lights.ambient) || 0;
+        hemi.intensity = Number(lights.hemi) || 0;
+        key.intensity = Number(lights.key) || 0;
+        fill.intensity = Number(lights.fill) || 0;
+        rim.intensity = Number(lights.rim) || 0;
+        applyPartMaterials();
+        updateCamera();
+      }
+
+      /** Sit the shadow catcher/grid under the model and fit the key light's shadow frustum. */
+      function fitStage(box) {
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const r = Math.max(size.x, size.y, size.z, 0.5);
+        ground.position.y = box.min.y - 0.001;
+        grid.position.set(center.x, box.min.y, center.z);
+        grid.scale.setScalar(Math.max(1, r / 4));
+        key.position.copy(center).add(new THREE.Vector3(4, 8, 5).normalize().multiplyScalar(r * 3));
+        key.target.position.copy(center);
+        key.target.updateMatrixWorld();
+        const sc = key.shadow.camera;
+        sc.left = -r * 1.5;
+        sc.right = r * 1.5;
+        sc.top = r * 1.5;
+        sc.bottom = -r * 1.5;
+        sc.near = 0.01;
+        sc.far = r * 8;
+        sc.updateProjectionMatrix();
+        modelScale = r / 2;
+      }
+
+      function disposeObject(obj) {
+        if (!obj) return;
+        obj.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          const mat = child.material;
+          if (!mat) return;
+          if (Array.isArray(mat)) mat.forEach((m) => m.dispose?.());
+          else mat.dispose?.();
+        });
+      }
+
+      function applyInstanceTransform(t) {
+        if (!root || !t) return;
+        if (Array.isArray(t.position)) root.position.fromArray(t.position);
+        if (Array.isArray(t.rotation)) root.rotation.set(t.rotation[0] || 0, t.rotation[1] || 0, t.rotation[2] || 0);
+        if (Array.isArray(t.scale)) root.scale.fromArray(t.scale);
+      }
+
+      // Select on click only — orbit drags must not change the selected part.
+      let pointerDownAt = null;
+      canvas.addEventListener("pointerdown", (ev) => {
+        pointerDownAt = [ev.clientX, ev.clientY];
+      });
+      canvas.addEventListener("pointerup", (ev) => {
+        if (!pointerDownAt) return;
+        const moved = Math.hypot(ev.clientX - pointerDownAt[0], ev.clientY - pointerDownAt[1]);
+        pointerDownAt = null;
+        if (moved > 4 || !root) return;
+        const rect = canvas.getBoundingClientRect();
+        pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hit = raycaster.intersectObject(root, true).find((h) => h.object.isMesh);
+        parent.postMessage({ type: "water-select", name: hit?.object.name || null }, "*");
+      });
 
       function showError(msg) {
         errEl.style.display = "flex";
@@ -104,23 +366,19 @@
       }
 
       function resize() {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        renderer.setSize(w, h, false);
-        camera.aspect = w / Math.max(h, 1);
-        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight, false);
+        updateCamera();
       }
       window.addEventListener("resize", resize);
       resize();
 
-      function frame() {
-        const elapsed = (performance.now() - start) / 1000;
-        if (root?.userData?.tick) {
-          try {
-            root.userData.tick(0.016, elapsed);
-          } catch {}
-        }
+      function frame(time) {
+        // Factories are static (D2). Never run userData.tick even if older jobs still emit it.
         if (interactive) controls.update();
+        if (highlightMats) highlightMats.rim.uniforms.uTime.value = (time || 0) / 1000;
+        for (const overlay of highlightGroup.children) {
+          overlay.matrix.copy(overlay.userData.follow.matrixWorld);
+        }
         renderer.render(scene, camera);
         requestAnimationFrame(frame);
       }
@@ -132,8 +390,10 @@
             interactive = false;
             controls.enableDamping = false;
             controls.update();
+            highlightGroup.visible = false;
             renderer.render(scene, camera);
             const raw = canvas.toDataURL("image/jpeg", 0.85);
+            highlightGroup.visible = true;
             const img = new Image();
             img.onload = () => {
               try {
@@ -148,7 +408,7 @@
                 if (!ctx) {
                   resolve(raw);
                 } else {
-                  ctx.fillStyle = "#f4f4f5";
+                  ctx.fillStyle = "#ffffff";
                   ctx.fillRect(0, 0, w, h);
                   ctx.drawImage(img, 0, 0, w, h);
                   resolve(off.toDataURL("image/jpeg", 0.82));
@@ -175,13 +435,16 @@
       }
 
       async function loadFactory(code) {
+        const token = ++loadToken;
         clearError();
         glbCache = null;
         glbWarmToken += 1;
         if (root) {
           scene.remove(root);
+          disposeObject(root);
           root = null;
         }
+        applyHighlight();
         try {
           if (!window.ts?.transpileModule) {
             throw new Error("TypeScript preview compiler did not load");
@@ -219,9 +482,10 @@
           let mod;
           try {
             mod = await import(/* @vite-ignore */ url);
-          } finally {
+          }           finally {
             URL.revokeObjectURL(url);
           }
+          if (token !== loadToken) return;
           const factory =
             mod.createModel ||
             mod.default ||
@@ -230,23 +494,43 @@
           if (typeof factory !== "function") {
             throw new Error("No createModel() export found in generated code");
           }
-          root = factory();
-          if (!root || !root.isObject3D) {
+          const next = factory();
+          if (!next || !next.isObject3D) {
             throw new Error("createModel() did not return a THREE.Object3D");
           }
+          if (token !== loadToken) {
+            disposeObject(next);
+            return;
+          }
+          if (root) {
+            scene.remove(root);
+            disposeObject(root);
+            root = null;
+          }
+          const authored = prepareMeshes(next);
+          root = next;
           glbCache = null;
           glbWarmToken += 1;
           scene.add(root);
+          applyInstanceTransform(window.__waterInstance || null);
+          applyPartMaterials();
+          applyHighlight();
           const box = new THREE.Box3().setFromObject(root);
           const size = box.getSize(new THREE.Vector3()).length() || 1;
           const center = box.getCenter(new THREE.Vector3());
+          fitStage(box);
+          updateCamera();
           // Deterministic three-quarter framing (img2threejs capture rules)
           controls.target.copy(center);
           camera.position.copy(center).add(new THREE.Vector3(size * 0.7, size * 0.45, size * 0.85));
           controls.update();
           renderer.render(scene, camera);
 
-          parent.postMessage({ type: "code-sculpt-ready" }, "*");
+          parent.postMessage({
+            type: "code-sculpt-ready",
+            meshNames: Object.keys(authored),
+            parts: authored,
+          }, "*");
 
           // One stable frame later → thumbnail for library cards
           requestAnimationFrame(async () => {
@@ -261,6 +545,7 @@
             scheduleGlbWarm();
           });
         } catch (e) {
+          if (token !== loadToken) return;
           glbCache = null;
           showError(e?.message || String(e));
         }
@@ -444,6 +729,7 @@ const {
             interactive = false;
             controls.enableDamping = false;
             controls.update();
+            highlightGroup.visible = false;
             renderer.render(scene, camera);
             const blob = await new Promise((resolve, reject) => {
               canvas.toBlob(
@@ -451,6 +737,7 @@ const {
                 "image/png"
               );
             });
+            highlightGroup.visible = true;
             controls.enableDamping = true;
             interactive = true;
             const ab = await blob.arrayBuffer();
@@ -474,7 +761,25 @@ const {
         const data = ev.data;
         if (!data || typeof data !== "object") return;
         if (data.type === "code-sculpt-load" && typeof data.code === "string") {
+          if (data.instance) window.__waterInstance = data.instance;
+          partMaterials = {};
           loadFactory(data.code);
+        }
+        if (data.type === "water-transform" && data.instance) {
+          window.__waterInstance = data.instance;
+          applyInstanceTransform(data.instance);
+        }
+        if (data.type === "water-parts") {
+          partMaterials = data.parts && typeof data.parts === "object" ? data.parts : {};
+          applyPartMaterials();
+        }
+        if (data.type === "water-look" && data.look) {
+          applyLook(data.look);
+        }
+        if (data.type === "water-highlight") {
+          ensureHighlightMaterials(data.spec);
+          highlightName = typeof data.name === "string" ? data.name : null;
+          applyHighlight();
         }
         if (data.type === "code-sculpt-export" && data.format && data.requestId) {
           void exportModel(String(data.format), data.requestId);

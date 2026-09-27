@@ -1,0 +1,258 @@
+{
+  "branding": {
+    "colorScheme": "dark",
+    "fonts": [
+      {
+        "family": "Inter",
+        "role": "body"
+      },
+      {
+        "family": "Chakra Petch",
+        "role": "heading"
+      },
+      {
+        "family": "SF Pro Text Regular",
+        "role": "unknown"
+      }
+    ],
+    "colors": {
+      "primary": "#0000EE",
+      "accent": "#0000EE",
+      "background": "#000000",
+      "textPrimary": "#000000",
+      "link": "#0000EE"
+    },
+    "typography": {
+      "fontFamilies": {
+        "primary": "Inter",
+        "heading": "Chakra Petch"
+      },
+      "fontStacks": {
+        "heading": [
+          "sans-serif"
+        ],
+        "body": [
+          "sans-serif"
+        ],
+        "paragraph": [
+          "Inter",
+          "sans-serif"
+        ]
+      },
+      "fontSizes": {
+        "h1": "12px",
+        "h2": "48px",
+        "body": "14px"
+      }
+    },
+    "spacing": {
+      "baseUnit": 4,
+      "borderRadius": "7px"
+    },
+    "components": {
+      "input": {
+        "background": "#EFEFEF",
+        "textColor": "#000000",
+        "borderColor": "#767676",
+        "borderRadius": "0px",
+        "borderRadiusCorners": {
+          "topLeft": "0px",
+          "topRight": "0px",
+          "bottomRight": "0px",
+          "bottomLeft": "0px"
+        },
+        "shadow": "none"
+      },
+      "buttonPrimary": {
+        "background": "#000000",
+        "textColor": "#0000EE",
+        "borderRadius": "8px",
+        "borderRadiusCorners": {
+          "topLeft": "8px",
+          "topRight": "8px",
+          "bottomRight": "8px",
+          "bottomLeft": "8px"
+        },
+        "shadow": "none"
+      }
+    },
+    "images": {
+      "logo": "https://framerusercontent.com/images/Cs4xwI1LcnP2YtC4rNfnhVQrag.png",
+      "favicon": "https://framerusercontent.com/images/BjVUeOJ3bO2EzSmJXFFMqNJi1g.png",
+      "ogImage": "https://framerusercontent.com/images/Cs4xwI1LcnP2YtC4rNfnhVQrag.png",
+      "logoAlt": "AssetHub"
+    },
+    "__llm_logo_reasoning": {
+      "selectedIndex": 0,
+      "reasoning": "Selected #0 because it is visible, located in the header, and matches the brand name 'AssetHub'.",
+      "confidence": 0.95,
+      "source": "llm"
+    },
+    "__llm_button_reasoning": {
+      "primary": {
+        "index": 1,
+        "text": "Start creating",
+        "reasoning": "The button 'Start creating' is likely the primary CTA due to its action-oriented text, suggesting immediate engagement with the platform."
+      },
+      "secondary": {
+        "index": 0,
+        "text": "Join Community",
+        "reasoning": "The button 'Join Community' serves as a secondary action, encouraging user engagement but not directly related to the core service offering."
+      },
+      "confidence": 0.9
+    },
+    "personality": {
+      "tone": "modern",
+      "energy": "medium",
+      "targetAudience": "digital creators and designers"
+    },
+    "designSystem": {
+      "framework": "custom",
+      "componentLibrary": ""
+    },
+    "confidence": {
+      "buttons": 0.9,
+      "colors": 0.8,
+      "overall": 0.8500000000000001
+    },
+    "__llm_metadata": {
+      "logoSelection": {
+        "llmCalled": true,
+        "llmSucceeded": true,
+        "finalSource": "llm",
+        "rawLogoSelection": {
+          "selectedLogoIndex": 0,
+          "selectedLogoReasoning": "Selected #0 because it is visible, located in the header, and matches the brand name 'AssetHub'.",
+          "confidence": 0.95
+        }
+      },
+      "buttonClassification": {
+        "llmCalled": true,
+        "llmSucceeded": true
+      }
+    },
+    "brandName": "AssetHub",
+    "logo": "https://framerusercontent.com/images/Cs4xwI1LcnP2YtC4rNfnhVQrag.png"
+  },
+  "metadata": {
+    "og:type": "website",
+    "ogDescription": "Turn a concept image into editable 3D parts with AI agents for generation, assembly and review. Work with AssetHub to build a production workflow for your team.",
+    "generator": "Framer 560da95",
+    "framer-html-plugin": "disable",
+    "twitter:card": "summary_large_image",
+    "twitter:image": "https://framerusercontent.com/images/Cs4xwI1LcnP2YtC4rNfnhVQrag.png",
+    "framer-search-index-fallback": "https://framerusercontent.com/sites/8GVnGAJUCnXBtAWvEt5PO/searchIndex-D5T2QS3F6KQV.json",
+    "title": "AssetHub | From One Image to Editable 3D",
+    "ogUrl": "https://assethub.io/",
+    "language": "en",
+    "og:description": "Turn a concept image into editable 3D parts with AI agents for generation, assembly and review. Work with AssetHub to build a production workflow for your team.",
+    "og:url": "https://assethub.io/",
+    "robots": "max-image-preview:large",
+    "twitter:description": "Turn a concept image into editable 3D parts with AI agents for generation, assembly and review. Work with AssetHub to build a production workflow for your team.",
+    "color-scheme": "light dark",
+    "framer-search-index": "https://framerusercontent.com/sites/8GVnGAJUCnXBtAWvEt5PO/searchIndex-UFHy48gni1hE.json",
+    "og:title": "AssetHub | From One Image to Editable 3D",
+    "og:image": "https://framerusercontent.com/images/Cs4xwI1LcnP2YtC4rNfnhVQrag.png",
+    "twitter:title": "AssetHub | From One Image to Editable 3D",
+    "ogTitle": "AssetHub | From One Image to Editable 3D",
+    "description": "Turn a concept image into editable 3D parts with AI agents for generation, assembly and review. Work with AssetHub to build a production workflow for your team.",
+    "viewport": [
+      "width=device-width",
+      "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    ],
+    "ogImage": "https://framerusercontent.com/images/Cs4xwI1LcnP2YtC4rNfnhVQrag.png",
+    "favicon": "https://framerusercontent.com/images/BjVUeOJ3bO2EzSmJXFFMqNJi1g.png",
+    "scrapeId": "01a0bf03-fc5e-7552-a80c-4f802915bb19",
+    "sourceURL": "https://assethub.io/",
+    "url": "https://assethub.io/",
+    "statusCode": 200,
+    "contentType": "text/html",
+    "timezone": "America/New_York",
+    "proxyUsed": "basic",
+    "indexId": "9d212637-66ff-4243-b472-d3cd6d8e66b2",
+    "creditsUsed": 1,
+    "concurrencyLimited": false
+  },
+  "images": [
+    "https://framerusercontent.com/images/VIV3oxzF3vGGKiorUIggnRCjzqI.png?width=1494&height=914",
+    "https://framerusercontent.com/images/YA50iBMb3E7X3G1dUuvYgzsNQWY.png?width=512&height=512",
+    "https://framerusercontent.com/images/HOpvaKst2zpbmFZWeqzKcEcp2g.png?width=96&height=96",
+    "https://framerusercontent.com/images/5ubycagRVdAAztvsTYGmHBfpBQ.png?width=1184&height=896",
+    "https://framerusercontent.com/images/INR3IicqQXCu9iZZjrVe9IE2k.png?width=1096&height=960",
+    "https://framerusercontent.com/images/5AOHKulIvhCD5rqig5WwN2OzI.png?width=1387&height=768",
+    "https://framerusercontent.com/images/SoI2xYQ1jriTXNx6BTZ8jdThHY.png?width=365&height=365",
+    "https://framerusercontent.com/images/qlahmFZegtQOu0HZMSaXfRldU.png?width=365&height=365",
+    "https://framerusercontent.com/images/TbSx0Ec8mrhloLj3OXTH9LoMFo.png?width=365&height=365",
+    "https://framerusercontent.com/images/ijRHYWvZ1ZZPj1Ko3VeLih4a3E.png?width=512&height=512",
+    "https://framerusercontent.com/images/BlgCnuV04QwA0SPRt3QK0YOFWk.png?width=883&height=468",
+    "https://framerusercontent.com/images/nBpBCjLlo3pLzNuhb5z46AU56w.png?width=1920&height=1080",
+    "https://framerusercontent.com/images/FcL07x9m053phfelN9Tstel8Ub0.png?width=299&height=299",
+    "https://framerusercontent.com/images/so7BrzqfxIfuuoB7qJUorTBkdWg.png?width=629&height=625",
+    "https://framerusercontent.com/images/AcLRx52aE6FhTnBtv4VMstjDJ10.png?width=256&height=256",
+    "https://framerusercontent.com/images/HM5VUsTIjDx2eEngTfPH18x5kkk.png?width=1008&height=1056",
+    "https://framerusercontent.com/images/1NmvvhCnjDDoOZ2rkPqwFsJ7BWA.png?width=522&height=408",
+    "https://framerusercontent.com/images/cfy1BrfEjcQJh4bSkhXlRJ0hOg.png?width=2196&height=1126",
+    "https://framerusercontent.com/images/RgROEELDkKSi2XRlFnshmwjQ9PI.png?width=92&height=92",
+    "https://framerusercontent.com/images/gpjmjEN7dI020lixjt3pVo1SAE.png?width=2820&height=1422",
+    "https://framerusercontent.com/images/nMyf4wLkeGTjaFPgwqpj8yrPGqw.png?width=92&height=92",
+    "https://framerusercontent.com/images/tXIGiPWB6M7kv6zMJQ0Hrjtb1TU.png?width=60&height=60",
+    "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 xmlns:xlink=%22http://www.w3.org/1999/xlink%22 viewBox=%220 0 134 24%22><g><path d=%22M 0 24 L 0 0 L 133.187 0 L 133.187 24 Z%22 fill=%22transparent%22></path><path d=%22M 39.605 4.26 L 42.043 4.26 L 47.651 19.777 L 45.036 19.777 L 43.706 16.097 L 37.92 16.097 L 36.59 19.777 L 33.975 19.777 Z M 43.108 13.949 L 40.824 7.388 L 40.779 7.388 L 38.541 13.949 Z%22 fill=%22rgb(255,255,255",
+    "https://framerusercontent.com/images/p5SrcDpUvwMjXWoQFme8NWUCI.png?width=160&height=160",
+    "https://framerusercontent.com/images/ElDnRW7jabGSmkXQg7m12nW4gA.png?width=1766&height=1735",
+    "https://framerusercontent.com/images/H7MW2ogloD47qXMWQnyt8dKTcA.png?width=1477&height=947",
+    "https://framerusercontent.com/images/sn7es3mKPUbDoyaLVl9XVNSmSk.png?width=1195&height=1356",
+    "https://framerusercontent.com/images/jkUTtc93c7GWx4G0DaAiMjVFjrM.png?width=944&height=1136",
+    "https://framerusercontent.com/images/zidwD0RSproWBZEV2mxXHHrwdp4.png?width=2560&height=1380",
+    "https://framerusercontent.com/images/RhUUKzAP4OhM0JNO2xbSyLfoOBQ.png?width=200&height=200",
+    "https://framerusercontent.com/images/mNgJOZawfMFo1aqfpS59fcfgYg.png?width=1472&height=1472",
+    "https://framerusercontent.com/images/4IGeOBhi0ejns8Bsl6KifYauvo.png?width=912&height=1179",
+    "https://framerusercontent.com/images/KMWZJo6RaeYeppTl01FpEhjqWsQ.png?width=365&height=365",
+    "https://framerusercontent.com/images/6Ju4J5Mgx0yKHLnaVrnXhu3Kd0.png?width=1224&height=1228",
+    "https://framerusercontent.com/images/sFcKT9R4UdohejXKgPeSGi0wA.png?width=1000&height=1000",
+    "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 xmlns:xlink=%22http://www.w3.org/1999/xlink%22 viewBox=%220 0 24 24%22 overflow=%22visible%22><g><path d=%22M 0 0 L 24 0 L 24 24 L 0 24 Z%22 fill=%22transparent%22></path><path d=%22M 21.333 0 C 22.806 0 24 1.194 24 2.667 L 24 21.333 C 24 22.806 22.806 24 21.333 24 L 2.667 24 C 1.194 24 0 22.806 0 21.333 L 0 2.667 C 0 1.194 1.194 0 2.667 0 Z M 20.667 20.667 L 20.667 13.6 C 20.667 11.199 18.721 9.253 16.32 9.253 C 15.187 9.253 13.867 9.947 13.227 10.987 L 13.227 9.507 L 9.507 9.507 L 9.507 20.667 L 13.227 20.667 L 13.227 14.093 C 13.224 13.066 14.053 12.231 15.08 12.227 C 15.575 12.227 16.05 12.423 16.4 12.773 C 16.75 13.123 16.947 13.598 16.947 14.093 L 16.947 20.667 Z M 5.173 7.413 C 6.41 7.413 7.413 6.41 7.413 5.173 C 7.413 3.933 6.413 2.92 5.173 2.92 C 3.929 2.92 2.92 3.929 2.92 5.173 C 2.92 6.413 3.933 7.413 5.173 7.413 Z M 7.027 20.667 L 7.027 9.507 L 3.333 9.507 L 3.333 20.667 Z%22 fill=%22rgb(255,255,255",
+    "https://framerusercontent.com/images/rYM1eTwnOvePmgsGuSi0jn0EoY.png?width=1195&height=1356",
+    "https://framerusercontent.com/images/y1GTGRZ9vfrDxiEKg4BJmEl5Y.png?width=365&height=365",
+    "https://framerusercontent.com/images/CpUhmwfcw2ZsYSGfEkgJrgPfhxA.png?width=3180&height=1440",
+    "https://framerusercontent.com/images/FY7tbBZbUmWBp3uwRonZ9MHFfL8.png?width=976&height=1079",
+    "https://framerusercontent.com/images/IFJ1BXJrjlCNoxiHtgpnKK3EKY.png?width=365&height=365",
+    "https://framerusercontent.com/images/hYu4JJLqArWOveRMXabblLZH24.png?width=736&height=1440",
+    "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 xmlns:xlink=%22http://www.w3.org/1999/xlink%22 viewBox=%220 0 26 17%22 overflow=%22visible%22><path d=%22M 10.4 12.143 L 17.147 8.5 L 10.4 4.857 Z M 25.428 2.635 C 25.597 3.206 25.714 3.971 25.792 4.942 C 25.883 5.914 25.922 6.751 25.922 7.48 L 26 8.5 C 26 11.159 25.792 13.114 25.428 14.365 C 25.103 15.458 24.349 16.162 23.179 16.466 C 22.568 16.624 21.45 16.733 19.734 16.806 C 18.18 16.885 16.623 16.925 15.067 16.927 L 13 17 C 7.553 17 4.16 16.806 2.821 16.466 C 1.651 16.162 0.897 15.458 0.572 14.365 C 0.403 13.794 0.286 13.029 0.208 12.058 C 0.125 11.215 0.082 10.368 0.078 9.52 L 0 8.5 C 0 5.841 0.208 3.886 0.572 2.635 C 0.897 1.542 1.651 0.838 2.821 0.534 C 3.432 0.376 4.55 0.267 6.266 0.194 C 7.82 0.115 9.377 0.075 10.933 0.073 L 13 0 C 18.447 0 21.84 0.194 23.179 0.534 C 24.349 0.838 25.103 1.542 25.428 2.635 Z%22 fill=%22rgb(255,255,255",
+    "https://framerusercontent.com/images/5g8xANvWMBPftpw7ATirOCCOs.png?width=2016&height=1164",
+    "https://framerusercontent.com/images/Z63f159k8jWR615v4L5CeXRpwQ.jpg?width=2119&height=1096",
+    "https://framerusercontent.com/images/DvryFayF4I7qBdPknCirM2295eU.png?width=158&height=158",
+    "https://framerusercontent.com/images/NOlxUHDDMUqlKKRtRkNtb7OwJEQ.png?width=160&height=160",
+    "https://framerusercontent.com/images/uvFXp2HwmFmO39BPUGi4eY6lk.png?width=1195&height=1356",
+    "https://framerusercontent.com/images/Z19WtpspRYYvpKsvB5A6qhPGEw.png?width=1024&height=1024",
+    "https://framerusercontent.com/images/rA8m71GUHbbPohOWAALskOLXo.png?width=1000&height=1000",
+    "https://framerusercontent.com/images/wCgwrhriOVi80OpMtR4lF9XGJ3w.png?width=365&height=365",
+    "https://framerusercontent.com/images/J8QclzFnpIP5PncXUexAEGcP2w.png?width=92&height=92",
+    "https://framerusercontent.com/images/fAOZflYdiWf5E6WZdMJ8sJUXwiE.png?width=816&height=1312",
+    "https://framerusercontent.com/images/dLFxs59CTSjbg7oprGIpwS42M.png?width=2560&height=1380",
+    "https://framerusercontent.com/images/73bYGtHVNmjlZXLJOP953LZUH8.png?width=92&height=92",
+    "https://framerusercontent.com/images/86nWiEz8zvJL776lLx7BZuqzCQ.jpg?width=1920&height=1080",
+    "https://framerusercontent.com/images/rCSLvlbv1za9NuyZjHZrzDTxXk.png?width=512&height=512",
+    "https://framerusercontent.com/images/AwJqkzDRrR4rF0gEEimKD0tXM.png?width=256&height=256",
+    "https://framerusercontent.com/images/MhNtmyLrkygju0wgvf81KtD50.png?width=1000&height=1000",
+    "https://framerusercontent.com/images/MZOzuNqWLPaaXyFltU68mBRu3s.png?width=160&height=160",
+    "https://framerusercontent.com/images/FyDhJaXa8vb1bRkvdiJbd94jLSQ.png?width=365&height=365",
+    "https://framerusercontent.com/images/AK7apPCi57qFs4YT6DKOw0GfM.png?width=256&height=256",
+    "https://framerusercontent.com/images/mT99spZWzD2aSprSRxnGR6rJVIE.png?width=241&height=241",
+    "https://framerusercontent.com/images/BZNCbZS0kJoMjQzP7FJZH9eEys.png?width=968&height=614",
+    "https://framerusercontent.com/images/t2yI4MgZcIvMfpYRRlMqgtDRlM.png?width=1296&height=816",
+    "https://framerusercontent.com/images/K8FfxPHcymXVcrqC9os9ospQrQ.png?width=688&height=1568",
+    "https://framerusercontent.com/images/A5RLo8lP7kGfzxNytdPeHTPHX0.png?width=1328&height=1878",
+    "https://framerusercontent.com/images/txrK8M0mY05SnlRCkWSHg3AIOM.png?width=512&height=512",
+    "https://framerusercontent.com/images/vkw0IAuVkJ0r27138poHEAfMJtQ.png?width=1000&height=1000",
+    "https://framerusercontent.com/images/zkAzxJOZI0YnNH7STfMmCHR5fI.png?width=365&height=365",
+    "https://framerusercontent.com/images/YlmP8var9oSKvGeWFF5tZroTbWA.png?width=976&height=1089",
+    "https://framerusercontent.com/images/Hi3lUqZqZBhnc2tcZ0x8v0d1ruI.png?width=1375&height=707",
+    "https://framerusercontent.com/images/MFms3A958N6NtlKriDWq2wfx0w.png?width=365&height=365",
+    "https://framerusercontent.com/images/MAhbw0tKlDYqV7uNTFkLAJ0.png?width=1000&height=1000",
+    "https://framerusercontent.com/images/TB9SR4Y377YGP4wgRFr93vFzW4.png?width=1000&height=1000",
+    "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 xmlns:xlink=%22http://www.w3.org/1999/xlink%22 viewBox=%220 0 16 16%22><path d=%22M 4.057 9.276 C 3.807 9.526 3.468 9.667 3.115 9.667 L 1.667 9.667 C 1.49 9.667 1.32 9.596 1.195 9.471 C 1.07 9.346 1 9.177 1 9 L 1 6.333 C 1 6.157 1.07 5.987 1.195 5.862 C 1.32 5.737 1.49 5.667 1.667 5.667 L 3.115 5.667 C 3.468 5.667 3.807 5.807 4.057 6.057 L 5.097 7.097 C 5.172 7.172 5.232 7.261 5.272 7.359 C 5.313 7.456 5.333 7.561 5.333 7.667 C 5.333 7.772 5.313 7.877 5.272 7.975 C 5.232 8.073 5.172 8.161 5.097 8.236 Z%22 fill=%22rgb(255, 0, 0",
+    "https://framerusercontent.com/images/z3hupyQtyZIlLbAHznpd5RhbPqI.png?width=1000&height=1000",
+    "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 xmlns:xlink=%22http://www.w3.org/1999/xlink%22 viewBox=%220 0 873 711%22><g transform=%22translate(0 -0.055",
+    "https://framerusercontent.com/images/LCdMbIwZPSZFU3wyODatnIPgHU.png?width=512&height=512",
+    "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 xmlns:xlink=%22http://www.w3.org/1999/xlink%22 viewBox=%220 0 24 24%22 overflow=%22visible%22><g><path d=%22M 0 0 L 24 0 L 24 24 L 0 24 Z%22 fill=%22transparent%22></path><path d=%22M 19.636 0 C 20.793 0 21.904 0.459 22.722 1.278 C 23.541 2.096 24 3.207 24 4.364 L 24 19.636 C 24 20.793 23.541 21.904 22.722 22.722 C 21.904 23.541 20.793 24 19.636 24 L 4.364 24 C 3.207 24 2.096 23.541 1.278 22.722 C 0.459 21.904 0 20.793 0 19.636 L 0 4.364 C 0 1.954 1.954 0 4.364 0 Z M 9.769 5.678 C 8.411 5.678 7.383 5.908 6.257 6.459 C 6.193 6.491 6.14 6.54 6.103 6.601 C 5.33 7.891 3.818 11.476 3.818 15.72 C 3.818 15.817 3.855 15.91 3.923 15.978 C 4.63 16.709 5.273 17.246 5.963 17.626 C 6.658 18.006 7.381 18.218 8.236 18.321 C 8.382 18.339 8.525 18.269 8.6 18.143 L 8.976 17.517 C 8.659 17.406 8.354 17.263 8.066 17.091 C 7.908 16.997 7.754 16.895 7.606 16.786 L 7.576 16.764 L 7.568 16.758 L 7.565 16.755 L 7.563 16.755 C 7.34 16.559 7.31 16.222 7.494 15.989 C 7.678 15.756 8.012 15.708 8.255 15.879 L 8.257 15.88 L 8.275 15.893 L 8.349 15.948 C 8.414 15.994 8.512 16.059 8.633 16.131 C 8.925 16.308 9.239 16.441 9.568 16.529 C 10.363 16.73 11.18 16.833 12 16.835 C 12.82 16.833 13.637 16.73 14.433 16.529 C 14.761 16.442 15.076 16.307 15.367 16.131 C 15.49 16.058 15.61 15.979 15.727 15.893 L 15.743 15.88 L 15.745 15.88 C 15.987 15.716 16.315 15.767 16.496 15.996 C 16.677 16.225 16.652 16.556 16.437 16.754 L 16.434 16.755 L 16.432 16.758 L 16.424 16.765 L 16.394 16.787 C 16.246 16.897 16.092 16.998 15.934 17.092 C 15.646 17.264 15.341 17.406 15.024 17.517 L 15.4 18.143 C 15.475 18.269 15.618 18.339 15.764 18.321 C 16.619 18.218 17.342 18.006 18.036 17.625 C 18.726 17.246 19.37 16.708 20.076 15.979 C 20.144 15.91 20.182 15.817 20.182 15.72 C 20.182 11.477 18.67 7.892 17.898 6.603 C 17.861 6.542 17.807 6.492 17.743 6.461 C 16.617 5.908 15.589 5.679 14.232 5.679 C 14.072 5.678 13.929 5.781 13.879 5.933 L 13.628 6.683 C 13.102 6.512 12.553 6.423 12 6.42 C 11.447 6.423 10.898 6.511 10.372 6.682 L 10.122 5.932 C 10.072 5.78 9.93 5.677 9.77 5.677 Z M 8.281 12.557 C 8.281 11.838 8.782 11.256 9.397 11.256 C 10.012 11.256 10.512 11.838 10.512 12.557 C 10.512 13.276 10.012 13.86 9.397 13.86 C 8.781 13.86 8.281 13.277 8.281 12.557 Z M 13.488 12.557 C 13.488 11.838 13.988 11.256 14.603 11.256 C 15.219 11.256 15.719 11.838 15.719 12.557 C 15.719 13.276 15.219 13.86 14.603 13.86 C 13.988 13.86 13.488 13.277 13.488 12.557 Z%22 fill=%22rgb(255,255,255"
+  ]
+}

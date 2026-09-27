@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ["dialkit"],
   // Use this directory as workspace root so Turbopack doesn't warn about multiple lockfiles
   turbopack: {
     root: __dirname,

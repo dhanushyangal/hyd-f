@@ -1,29 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-
-export type ViewerEnvLighting = "studio" | "outdoor" | "neutral";
-export type ViewerMaterialType = "standard" | "matcap" | "toon" | "lambert" | "normal";
-export type ViewerMaterialRoughness = "smooth" | "medium" | "rough";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+import { StudioOrb } from "@/components/workspace/StudioOrb";
+import {
+  DEFAULT_PART_MATERIAL,
+  DEFAULT_VIEWER_LOOK,
+  resolveViewerLook,
+  type PartMaterial,
+  type PartMaterialMap,
+  type ResolvedViewerLook,
+  type ViewerLook,
+  type ViewerMaterialType,
+} from "@/lib/viewer/look";
+import { SELECTION_HIGHLIGHT } from "@/lib/viewer/highlight";
 
 type Props = {
   glbUrl: string;
-  background?: boolean;
-  grid?: boolean;
-  shadow?: boolean;
-  autoRotate?: boolean;
-  lighting?: ViewerEnvLighting;
-  lightIntensity?: number;
-  brightness?: number;
-  materialType?: ViewerMaterialType;
-  materialRoughness?: ViewerMaterialRoughness;
-  /** When provided, wireframe is controlled from parent (e.g. workspace top bar) */
-  wireframeMode?: boolean;
-  onWireframeChange?: (on: boolean) => void;
+  look?: ViewerLook;
+  /** Per-mesh overrides; meshes not listed keep their authored material. */
+  partMaterials?: PartMaterialMap;
+  /** Authored material per mesh name, reported once the GLB has loaded. */
+  onParts?: (parts: PartMaterialMap) => void;
+  selectedPart?: string | null;
+  /** Part clicked in the canvas (null = empty space). */
+  onPick?: (name: string | null) => void;
 };
 
 // Default neutral matcap texture (baked sphere lighting)
@@ -90,174 +96,213 @@ function getToonGradientMap(): THREE.Texture {
   return toonGradientMap;
 }
 
-// Gradient background texture (Blender-style soft backdrop when background is on)
-function createGradientBackgroundTexture(): THREE.CanvasTexture {
-  const w = 256;
-  const h = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return new THREE.CanvasTexture(canvas);
-  const gradient = ctx.createLinearGradient(0, 0, 0, h);
-  gradient.addColorStop(0, "#f5f5f5");
-  gradient.addColorStop(0.5, "#fafafa");
-  gradient.addColorStop(1, "#ebebeb");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, w, h);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  return tex;
+const NO_PARTS: PartMaterialMap = {};
+
+type ViewerCamera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
+
+function materialList(material: THREE.Material | THREE.Material[]): THREE.Material[] {
+  return Array.isArray(material) ? material : [material];
 }
-let gradientBackgroundTexture: THREE.CanvasTexture | null = null;
-function getGradientBackgroundTexture(): THREE.CanvasTexture {
-  if (!gradientBackgroundTexture) gradientBackgroundTexture = createGradientBackgroundTexture();
-  return gradientBackgroundTexture;
+
+function readPartMaterial(mat: THREE.Material): PartMaterial {
+  const color = "color" in mat && mat.color instanceof THREE.Color ? `#${mat.color.getHexString()}` : null;
+  return {
+    color: color ?? DEFAULT_PART_MATERIAL.color,
+    roughness: mat instanceof THREE.MeshStandardMaterial ? mat.roughness : DEFAULT_PART_MATERIAL.roughness,
+    metalness: mat instanceof THREE.MeshStandardMaterial ? mat.metalness : DEFAULT_PART_MATERIAL.metalness,
+  };
+}
+
+function writePartMaterial(mat: THREE.Material, part: PartMaterial) {
+  if ("color" in mat && mat.color instanceof THREE.Color) mat.color.set(part.color);
+  if (mat instanceof THREE.MeshStandardMaterial) {
+    mat.roughness = part.roughness;
+    mat.metalness = part.metalness;
+  }
+}
+
+/** Per-mesh material for the chosen shading mode; never mutates the GLB source material. */
+function deriveMaterial(source: THREE.Material, type: ViewerMaterialType, roughness: number): THREE.Material {
+  const color =
+    "color" in source && source.color instanceof THREE.Color ? source.color.clone() : new THREE.Color(0xcccccc);
+  const map = "map" in source && source.map instanceof THREE.Texture ? source.map : undefined;
+  let mat: THREE.Material;
+  switch (type) {
+    case "matcap":
+      mat = new THREE.MeshMatcapMaterial({ matcap: getDefaultMatcap(), color });
+      break;
+    case "toon":
+      mat = new THREE.MeshToonMaterial({ color, gradientMap: getToonGradientMap(), map });
+      break;
+    case "lambert":
+      mat = new THREE.MeshLambertMaterial({ color, map });
+      break;
+    case "normal":
+      mat = new THREE.MeshNormalMaterial();
+      break;
+    default:
+      if (source instanceof THREE.MeshStandardMaterial) {
+        const clone = source.clone();
+        clone.roughness = roughness;
+        clone.envMapIntensity = 0.8;
+        mat = clone;
+      } else {
+        mat = new THREE.MeshStandardMaterial({ color, map, roughness, metalness: 0.1, envMapIntensity: 0.8 });
+      }
+  }
+  mat.userData.base = readPartMaterial(mat);
+  return mat;
+}
+
+function createHighlightMaterials() {
+  const spec = SELECTION_HIGHLIGHT;
+  return {
+    rim: new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(spec.color) },
+        uRim: { value: spec.rimStrength },
+        uFill: { value: spec.fill },
+        uTime: { value: 0 },
+        uPeriod: { value: spec.pulsePeriod },
+      },
+      vertexShader: spec.vertexShader,
+      fragmentShader: spec.fragmentShader,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+      toneMapped: false,
+    }),
+    edge: new THREE.LineBasicMaterial({
+      color: spec.color,
+      transparent: true,
+      opacity: spec.edgeOpacity,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  };
+}
+
+type HighlightMaterials = ReturnType<typeof createHighlightMaterials>;
+
+/** Overlays live outside the model and follow their mesh's world matrix each frame. */
+function followMesh<T extends THREE.Object3D>(overlay: T, mesh: THREE.Object3D): T {
+  overlay.matrixAutoUpdate = false;
+  overlay.matrix.copy(mesh.matrixWorld);
+  overlay.userData.follow = mesh;
+  overlay.renderOrder = 2;
+  overlay.raycast = () => {};
+  return overlay;
+}
+
+function clearHighlight(group: THREE.Group) {
+  for (const child of group.children) {
+    if (child instanceof THREE.LineSegments) child.geometry.dispose();
+  }
+  group.clear();
+}
+
+function applyCameraProjection(camera: ViewerCamera, width: number, height: number, spec: ResolvedViewerLook["camera"]) {
+  const aspect = width / Math.max(height, 1);
+  if (camera instanceof THREE.OrthographicCamera) {
+    camera.left = -spec.frustum * aspect;
+    camera.right = spec.frustum * aspect;
+    camera.top = spec.frustum;
+    camera.bottom = -spec.frustum;
+  } else {
+    camera.fov = spec.fov;
+    camera.aspect = aspect;
+  }
+  camera.updateProjectionMatrix();
 }
 
 export function ThreeViewer({
   glbUrl,
-  background = true,
-  grid: showGrid = false,
-  shadow: showShadow = true,
-  autoRotate = false,
-  lighting = "neutral",
-  lightIntensity = 1,
-  brightness = 1,
-  materialType = "standard",
-  materialRoughness = "medium",
-  wireframeMode: wireframeModeProp,
-  onWireframeChange,
+  look = DEFAULT_VIEWER_LOOK,
+  partMaterials = NO_PARTS,
+  onParts,
+  selectedPart = null,
+  onPick,
 }: Props) {
   const { getToken } = useAuth();
+  const resolved = useMemo(() => resolveViewerLook(look), [look]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const modelRef = useRef<THREE.Group | null>(null); // Store reference to the actual model
-  const wireframeOverlayRef = useRef<THREE.Group | null>(null); // Store reference to wireframe overlay
-  const sceneRefForWireframe = useRef<THREE.Scene | null>(null); // Store scene reference for wireframe toggle
+  const modelRef = useRef<THREE.Group | null>(null);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
+  const groundRef = useRef<THREE.Mesh | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
   const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
   const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
   const hemisphereLightRef = useRef<THREE.HemisphereLight | null>(null);
+  const cameraRef = useRef<ViewerCamera | null>(null);
+  const highlightGroupRef = useRef<THREE.Group | null>(null);
+  const highlightMatsRef = useRef<HighlightMaterials | null>(null);
+  const resolvedRef = useRef(resolved);
+  resolvedRef.current = resolved;
+  const partMaterialsRef = useRef(partMaterials);
+  partMaterialsRef.current = partMaterials;
+  const onPartsRef = useRef(onParts);
+  onPartsRef.current = onParts;
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
-  const [internalWireframeMode, setInternalWireframeMode] = useState(false);
-  const [modelReady, setModelReady] = useState(false); // Triggers material sync when model has loaded
-
-  const isControlledWireframe = wireframeModeProp !== undefined;
-  const wireframeMode = isControlledWireframe ? wireframeModeProp : internalWireframeMode;
-
-  // Apply or remove wireframe overlay (used by both controlled and uncontrolled)
-  const applyWireframe = useCallback((show: boolean) => {
-    if (!modelRef.current || !sceneRefForWireframe.current) return;
-    if (show) {
-      if (wireframeOverlayRef.current) return; // already on
-      const wireframeGroup = modelRef.current.clone();
-      wireframeGroup.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.geometry) {
-          const wireframeMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000000,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.8,
-            depthWrite: false,
-          });
-          child.material = wireframeMaterial;
-        }
-      });
-      wireframeOverlayRef.current = wireframeGroup;
-      sceneRefForWireframe.current.add(wireframeGroup);
-    } else {
-      if (!wireframeOverlayRef.current || !sceneRefForWireframe.current) return;
-      wireframeOverlayRef.current.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-          else child.material.dispose();
-        }
-      });
-      sceneRefForWireframe.current.remove(wireframeOverlayRef.current);
-      wireframeOverlayRef.current = null;
-    }
-  }, []);
-
-  // Sync overlay when controlled wireframeMode or model readiness changes
-  useEffect(() => {
-    if (modelRef.current && sceneRefForWireframe.current) applyWireframe(wireframeMode);
-  }, [wireframeMode, modelReady, applyWireframe]);
-
-  const toggleWireframe = useCallback(() => {
-    const next = !wireframeMode;
-    if (isControlledWireframe) onWireframeChange?.(next);
-    else setInternalWireframeMode(next);
-  }, [wireframeMode, isControlledWireframe, onWireframeChange]);
+  const [modelReady, setModelReady] = useState(false);
+  const [materialsVersion, setMaterialsVersion] = useState(0);
 
   useEffect(() => {
     if (!containerRef.current || !glbUrl) return;
 
-    // Cleanup previous scene
-    if (rendererRef.current) {
-      rendererRef.current.dispose();
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    if (containerRef.current) {
-      containerRef.current.innerHTML = "";
-    }
-
-    // Reset wireframe state and overlay when model changes
-    setInternalWireframeMode(false);
-    if (wireframeOverlayRef.current && sceneRef.current) {
-      // Cleanup wireframe overlay (materials only, geometries are shared)
-      wireframeOverlayRef.current.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          // Don't dispose geometry - it's shared with the original model
-          if (child.material) {
-            if (Array.isArray(child.material)) {
-              child.material.forEach((mat) => mat.dispose());
-            } else {
-              child.material.dispose();
-            }
-          }
-        }
-      });
-      sceneRef.current.remove(wireframeOverlayRef.current);
-      wireframeOverlayRef.current = null;
-    }
+    if (rendererRef.current) rendererRef.current.dispose();
+    containerRef.current.innerHTML = "";
     modelRef.current = null;
     setModelReady(false);
-
+    setMaterialsVersion(0);
     setLoading(true);
     setError(null);
     setLoadProgress(0);
 
+    const initial = resolvedRef.current;
     const scene = new THREE.Scene();
-    scene.background = background ? getGradientBackgroundTexture() : null;
+    scene.background = initial.background ? new THREE.Color(initial.background) : null;
     sceneRef.current = scene;
-    sceneRefForWireframe.current = scene; // Store scene reference for wireframe toggle
 
     const width = containerRef.current.clientWidth || 800;
     const height = containerRef.current.clientHeight || 500;
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    const camera: ViewerCamera = initial.camera.ortho
+      ? new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000)
+      : new THREE.PerspectiveCamera(initial.camera.fov, width / height, 0.1, 1000);
     camera.position.set(2, 2, 3);
     camera.lookAt(0, 0, 0);
+    applyCameraProjection(camera, width, height, initial.camera);
+    cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = showShadow;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = initial.exposure;
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const room = new RoomEnvironment();
+    scene.environment = pmrem.fromScene(room, 0.04).texture;
+    room.dispose();
+    pmrem.dispose();
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -265,69 +310,98 @@ export function ThreeViewer({
     controls.minDistance = 0.5;
     controls.maxDistance = 10;
     controls.target.set(0, 0, 0);
-    controls.autoRotate = autoRotate;
+    controls.autoRotate = initial.autoRotate;
     controls.autoRotateSpeed = 1.0;
     controls.update();
     controlsRef.current = controls;
 
-    // Lighting (presets: neutral, studio, outdoor)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    const ambientLight = new THREE.AmbientLight(0xffffff, initial.lights.ambient);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    const keyLight = new THREE.DirectionalLight(0xffffff, initial.lights.key);
     keyLight.position.set(5, 10, 5);
-    keyLight.castShadow = showShadow;
-    keyLight.shadow.mapSize.width = 2048;
-    keyLight.shadow.mapSize.height = 2048;
+    keyLight.castShadow = initial.shadow;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.bias = -0.0005;
     scene.add(keyLight);
     keyLightRef.current = keyLight;
 
-    // Fill light (softer, from opposite side)
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    const fillLight = new THREE.DirectionalLight(0xffffff, initial.lights.fill);
     fillLight.position.set(-5, 5, -5);
     scene.add(fillLight);
     fillLightRef.current = fillLight;
 
-    // Rim light (back light for depth)
-    const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
+    const rimLight = new THREE.DirectionalLight(0xffffff, initial.lights.rim);
     rimLight.position.set(0, 3, -8);
     scene.add(rimLight);
     rimLightRef.current = rimLight;
 
-    // Hemisphere light for ambient fill
-    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5);
+    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0xf4f4f5, initial.lights.hemi);
     hemisphereLight.position.set(0, 20, 0);
     scene.add(hemisphereLight);
     hemisphereLightRef.current = hemisphereLight;
 
-    // Grid helper with light gray colors
     const gridHelper = new THREE.GridHelper(10, 20, 0xd4d4d4, 0xe5e5e5);
-    gridHelper.position.y = -0.5;
-    gridHelper.visible = showGrid;
+    gridHelper.position.y = -1;
+    gridHelper.visible = initial.grid;
     gridHelperRef.current = gridHelper;
     scene.add(gridHelper);
 
-    // Animation loop
-    const animate = () => {
-      if (controlsRef.current) {
-        controlsRef.current.update();
-      }
-      if (rendererRef.current && sceneRef.current && camera) {
-        rendererRef.current.render(sceneRef.current, camera);
-      }
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
-    animate();
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.16 }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -1;
+    ground.receiveShadow = true;
+    ground.visible = initial.shadow;
+    groundRef.current = ground;
+    scene.add(ground);
 
-    // Handle resize (window + container so we react to layout changes e.g. full view)
+    const highlight = new THREE.Group();
+    scene.add(highlight);
+    highlightGroupRef.current = highlight;
+    const highlightMats = createHighlightMaterials();
+    highlightMatsRef.current = highlightMats;
+
+    renderer.setAnimationLoop((time) => {
+      controlsRef.current?.update();
+      highlightMats.rim.uniforms.uTime.value = time / 1000;
+      for (const overlay of highlight.children) {
+        overlay.matrix.copy((overlay.userData.follow as THREE.Object3D).matrixWorld);
+      }
+      const cam = cameraRef.current;
+      if (rendererRef.current && sceneRef.current && cam) rendererRef.current.render(sceneRef.current, cam);
+    });
+
+    // Select on click only — orbit drags must not change the selected part.
+    const raycaster = new THREE.Raycaster();
+    let pointerDownAt: [number, number] | null = null;
+    const onPointerDown = (ev: PointerEvent) => {
+      pointerDownAt = [ev.clientX, ev.clientY];
+    };
+    const onPointerUp = (ev: PointerEvent) => {
+      const start = pointerDownAt;
+      pointerDownAt = null;
+      const model = modelRef.current;
+      const cam = cameraRef.current;
+      if (!start || !model || !cam || !onPickRef.current) return;
+      if (Math.hypot(ev.clientX - start[0], ev.clientY - start[1]) > 4) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const pointer = new THREE.Vector2(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -((ev.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      raycaster.setFromCamera(pointer, cam);
+      const hit = raycaster.intersectObject(model, true).find((h) => h.object instanceof THREE.Mesh);
+      onPickRef.current(hit?.object.name || null);
+    };
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+
     const handleResize = () => {
-      if (!containerRef.current || !rendererRef.current || !camera) return;
+      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
       const { clientWidth, clientHeight } = containerRef.current;
       if (clientWidth === 0 || clientHeight === 0) return;
-
-      camera.aspect = clientWidth / clientHeight;
-      camera.updateProjectionMatrix();
+      applyCameraProjection(cameraRef.current, clientWidth, clientHeight, resolvedRef.current.camera);
       rendererRef.current.setSize(clientWidth, clientHeight);
     };
     window.addEventListener("resize", handleResize);
@@ -341,6 +415,7 @@ export function ThreeViewer({
     (async () => {
       setLoadProgress(1);
       const loader = new GLTFLoader();
+      loader.setMeshoptDecoder(MeshoptDecoder);
       loader.setWithCredentials(true);
       try {
         const token = await getToken();
@@ -360,54 +435,43 @@ export function ThreeViewer({
           if (cancelled) return;
           try {
             const model = gltf.scene;
-            modelRef.current = model; // Store reference to the actual model
+            modelRef.current = model;
 
-            // Center and scale the model
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
-
-            // Calculate scale to fit in view
             const maxDim = Math.max(size.x, size.y, size.z);
             const scale = maxDim > 0 ? 2 / maxDim : 1;
             model.scale.multiplyScalar(scale);
+            model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
 
-            // Center the model
-            model.position.x = -center.x * scale;
-            model.position.y = -center.y * scale;
-            model.position.z = -center.z * scale;
-
-            // Enable shadows; store original material ref for material-type switching
+            const authored: PartMaterialMap = {};
+            let unnamed = 0;
             model.traverse((child) => {
-              if (child instanceof THREE.Mesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                (child as THREE.Mesh & { userData: { originalMaterial?: THREE.Material } }).userData.originalMaterial = child.material;
-                if (child.material) {
-                  if (Array.isArray(child.material)) {
-                    child.material.forEach((mat: THREE.Material) => {
-                      if (mat instanceof THREE.MeshStandardMaterial) mat.envMapIntensity = 0.8;
-                    });
-                  } else if (child.material instanceof THREE.MeshStandardMaterial) {
-                    child.material.envMapIntensity = 0.8;
-                  }
-                }
-              }
+              if (!(child instanceof THREE.Mesh)) return;
+              child.castShadow = true;
+              child.receiveShadow = true;
+              if (!child.name) child.name = `Part ${++unnamed}`;
+              child.userData.sourceMaterial = child.material;
+              const first = materialList(child.material)[0];
+              if (first && !authored[child.name]) authored[child.name] = readPartMaterial(first);
             });
+            onPartsRef.current?.(authored);
 
             scene.add(model);
-            setLoading(false);
-            setModelReady(true); // So material sync effect runs and applies materialType/roughness
 
-            // Adjust camera to view the model
             const newBox = new THREE.Box3().setFromObject(model);
+            ground.position.y = newBox.min.y - 0.001;
+            gridHelper.position.y = newBox.min.y;
             const newSize = newBox.getSize(new THREE.Vector3());
-            const maxSize = Math.max(newSize.x, newSize.y, newSize.z);
-            const distance = maxSize * 2;
+            const distance = Math.max(newSize.x, newSize.y, newSize.z) * 2;
             camera.position.set(distance * 0.7, distance * 0.7, distance * 0.7);
             camera.lookAt(0, 0, 0);
             controls.target.set(0, 0, 0);
             controls.update();
+
+            setLoading(false);
+            setModelReady(true);
           } catch (err: any) {
             setError(`Failed to process model: ${err.message}`);
             setLoading(false);
@@ -449,18 +513,20 @@ export function ThreeViewer({
       );
     })();
 
-    // Cleanup
     return () => {
       cancelled = true;
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      clearHighlight(highlight);
+      highlightMats.rim.dispose();
+      highlightMats.edge.dispose();
+      highlightGroupRef.current = null;
+      highlightMatsRef.current = null;
       if (containerEl) ro.unobserve(containerEl);
       window.removeEventListener("resize", handleResize);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (controlsRef.current) {
-        controlsRef.current.dispose();
-      }
+      controlsRef.current?.dispose();
       if (rendererRef.current) {
+        rendererRef.current.setAnimationLoop(null);
         rendererRef.current.dispose();
         if (containerRef.current && rendererRef.current.domElement.parentNode === containerRef.current) {
           containerRef.current.removeChild(rendererRef.current.domElement);
@@ -468,267 +534,124 @@ export function ThreeViewer({
       }
       if (sceneRef.current) {
         sceneRef.current.traverse((object) => {
-          if (object instanceof THREE.Mesh) {
-            object.geometry?.dispose();
-            if (Array.isArray(object.material)) {
-              object.material.forEach((material) => material.dispose());
-            } else {
-              object.material?.dispose();
-            }
-          }
+          if (!(object instanceof THREE.Mesh)) return;
+          object.geometry?.dispose();
+          materialList(object.material).forEach((m) => m?.dispose());
+          const source = object.userData.sourceMaterial as THREE.Material | THREE.Material[] | undefined;
+          if (source) materialList(source).forEach((m) => m?.dispose());
         });
         sceneRef.current.clear();
-      }
-      // Cleanup wireframe overlay (materials only, geometries are shared)
-      if (wireframeOverlayRef.current) {
-        wireframeOverlayRef.current.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            // Don't dispose geometry - it's shared with the original model
-            if (child.material) {
-              if (Array.isArray(child.material)) {
-                child.material.forEach((mat) => mat.dispose());
-              } else {
-                child.material.dispose();
-              }
-            }
-          }
-        });
-        if (sceneRef.current && wireframeOverlayRef.current.parent === sceneRef.current) {
-          sceneRef.current.remove(wireframeOverlayRef.current);
-        }
-        wireframeOverlayRef.current = null;
       }
     };
   }, [glbUrl, getToken]);
 
-  // Sync viewer options when they change (background, grid, autoRotate, lighting, material, brightness)
+  useEffect(() => {
+    const container = containerRef.current;
+    const controls = controlsRef.current;
+    const current = cameraRef.current;
+    if (!container || !controls || !current) return;
+    const spec = resolved.camera;
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 500;
+    if (spec.ortho !== current instanceof THREE.OrthographicCamera) {
+      const next: ViewerCamera = spec.ortho
+        ? new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000)
+        : new THREE.PerspectiveCamera(spec.fov, 1, 0.1, 1000);
+      next.position.copy(current.position);
+      next.quaternion.copy(current.quaternion);
+      next.up.copy(current.up);
+      applyCameraProjection(next, width, height, spec);
+      next.lookAt(controls.target);
+      cameraRef.current = next;
+      controls.object = next;
+      controls.update();
+      return;
+    }
+    applyCameraProjection(current, width, height, spec);
+  }, [resolved.camera]);
+
   useEffect(() => {
     if (sceneRef.current) {
-      sceneRef.current.background = background ? getGradientBackgroundTexture() : null;
+      sceneRef.current.background = resolved.background ? new THREE.Color(resolved.background) : null;
     }
-    if (gridHelperRef.current) {
-      gridHelperRef.current.visible = showGrid;
+    if (gridHelperRef.current) gridHelperRef.current.visible = resolved.grid;
+    if (groundRef.current) groundRef.current.visible = resolved.shadow;
+    if (keyLightRef.current) {
+      keyLightRef.current.castShadow = resolved.shadow;
+      keyLightRef.current.intensity = resolved.lights.key;
     }
-    if (controlsRef.current) {
-      controlsRef.current.autoRotate = autoRotate;
-    }
-    if (rendererRef.current) {
-      rendererRef.current.toneMappingExposure = brightness;
-      rendererRef.current.shadowMap.enabled = showShadow;
-    }
-    if (keyLightRef.current) keyLightRef.current.castShadow = showShadow;
-    const lightingPresets: Record<ViewerEnvLighting, { ambient: number; key: number; fill: number; rim: number; hemi: number }> = {
-      neutral: { ambient: 0.4, key: 1.0, fill: 0.3, rim: 0.2, hemi: 0.5 },
-      studio: { ambient: 0.6, key: 1.2, fill: 0.35, rim: 0.25, hemi: 0.55 },
-      outdoor: { ambient: 0.7, key: 1.4, fill: 0.4, rim: 0.3, hemi: 0.6 },
-    };
-    const preset = lightingPresets[lighting];
-    const scale = Math.max(0.3, Math.min(2, lightIntensity));
-    if (ambientLightRef.current) ambientLightRef.current.intensity = preset.ambient * scale;
-    if (keyLightRef.current) keyLightRef.current.intensity = preset.key * scale;
-    if (fillLightRef.current) fillLightRef.current.intensity = preset.fill * scale;
-    if (rimLightRef.current) rimLightRef.current.intensity = preset.rim * scale;
-    if (hemisphereLightRef.current) hemisphereLightRef.current.intensity = preset.hemi * scale;
+    if (controlsRef.current) controlsRef.current.autoRotate = resolved.autoRotate;
+    if (rendererRef.current) rendererRef.current.toneMappingExposure = resolved.exposure;
+    if (ambientLightRef.current) ambientLightRef.current.intensity = resolved.lights.ambient;
+    if (fillLightRef.current) fillLightRef.current.intensity = resolved.lights.fill;
+    if (rimLightRef.current) rimLightRef.current.intensity = resolved.lights.rim;
+    if (hemisphereLightRef.current) hemisphereLightRef.current.intensity = resolved.lights.hemi;
+  }, [resolved]);
 
-    const model = modelRef.current;
-    if (!model) return;
-
-    const roughnessMap: Record<ViewerMaterialRoughness, number> = {
-      smooth: 0.2,
-      medium: 0.5,
-      rough: 0.9,
-    };
-    const r = roughnessMap[materialRoughness];
-    const matcapTex = getDefaultMatcap();
-
-    // Defer heavy material updates to next frame so UI (material/wireframe buttons) feels instant like wireframe
+  // Rebuild per-mesh materials when the shading mode changes (deferred a frame so the UI stays instant).
+  useEffect(() => {
+    if (!modelReady) return;
+    const { materialType, roughness } = resolved;
     const rafId = requestAnimationFrame(() => {
-      if (!modelRef.current) return;
-      const m = modelRef.current;
-      m.traverse((child) => {
-        if (!(child instanceof THREE.Mesh) || !child.geometry) return;
-        const mesh = child;
-        const orig = (mesh.userData as { originalMaterial?: THREE.Material }).originalMaterial;
-        if (!orig) return;
-
-          const current = mesh.material;
-        const currentSingle = Array.isArray(current) ? current[0] : current;
-        const isReplacement =
-          current !== orig && !(Array.isArray(orig) && (orig as THREE.Material[]).includes(currentSingle as THREE.Material));
-
-        const alreadyStandard = currentSingle instanceof THREE.MeshStandardMaterial && (current === orig || (Array.isArray(orig) && orig.includes(currentSingle)));
-        const alreadyMatcap = currentSingle instanceof THREE.MeshMatcapMaterial;
-        const alreadyToon = currentSingle instanceof THREE.MeshToonMaterial;
-        const alreadyLambert = currentSingle instanceof THREE.MeshLambertMaterial;
-        const alreadyNormal = currentSingle instanceof THREE.MeshNormalMaterial;
-
-        if (materialType === "standard") {
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          const allStandard = mats.every((m) => m instanceof THREE.MeshStandardMaterial);
-          const sameAsOrig =
-            current === orig || (Array.isArray(current) && Array.isArray(orig) && (current as THREE.Material[]).length === orig.length);
-          if (allStandard && sameAsOrig) {
-            mats.forEach((m) => {
-              if (m instanceof THREE.MeshStandardMaterial) {
-                m.roughness = r;
-                m.envMapIntensity = 0.8;
-              }
-            });
-            return;
-          }
-          if (isReplacement && current) {
-            if (Array.isArray(current)) current.forEach((m) => m.dispose());
-            else (current as THREE.Material).dispose();
-          }
-          if (Array.isArray(orig)) {
-            const clones = orig.map((o) => (o as THREE.Material).clone());
-            mesh.material = clones.length === 1 ? clones[0] : clones;
-            (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) => {
-              if (m instanceof THREE.MeshStandardMaterial) {
-                m.roughness = r;
-                m.envMapIntensity = 0.8;
-              }
-            });
-          } else {
-            const origMat = orig as THREE.Material;
-            if (origMat instanceof THREE.MeshStandardMaterial) {
-              const base = origMat.clone();
-              mesh.material = base;
-              base.roughness = r;
-              base.envMapIntensity = 0.8;
-            } else {
-              // GLB may use MeshBasicMaterial or other; use MeshStandardMaterial for PBR
-              const color = origMat instanceof THREE.MeshBasicMaterial ? (origMat as THREE.MeshBasicMaterial).color.clone() : new THREE.Color(0xcccccc);
-              if ("color" in origMat && origMat.color) color.copy((origMat as { color: THREE.Color }).color);
-              mesh.material = new THREE.MeshStandardMaterial({ color, roughness: r, metalness: 0.1, envMapIntensity: 0.8 });
-            }
-          }
-          return;
-        }
-
-        if (materialType === "matcap") {
-          if (alreadyMatcap) return;
-          if (isReplacement && current) {
-            if (Array.isArray(current)) current.forEach((m) => m.dispose());
-            else (current as THREE.Material).dispose();
-          }
-          const color = new THREE.Color(0xcccccc);
-          if (Array.isArray(orig) && orig[0] && "color" in orig[0]) color.copy((orig[0] as { color: THREE.Color }).color);
-          else if (orig && "color" in orig) color.copy((orig as { color: THREE.Color }).color);
-          mesh.material = new THREE.MeshMatcapMaterial({ matcap: matcapTex, color });
-          return;
-        }
-
-        if (materialType === "toon") {
-          if (alreadyToon) return;
-          if (isReplacement && current) {
-            if (Array.isArray(current)) current.forEach((m) => m.dispose());
-            else (current as THREE.Material).dispose();
-          }
-          const colorToon = new THREE.Color(0xcccccc);
-          if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorToon.copy((orig[0] as { color: THREE.Color }).color);
-          else if (orig && "color" in orig) colorToon.copy((orig as { color: THREE.Color }).color);
-          const gradientMap = getToonGradientMap();
-          const origMat = Array.isArray(orig) ? orig[0] : orig;
-          const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
-          mesh.material = new THREE.MeshToonMaterial({
-            color: colorToon,
-            gradientMap,
-            map: map || undefined,
-          });
-          return;
-        }
-
-        if (materialType === "lambert") {
-          if (alreadyLambert) return;
-          if (isReplacement && current) {
-            if (Array.isArray(current)) current.forEach((m) => m.dispose());
-            else (current as THREE.Material).dispose();
-          }
-          const colorLambert = new THREE.Color(0xcccccc);
-          if (Array.isArray(orig) && orig[0] && "color" in orig[0]) colorLambert.copy((orig[0] as { color: THREE.Color }).color);
-          else if (orig && "color" in orig) colorLambert.copy((orig as { color: THREE.Color }).color);
-          const origMat = Array.isArray(orig) ? orig[0] : orig;
-          const map = origMat && "map" in origMat && origMat.map ? (origMat as { map: THREE.Texture }).map : null;
-          mesh.material = new THREE.MeshLambertMaterial({ color: colorLambert, map: map || undefined });
-          return;
-        }
-
-        if (materialType === "normal") {
-          if (alreadyNormal) return;
-          if (isReplacement && current) {
-            if (Array.isArray(current)) current.forEach((m) => m.dispose());
-            else (current as THREE.Material).dispose();
-          }
-          mesh.material = new THREE.MeshNormalMaterial({ flatShading: false });
-          return;
-        }
+      modelRef.current?.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const source = child.userData.sourceMaterial as THREE.Material | THREE.Material[] | undefined;
+        if (!source) return;
+        const sources = materialList(source);
+        if (child.material !== source) materialList(child.material).forEach((m) => m?.dispose());
+        const derived = sources.map((m) => deriveMaterial(m, materialType, roughness));
+        child.material = Array.isArray(source) ? derived : derived[0];
       });
+      setMaterialsVersion((v) => v + 1);
     });
-
     return () => cancelAnimationFrame(rafId);
-  }, [background, showGrid, showShadow, autoRotate, lighting, lightIntensity, brightness, materialType, materialRoughness, modelReady]);
+  }, [resolved.materialType, resolved.roughness, modelReady]);
+
+  // Part overrides + wireframe sit on top of the derived materials.
+  useEffect(() => {
+    if (!materialsVersion) return;
+    modelRef.current?.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const override = partMaterials[child.name];
+      for (const mat of materialList(child.material)) {
+        if (!mat) continue;
+        const target = override ?? (mat.userData.base as PartMaterial | undefined);
+        if (target) writePartMaterial(mat, target);
+        if ("wireframe" in mat) mat.wireframe = resolved.wireframe;
+      }
+    });
+  }, [partMaterials, resolved.wireframe, materialsVersion]);
+
+  useEffect(() => {
+    const group = highlightGroupRef.current;
+    const mats = highlightMatsRef.current;
+    if (!group || !mats) return;
+    clearHighlight(group);
+    const model = modelRef.current;
+    if (!model || !selectedPart || !modelReady) return;
+    model.updateMatrixWorld(true);
+    model.traverse((child) => {
+      if (!(child instanceof THREE.Mesh) || child instanceof THREE.SkinnedMesh || child.name !== selectedPart) return;
+      group.add(followMesh(new THREE.Mesh(child.geometry, mats.rim), child));
+      group.add(
+        followMesh(
+          new THREE.LineSegments(new THREE.EdgesGeometry(child.geometry, SELECTION_HIGHLIGHT.edgeThreshold), mats.edge),
+          child
+        )
+      );
+    });
+  }, [selectedPart, modelReady]);
 
   return (
-    <div className="relative h-full min-h-[400px] isolate">
+    <div className="relative h-full w-full isolate">
       <div ref={containerRef} className="h-full w-full relative z-0" />
-      
-      {/* Wireframe Toggle Button - only when not controlled by parent (e.g. workspace has its own in top bar) */}
-      {!loading && !error && modelRef.current && !isControlledWireframe && (
-        <button
-          onClick={toggleWireframe}
-          className={`absolute top-4 right-4 z-10 p-2.5 rounded-lg transition-all duration-200 ${
-            wireframeMode 
-              ? "bg-black text-white hover:bg-neutral-900 border border-neutral-800 shadow-md" 
-              : "bg-white/95 hover:bg-white text-neutral-700 hover:text-black border border-neutral-200/80 shadow-sm hover:shadow-md"
-          } backdrop-blur-sm`}
-          title={wireframeMode ? "Wireframe - On" : "Wireframe - Off"}
-        >
-          <svg 
-            className={`w-5 h-5 transition-all duration-200 ${
-              wireframeMode ? "opacity-100" : "opacity-70"
-            }`}
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor"
-            strokeWidth={wireframeMode ? 2.5 : 2}
-          >
-            {/* Globe with wireframe/grid lines icon */}
-            <circle cx="12" cy="12" r="10" stroke="currentColor" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-          </svg>
-        </button>
-      )}
-      
-      {/* Controls hint — z-10 so it stays above canvas when model is loaded */}
-      <div className="absolute bottom-4 left-4 z-10 text-xs text-neutral-500 bg-white/80 px-3 py-1.5 rounded-lg pointer-events-none">
-        Drag to rotate • Scroll to zoom
-      </div>
-      
+
       {loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-white">
-          <div className="text-center">
-            <div className="w-10 h-10 mx-auto mb-4">
-              <div className="w-10 h-10 spinner"></div>
-            </div>
-            <div className="text-black text-sm">Loading model...</div>
-            {loadProgress > 0 ? (
-              <>
-                <div className="text-xs text-neutral-400 mt-1">{loadProgress}%</div>
-                <div className="w-48 h-1 bg-neutral-200 rounded-full overflow-hidden mt-2 mx-auto">
-                  <div 
-                    className="h-full bg-black rounded-full transition-all duration-300"
-                    style={{ width: `${loadProgress}%` }}
-                  ></div>
-                </div>
-              </>
-            ) : (
-              <div className="text-xs text-neutral-400 mt-1">Preparing...</div>
-            )}
-          </div>
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <StudioOrb state="searching" size={64} />
         </div>
       )}
-      
+
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-white">
           <div className="text-center p-6 max-w-md">

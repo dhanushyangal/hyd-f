@@ -4,10 +4,12 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
-import { ChevronDown, Download, Droplets, Loader2 } from "lucide-react";
+import { ChevronDown, Download, Droplets } from "lucide-react";
+import { StudioOrb } from "@/components/workspace/StudioOrb";
 import { cn } from "@/lib/utils";
 import { ENGINE } from "@/lib/engines";
 import {
@@ -18,20 +20,50 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  DEFAULT_VIEWER_LOOK,
+  resolveViewerLook,
+  sanitizePartMaterials,
+  type PartMaterialMap,
+  type ViewerLook,
+} from "@/lib/viewer/look";
+import { SELECTION_HIGHLIGHT } from "@/lib/viewer/highlight";
 
 type Props = {
   factoryCode: string | null;
   className?: string;
-  passLabel?: string | null;
   jobId?: string | null;
   onThumbnail?: (dataUrl: string) => void;
   /** Fired after a successful download (for analytics). */
   onDownloaded?: (format: ExportFormat) => void;
   /** Hide the built-in top-right controls when the parent renders its own bar. */
   hideToolbar?: boolean;
+  /** Left offset for the engine badge, in CSS pixels. Defaults to 12 (`left-3`). */
+  badgeLeft?: number;
+  instance?: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  } | null;
+  look?: ViewerLook;
+  /** Per-mesh overrides; meshes not listed keep their authored material. */
+  partMaterials?: PartMaterialMap;
+  /** Authored material per mesh name, reported once the factory has built. */
+  onParts?: (parts: PartMaterialMap) => void;
+  selectedPart?: string | null;
+  /** Part clicked in the canvas (null = empty space). */
+  onPick?: (name: string | null) => void;
+  onInstanceTransform?: (t: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }) => void;
 };
 
 export type ExportFormat = "glb" | "gltf" | "obj" | "stl" | "png" | "ts";
+
+/** Bump when the sandbox message protocol changes so browsers don't reuse a stale cached iframe. */
+const WATER_SANDBOX_SRC = "/water-sandbox.html?v=4";
 
 export type WaterViewerHandle = {
   exportFormat: (format: ExportFormat) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -101,16 +133,26 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
   {
     factoryCode,
     className,
-    passLabel,
     jobId,
     onThumbnail,
     onDownloaded,
     hideToolbar = false,
+    badgeLeft = 12,
+    instance = null,
+    look = DEFAULT_VIEWER_LOOK,
+    partMaterials,
+    onParts,
+    selectedPart = null,
+    onPick,
+    onInstanceTransform,
   },
   ref
 ) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const onThumbnailRef = useRef(onThumbnail);
+  const onPartsRef = useRef(onParts);
+  const onPickRef = useRef(onPick);
+  const onInstanceTransformRef = useRef(onInstanceTransform);
   const pendingExport = useRef<{
     requestId: string;
     resolve: (v: { ok: true } | { ok: false; error: string }) => void;
@@ -125,14 +167,18 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
 
   useEffect(() => {
     onThumbnailRef.current = onThumbnail;
-  }, [onThumbnail]);
+    onPartsRef.current = onParts;
+    onPickRef.current = onPick;
+    onInstanceTransformRef.current = onInstanceTransform;
+  }, [onThumbnail, onParts, onPick, onInstanceTransform]);
+  const resolvedLook = useMemo(() => resolveViewerLook(look), [look]);
 
   const postCode = (code: string) => {
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
     setModelReady(false);
     // Protocol kept for sandbox compatibility (legacy code-sculpt-* message types).
-    win.postMessage({ type: "code-sculpt-load", code }, "*");
+    win.postMessage({ type: "code-sculpt-load", code, instance: instance || undefined }, "*");
   };
 
   useEffect(() => {
@@ -150,6 +196,17 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
         setBooting(false);
         setError(null);
         setModelReady(true);
+        onPartsRef.current?.(sanitizePartMaterials(data.parts));
+      }
+      if (data.type === "water-select") {
+        onPickRef.current?.(data.name ? String(data.name) : null);
+      }
+      if (data.type === "water-transform" && Array.isArray(data.position)) {
+        onInstanceTransformRef.current?.({
+          position: data.position as [number, number, number],
+          rotation: (data.rotation || [0, 0, 0]) as [number, number, number],
+          scale: (data.scale || [1, 1, 1]) as [number, number, number],
+        });
       }
       if (data.type === "code-sculpt-error") {
         setBooting(false);
@@ -213,6 +270,30 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
     setError(null);
     postCode(factoryCode);
   }, [ready, factoryCode]);
+
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || !ready || !instance) return;
+    win.postMessage({ type: "water-transform", instance }, "*");
+  }, [instance, ready, modelReady]);
+
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || !ready || !modelReady) return;
+    win.postMessage({ type: "water-parts", parts: partMaterials ?? {} }, "*");
+  }, [partMaterials, ready, modelReady]);
+
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || !ready) return;
+    win.postMessage({ type: "water-look", look: resolvedLook }, "*");
+  }, [resolvedLook, ready, modelReady]);
+
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || !ready || !modelReady) return;
+    win.postMessage({ type: "water-highlight", name: selectedPart, spec: SELECTION_HIGHLIGHT }, "*");
+  }, [selectedPart, ready, modelReady]);
 
   const requestSandboxExport = (format: Exclude<ExportFormat, "ts">) =>
     new Promise<{ ok: true } | { ok: false; error: string }>((resolve) => {
@@ -286,33 +367,25 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
     [factoryCode, modelReady, exporting, error, jobId]
   );
 
-  const passDisplay =
-    passLabel === "blockout" || passLabel === "done"
-      ? "blockout ready"
-      : passLabel || null;
-
   return (
-    <div className={cn("relative h-full w-full overflow-hidden bg-[#f4f4f5]", className)}>
+    <div className={cn("relative h-full w-full overflow-hidden bg-white", className)}>
       <iframe
         ref={iframeRef}
         title={`${ENGINE.water.label} preview`}
-        src="/water-sandbox.html"
+        src={WATER_SANDBOX_SRC}
         sandbox="allow-scripts"
         className="absolute inset-0 h-full w-full border-0"
         onLoad={() => {
           setReady(true);
-          if (factoryCode) {
-            setBooting(true);
-            setError(null);
-            postCode(factoryCode);
-          }
         }}
       />
-      <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+      <div
+        className="absolute top-3 z-10 flex items-center gap-2"
+        style={{ left: badgeLeft }}
+      >
         <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium tracking-tight text-neutral-700 shadow-sm backdrop-blur">
-          <Droplets className="h-3 w-3" />
+          <Droplets className="h-3 w-3 text-sky-600" strokeWidth={2} />
           {ENGINE.water.label}
-          {passDisplay ? ` · ${passDisplay}` : ""}
         </span>
       </div>
       {factoryCode && !hideToolbar && (
@@ -325,7 +398,7 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
             title="Download GLB"
           >
             {exporting === "glb" ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <StudioOrb state="working" size={20} />
             ) : (
               <Download className="h-3 w-3" />
             )}
@@ -340,7 +413,7 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
                 title="Download GLTF, TypeScript, and more"
               >
                 {exporting && exporting !== "glb" ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <StudioOrb state="working" size={20} />
                 ) : (
                   <>
                     <span>Formats</span>
@@ -387,11 +460,8 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
         </div>
       )}
       {(!factoryCode || booting) && !error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#f4f4f5]/80 text-sm text-neutral-500">
-          <div className="h-9 w-9 rounded-full border-2 border-neutral-200 border-t-neutral-800 animate-spin" />
-          <span className="tracking-tight">
-            {factoryCode ? "Loading preview…" : "Waiting for generated code…"}
-          </span>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <StudioOrb state={factoryCode ? "searching" : "breathing"} size={64} />
         </div>
       )}
       {error && (

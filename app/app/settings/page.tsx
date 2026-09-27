@@ -73,7 +73,7 @@ export default function SettingsPage() {
   }, [isLoaded, isSignedIn]);
 
   return (
-    <div className="app-content-page font-dm-sans bg-[#fafafa]">
+    <div className="app-content-page font-dm-sans bg-[var(--app-canvas)]">
       <div className="mx-auto w-full max-w-2xl space-y-6">
         <header>
           <p className="text-[11px] sm:text-xs font-medium text-neutral-400 tracking-[0.14em] uppercase">

@@ -1,6 +1,7 @@
 /**
- * Water Skills + quality tiers — selectable in the workspace Engine create bar.
- * Runtime harness loads matching prompt packs on the backend (not markdown skills).
+ * Water Create packs + quality tiers.
+ * Packs are bound by the backend orchestrator (`lib/water/orchestrator/packs.ts`).
+ * The workspace UI does not expose Object / Fast / Anim chips.
  */
 
 export type WaterSkillId =
@@ -83,71 +84,19 @@ export const QUALITY_TIERS: QualityTierDef[] = [
   },
 ];
 
-export const WATER_SKILLS: WaterSkillDef[] = [
-  {
-    id: "object-studio",
-    label: "Object Studio",
-    shortLabel: "Object",
-    description: "Hard-surface / prop reconstruction — full quality pipeline",
-    status: "live",
-  },
-  {
-    id: "character",
-    label: "Character",
-    shortLabel: "Character",
-    description: "Anatomy-aware track — proportions, features, stylized likeness",
-    status: "live",
-    roadmapTheme: "v1.5 Character",
-  },
-  {
-    id: "animation",
-    label: "Animation Ready",
-    shortLabel: "Anim",
-    description: "Sockets, pivot hierarchy — static rest pose",
-    status: "partial",
-    badge: "Partial",
-    roadmapTheme: "v1.8 Animation",
-  },
-  {
-    id: "game",
-    label: "Game Ready",
-    shortLabel: "Game",
-    description: "Named parts, colliders, LOD hooks — export GLB/GLTF/OBJ/STL from viewer",
-    status: "partial",
-    badge: "Partial",
-    roadmapTheme: "v1.7 Game Pipeline",
-  },
-];
+export const DEFAULT_QUALITY_TIER: QualityTier = "standard";
+export const WATER_TIER_STORAGE_KEY = "hydrilla_water_tier";
 
-export const DEFAULT_WATER_SKILL: WaterSkillId = "object-studio";
-export const DEFAULT_QUALITY_TIER: QualityTier = "fast";
-
-const SKILL_IDS = new Set(WATER_SKILLS.map((s) => s.id));
 const TIER_IDS = new Set(QUALITY_TIERS.map((t) => t.id));
-
-export function getWaterSkill(id?: string | null): WaterSkillDef {
-  const found = WATER_SKILLS.find((s) => s.id === id);
-  return found || WATER_SKILLS[0]!;
-}
 
 export function getQualityTier(id?: string | null): QualityTierDef {
   const found = QUALITY_TIERS.find((t) => t.id === id);
   return found || QUALITY_TIERS[1]!;
 }
 
-export function parseWaterSkillId(value?: string | null): WaterSkillId {
-  if (value && SKILL_IDS.has(value as WaterSkillId)) return value as WaterSkillId;
-  return DEFAULT_WATER_SKILL;
-}
-
 export function parseQualityTier(value?: string | null): QualityTier {
   if (value && TIER_IDS.has(value as QualityTier)) return value as QualityTier;
   return DEFAULT_QUALITY_TIER;
-}
-
-/** Skills the user can select (live + partial). Stubs are shown disabled. */
-export function isWaterSkillSelectable(skill: WaterSkillDef): boolean {
-  return skill.status === "live" || skill.status === "partial";
 }
 
 export function passesForTier(tier: QualityTier): BuildPassId[] {
@@ -199,6 +148,3 @@ export function waterPassIndex(pass?: string | null, unlocked?: BuildPassId[]): 
   const i = steps.indexOf(pass || "assessment");
   return i >= 0 ? i : 0;
 }
-
-export const WATER_SKILL_STORAGE_KEY = "hydrilla_water_skill";
-export const WATER_TIER_STORAGE_KEY = "hydrilla_water_tier";

@@ -275,7 +275,7 @@ export default function AssetsPage() {
   };
 
   return (
-    <div className="app-content-page font-dm-sans bg-[#fafafa]">
+    <div className="app-content-page font-dm-sans bg-[var(--app-canvas)]">
       <section className="flex flex-col gap-6 sm:gap-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
