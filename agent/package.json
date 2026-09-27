@@ -15,9 +15,9 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/anthropic": "^4.0.65",
     "@vercel/connect": "1.0.0",
-    "ai": "^7.0.93",
+    "ai": "^7.0.118",
     "eve": "^0.54.3",
     "zod": "4.5.4"
   },

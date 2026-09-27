@@ -1,14 +1,9 @@
 /**
- * Water Create packs + quality tiers.
- * Packs are bound by the backend orchestrator (`lib/water/orchestrator/packs.ts`).
- * The workspace UI does not expose Object / Fast / Anim chips.
+ * Quality tiers and progress labels for the Water UI.
+ * Skill packs live only in the backend (`src/lib/water/skills/index.ts`); the frontend never
+ * sees them. `QualityTier`, `BuildPassId`, and `TIER_PASS_UNLOCK` mirror the backend's
+ * `src/lib/waterSkills.ts` — keep them identical.
  */
-
-export type WaterSkillId =
-  | "object-studio"
-  | "character"
-  | "animation"
-  | "game";
 
 export type QualityTier = "fast" | "standard" | "studio";
 
@@ -22,20 +17,6 @@ export type BuildPassId =
   | "lighting"
   | "interaction"
   | "optimization";
-
-export type WaterSkillStatus = "live" | "partial" | "stub";
-
-export type WaterSkillDef = {
-  id: WaterSkillId;
-  label: string;
-  shortLabel: string;
-  description: string;
-  status: WaterSkillStatus;
-  /** Shown when status is stub / partial. */
-  badge?: string;
-  /** Roadmap theme (img2threejs-inspired). */
-  roadmapTheme?: string;
-};
 
 export type QualityTierDef = {
   id: QualityTier;

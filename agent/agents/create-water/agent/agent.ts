@@ -4,6 +4,12 @@ import { defineAgent } from "eve";
 /**
  * eve-create-water — the Water (BYOK) Create orchestrator.
  *
+ * STATUS: PARKED. Not on the product path. `POST /api/water/generate` runs the in-process
+ * AI SDK harness in hydrilla_backend (`lib/water/orchestrator/routeCreate.ts` explains why).
+ * Kept compiling (`npm run typecheck`, `eve info`) so it can be switched on later without a
+ * rewrite. Revisit when Water runs need crash-resume across stages or human approval
+ * mid-run; until then, do not add product logic here — add it to the backend harness.
+ *
  * ===========================================================================
  * WHY A DIRECT PROVIDER MODEL AND NOT A GATEWAY MODEL ID
  * ===========================================================================
