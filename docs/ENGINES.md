@@ -35,42 +35,41 @@ Backend mirrors: `backend/hydrilla_backend/src/lib/engines.ts`.
 
 ## Water Skills — where they live and what is used
 
-Skills are **selectable in the workspace create bar** (next to Engine + Quality). They shape the planner / generator prompts. They are **not** the markdown files under `skills/water/` at runtime.
+Skills are **prompt packs in the backend**. There are no skill chips in the UI: the Create orchestrator picks the pack from the prompt. Skills shape the planner / generator / evaluator prompts. The markdown under `skills/water/` is for coding agents and is **not** loaded at generate time.
 
-### Status
+### Packs
 
-| UI label | `skillId` | Status | What it does |
-|----------|-----------|--------|--------------|
-| Object | `object-studio` | **live** | Hard-surface / prop reconstruction |
-| Character | `character` | **live** | Anatomy, proportions, stylized likeness |
-| Anim | `animation` | **partial** | Sockets + idle `tick` hierarchy |
-| Game | `game` | **partial** | Named parts, colliders, LOD hooks |
-| Env | `environment` | **stub** | Soon — not selectable |
-| World | `world` | **stub** | Soon — not selectable |
+| `skillId` | Chosen when the prompt mentions | What it does |
+|-----------|---------------------------------|--------------|
+| `game` | game-ready, collider, Unity, Unreal, LOD | Named parts, colliders, LOD hooks |
+| `animation` | rig, socket, joint, rest pose | Pivots + sockets, static pose |
+| `character` | human, character, creature, face… | Anatomy, proportions, stylized likeness |
+| `object-studio` | anything else (default) | Hard-surface / prop reconstruction |
 
-Defaults: skill `object-studio`, tier `fast`.
+First match wins. Tier defaults to what the prompt implies, else `standard`.
 
 ### Where each piece lives
 
 | Layer | Path | Role |
 |-------|------|------|
-| **FE registry (UI chips)** | `lib/waterSkills.ts` | Labels, status, tier unlock lists, progress labels |
-| **BE registry (mirror)** | `backend/.../src/lib/waterSkills.ts` | Same ids / tiers for API validation |
-| **Runtime prompt packs** | `backend/.../src/lib/water/skills/index.ts` | Actual planner/generator/evaluator extras per skill |
-| **Harness** | `backend/.../src/lib/water/harness/*` | `run` → planner → generator → evaluator → fallback |
-| **API** | `POST /api/water/generate` | Body: `modelId`, `skillId`, `qualityTier`, `prompt` |
-| **Agent docs only** | `skills/water/SKILL.md` (+ `character.md`, `game.md`, …) | For coding agents — **not loaded at generate time** |
+| **Pack binding** | `backend/.../src/lib/water/orchestrator/packs.ts` | Prompt → pack + quality profile |
+| **Runtime prompt packs** | `backend/.../src/lib/water/skills/index.ts` | Planner/generator/evaluator extras per pack |
+| **BE registry (source of truth)** | `backend/.../src/lib/waterSkills.ts` | Skill ids, tiers, pass order |
+| **FE mirror** | `lib/waterSkills.ts` | Tier / pass lists + labels for the progress rail only |
+| **Harness** | `backend/.../src/lib/water/harness/*` | planner → passes (generate → run → evaluate → refine) → visual pass |
+| **API** | `POST /api/water/generate` | Body: `prompt`, `modelId`, optional `qualityTier`, `imageUrl` |
+| **Agent docs only** | `skills/water/SKILL.md` | For coding agents — **not loaded at generate time** |
 
 ```text
-Workspace UI
-  selects skillId + qualityTier from lib/waterSkills.ts
-    → submitWater()  (lib/api.ts)
-      → POST /api/water/generate
-        → runStudioPipeline()
-             uses backend waterSkills + water/skills prompt packs
-        → DONE + factory_code
-          → WaterViewer / water-sandbox.html
-             export GLB | GLTF | OBJ | STL | PNG | .ts
+Workspace UI (prompt + engine + quality)
+  → submitWater()  (lib/api.ts)
+    → POST /api/water/generate
+      → planWaterCreate: compile → route → pack + tier
+      → waitUntil → runStudioPipeline (AI SDK generateText per step)
+      → DONE + factory_code
+        → WaterViewer / water-sandbox.html
+           export GLB | GLTF | OBJ | STL | PNG | .ts
+Follow-ups → POST /api/water/chat → director (AI SDK ToolLoopAgent): scene edit or rebuild
 ```
 
 ### Quality tiers (what unlocks)
@@ -79,9 +78,9 @@ Workspace UI
 |------|-----------------|--------------|
 | **Fast** | blockout | ~2 LLM calls · ~1 min |
 | **Standard** | → material (4 passes) | ~6 LLM calls · ~2–4 min |
-| **Studio** | all 8: blockout → structural → form → material → surface → lighting → interaction → optimization | ~12 LLM calls · longer on Cursor |
+| **Studio** | all 8: blockout → structural → form → material → surface → lighting → interaction → optimization | ~12 LLM calls · up to ~12 min |
 
-Cursor Cloud Agents need longer per call (~2–4 min). Soft budgets are provider-aware (see [`WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md)).
+Every run is capped at 760 s so it finishes inside the 800 s Vercel function limit. Budgets and runtime limits: [`WATER_ORCHESTRATION.md`](./WATER_ORCHESTRATION.md).
 
 ---
 
@@ -117,9 +116,9 @@ Mesh default remains `default_mesh_model` (usually `trilles`).
 ### Generate path
 
 ```text
-selectedModel + skillId + qualityTier
+selectedModel + prompt (+ qualityTier)
   → POST /api/water/generate
-  → runStudioPipeline
+  → pack chosen server-side → runStudioPipeline
   → DONE + factory_code + llm_*_tokens
   → WaterViewer (never /api/3d/glb for wt_* jobs)
 ```
@@ -150,6 +149,8 @@ Admin **Platform keys** (`/api/admin/api-keys`) are used only when the member ha
 | `sql/add_cursor_provider.sql` | Allow `provider = 'cursor'` |
 | `sql/007_provider_google.sql` | Rename `gemini` → `google` |
 | `sql/008_enabled_code_models.sql` | Persist Settings model toggles |
+| `sql/011_water_engine.sql` | Water projects / scenes / runs / scene ops |
+| `sql/012_water_scene_material_op.sql` | Allow `material` scene ops (part color / roughness / metalness) |
 
 ---
 
@@ -177,12 +178,12 @@ Never send Water jobs to the GLB proxy or GPU status poller.
 |------|------|
 | **`docs/ENGINES.md`** (this file) | Cloud vs Water, **skills map**, models, prefs |
 | **`docs/WATER_PROVIDERS.md`** | Connectors, keys, Settings toggles, Engine picker |
-| **`docs/WATER_ORCHESTRATION.md`** | Pipeline, budgets, harness files |
+| **`docs/WATER_ORCHESTRATION.md`** | Pipeline, packs, budgets, Vercel limits, AI SDK, harness files |
 | **`docs/WATER_FULL_GUIDE.md`** | Full Water pipeline reference |
 | **`docs/CREATE_ORCHESTRATION_PLAN.md`** | **Adoption plan** — Grok orchestration pack vs this repo, phased build order |
 | **`docs/DECISIONS_LOCKED.md`** | Locked Create decisions (Water modes, characters, Pixal=BlueFox, orchestrator) |
 | **`docs/contracts/*.md`** | JobCard, EvidenceManifest, 12-ID tool surface |
-| **`agent/README.md`** | The two eve agents (Cloud + Water) that drive the Create tool surface |
+| **`agent/README.md`** | The two eve agents (Cloud + Water) — **parked**, not on the generate path |
 | **`docs/GROK-3D-HARNESS-BRIEF.md`** | Earlier strategy brief — superseded on naming by the plan above |
 | **`skills/water/SKILL.md`** | Agent skill (docs only) |
 | **Backend `WATER_DEPLOY.md`** | SQL + Vercel env for BYOK |

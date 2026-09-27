@@ -126,8 +126,8 @@ Canonical orchestrator:
 
 ```text
 1. User selects a Water / BYOK code model (not Hydrilla Cloud mesh).
-2. User picks Skill chips (Object / Character / Anim / Game …).
-3. User picks Quality (Fast / Standard / Studio).
+2. User picks Quality (Fast / Standard / Studio). No skill chips: the backend picks the pack from the prompt (orchestrator/packs.ts).
+3. (optional) User attaches a reference image.
 4. User enters prompt (optional reference image).
 5. Generate → frontend calls submitWater / runWater.
 6. Job id `wt_…` appears in library; center shows progress (sculpt_pass labels).
@@ -288,8 +288,10 @@ Build pass order (locked):
 
 | Provider family | Fast | Standard | Studio |
 |-----------------|------|----------|--------|
-| Native (Anthropic / OpenAI / Gemini / OpenRouter) | ~90s | ~200s | ~240s |
-| **Cursor** Cloud Agents | ~240s | ~600s | ~900s |
+| Native (Anthropic / OpenAI / Gemini / OpenRouter) | 120s | 420s | 720s |
+| **Cursor** Cloud Agents | 240s | 600s | 760s (900s, capped) |
+
+Every budget is capped at 760s (`runtimeLimits.ts`: the 800s Vercel function limit minus 40s to save the result).
 
 If budget is nearly exhausted mid-loop, harness sets `partial: true` and returns the **best factory so far**.
 

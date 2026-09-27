@@ -1,5 +1,13 @@
 # `agent/` — eve orchestration for Hydrilla Create
 
+> **Status: PARKED.** Nothing in the product calls these agents. Water generation and
+> follow-up edits run in the backend on the Vercel AI SDK (`generateText` for the harness,
+> `ToolLoopAgent` for the director) — see [`docs/WATER_ORCHESTRATION.md`](../docs/WATER_ORCHESTRATION.md).
+> eve is kept compiling (`npm run typecheck`, `eve info`) so it can come back. The likely
+> first use is the follow-up director, once it needs durable multi-turn sessions. Why
+> it's parked, and when to revisit, is in the comments in `agents/create-water/agent/agent.ts`
+> and in the backend's `orchestrator/routeCreate.ts`. Also note `job_submit` returns 501 by design.
+
 Two [eve](https://vercel.com/eve) agents, one per engine. eve is Vercel's agent
 framework: instructions and skills are Markdown, tools are TypeScript, and durability
 comes from Vercel Workflows.
