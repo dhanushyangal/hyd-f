@@ -28,6 +28,8 @@ type Props = {
   tone?: "light" | "dark";
   side?: "top" | "bottom";
   align?: "start" | "center" | "end";
+  /** `cloud` lists only Hydrilla engines; `water` lists only bring-your-own-key models. */
+  scope?: "all" | "cloud" | "water";
 };
 
 function matchesQuery(m: CatalogModel, q: string): boolean {
@@ -47,6 +49,7 @@ function CreateEnginePickerInner({
   tone = "light",
   side = "bottom",
   align = "end",
+  scope = "all",
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -88,8 +91,14 @@ function CreateEnginePickerInner({
       else locked.push(group);
     }
 
-    return { order: ["Hydrilla", ...unlocked, ...locked], itemsFor };
-  }, [deferredQuery, waterPickerModels, visible, providerKeyOk]);
+    const order =
+      scope === "cloud"
+        ? ["Hydrilla"]
+        : scope === "water"
+          ? [...unlocked, ...locked]
+          : ["Hydrilla", ...unlocked, ...locked];
+    return { order, itemsFor };
+  }, [deferredQuery, waterPickerModels, visible, providerKeyOk, scope]);
 
   return (
     <div className={cn("relative", compact ? "min-w-0 max-w-[132px] sm:max-w-[176px]" : "min-w-[160px] max-w-[220px]")}>
@@ -175,6 +184,13 @@ function CreateEnginePickerInner({
             />
           </div>
           <div className="max-h-[min(320px,55vh)] overflow-y-auto p-1.5">
+            {grouped.order.every((group) => grouped.itemsFor(group).length === 0) ? (
+              <p className={cn("px-2.5 py-6 text-center text-xs", dark ? "text-white/45" : "text-neutral-500")}>
+                {scope === "water"
+                  ? "No Water models yet. Add an API key in Settings."
+                  : "No models found"}
+              </p>
+            ) : null}
             {grouped.order.map((group, gi) => {
               const items = grouped.itemsFor(group);
               if (!items.length) return null;

@@ -66,12 +66,12 @@
   },
   {
     "event_name": "text_to_image_started",
-    "event_description": "User started text-to-image generation (no prompt content captured).",
+    "event_description": "User started text-to-image generation with provider, quality and aspect (no prompt content captured).",
     "file": "app/workspace/page.tsx"
   },
   {
     "event_name": "image_edit_started",
-    "event_description": "User started image edit or combined edit (no prompt content captured).",
+    "event_description": "User started an image edit with provider and quality (no prompt content captured).",
     "file": "app/workspace/page.tsx"
   },
   {

@@ -4,14 +4,19 @@ import {
   markPrimaryDown,
   onHealthChange,
   canEdit,
-  canCombine,
   onFeaturesChange,
   getHealthState,
 } from "./apiHealth";
+import {
+  DEFAULT_IMAGE_OPTIONS,
+  type ImageOptions,
+  type ImageProvider,
+  type ImageQuality,
+} from "./imageOptions";
 
 // Re-export health utilities for UI components
 
-export { isPrimaryUp, onHealthChange, canEdit, canCombine, onFeaturesChange, getHealthState };
+export { isPrimaryUp, onHealthChange, canEdit, onFeaturesChange, getHealthState };
 
 const apiBase = getPrimaryUrl();
 
@@ -127,7 +132,7 @@ export interface Job {
   queue?: QueueInfo;  // Queue position and wait time
   result?: {
     job_id: string;
-    mode: "text-to-3d" | "image-to-3d";
+    mode: "image-to-3d";
     prompt?: string;
     mesh_url?: string;
     generated_image_url?: string;
@@ -321,7 +326,7 @@ function transformBackendJobToJob(backendJob: BackendJob | any): Job {
     updated_at: backendJob.updatedAt ? new Date(backendJob.updatedAt).getTime() : undefined,
     result: backendJob.resultGlbUrl || backendJob.previewImageUrl ? {
       job_id: backendJob.id,
-      mode: backendJob.prompt ? "text-to-3d" : "image-to-3d",
+      mode: "image-to-3d",
       prompt: backendJob.prompt || undefined,
       mesh_url: backendJob.resultGlbUrl || undefined,
       processed_image_url: backendJob.previewImageUrl || undefined,
@@ -389,48 +394,6 @@ export async function registerJobWithPreview(
   } catch {}
 }
 
-/**
- * Poll backend job status until completed, failed, or cancelled.
- * Never calls the GPU gateway from the browser.
- */
-async function pollBackendStatusUntilCompleted(
-  jobId: string,
-  getToken: () => Promise<string | null>,
-  options?: { maxWaitMs?: number; intervalMs?: number }
-): Promise<{ status: string; result?: { image_url?: string }; image_url?: string; error?: string; job?: any }> {
-  const maxWaitMs = options?.maxWaitMs ?? 120_000; // 2 min
-  const intervalMs = options?.intervalMs ?? 2000;
-  const start = Date.now();
-  while (Date.now() - start < maxWaitMs) {
-    const token = await getToken();
-    if (!token) throw new Error("Authentication required");
-    const res = await fetch(`${backendBase}/api/3d/status/${jobId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error((err as { error?: string }).error || "Failed to fetch status");
-    }
-    const data = await res.json();
-    const job = data.job || data;
-    const status = (job.status as string) || (data.status as string);
-    // Backend uses DONE/FAIL; gateway used completed/failed
-    if (status === "DONE" || status === "completed") {
-      return {
-        status: "completed",
-        image_url: job.previewImageUrl || job.image_url || data.image_url,
-        result: { image_url: job.previewImageUrl || job.image_url },
-        job,
-      };
-    }
-    if (status === "FAIL" || status === "failed" || status === "cancelled") {
-      throw new Error(job.errorMessage || data.error || data.message || `Job ${status}`);
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  throw new Error("Preview timed out. Please try again.");
-}
-
 /** Resolve relative image URL from gateway to full URL */
 function resolveImageUrl(url: string): string {
   if (!url || !url.startsWith("/")) return url;
@@ -447,105 +410,117 @@ function isGatewayOutputImageUrl(url: string): boolean {
   return (
     url.includes("/outputs/preview/") ||
     url.includes("/outputs/image/") ||
-    url.includes("/outputs/edit/") ||
-    url.includes("/outputs/combined/")
+    url.includes("/outputs/edit/")
   );
 }
 
+type ImageRequestContext = {
+  chatId?: string | null;
+  workspaceId?: string | null;
+  parentJobId?: string | null;
+  parentJobIds?: string[] | null;
+};
+
+const IMAGE_NETWORK_ERROR = "Could not reach Hydrilla. Check your connection and try again.";
+
+async function readImageError(res: Response, fallback: string): Promise<Error> {
+  const text = await res.text().catch(() => "");
+  const resolveMessage = (): string => {
+    try {
+      const data = JSON.parse(text) as {
+        error?: string | { message?: string; code?: string };
+        message?: string;
+      };
+      if (typeof data.error === "string") {
+        return data.error;
+      }
+      if (data.error && typeof data.error === "object" && typeof data.error.message === "string") {
+        return data.error.message;
+      }
+      if (typeof data.message === "string") {
+        return data.message;
+      }
+    } catch {
+      /* non-json body */
+    }
+    if (text) {
+      return text;
+    }
+    return fallback;
+  };
+  return new Error(resolveMessage());
+}
+
 /**
- * Generate preview image from text prompt via Node backend (auth required; credits deducted).
- * Gateway may return immediately (sync) with image_url, or async (pending) — we poll until completed.
+ * Text-to-image via OpenAI or Gemini (auth required; 2 credits low / 5 high).
+ * The backend returns the stored image synchronously.
  */
 export async function generatePreviewImage(
   prompt: string,
   getToken?: () => Promise<string | null>,
-  context?: {
-    chatId?: string | null;
-    workspaceId?: string | null;
-    parentJobId?: string | null;
-    parentJobIds?: string[] | null;
-  }
-): Promise<{ 
-  image_url: string; 
+  context?: ImageRequestContext,
+  options: ImageOptions = DEFAULT_IMAGE_OPTIONS
+): Promise<{
+  image_url: string;
   preview_id: string;
-  queue?: QueueInfo;
+  provider: ImageProvider;
+  quality: ImageQuality;
+  model?: string;
+  credits_used?: number;
 }> {
-  if (!getToken) {
-    throw new Error("Authentication required");
-  }
-  const token = await getToken();
+  const token = getToken ? await getToken() : null;
   if (!token) {
     throw new Error("Authentication required");
   }
 
-  const parseErrorResponse = async (res: Response): Promise<string> => {
-    try {
-      const data = await res.json();
-      return data.error || "Failed to generate preview image";
-    } catch {
-      return (await res.text()) || "Failed to generate preview image";
-    }
-  };
-
-  const handleResult = async (result: any) => {
-    const previewId = result.preview_id ?? result.job_id;
-    const resolve = (url: string) => resolveLoadableImageUrl(url);
-
-    if (result.status === "pending" || result.status === "queued" || (result.image_url == null && previewId)) {
-      const statusData = await pollBackendStatusUntilCompleted(previewId, getToken);
-      const imageUrl = statusData.image_url ?? statusData.result?.image_url ?? "";
-      return { image_url: resolve(imageUrl), preview_id: previewId, queue: result.queue };
-    }
-
-    return { image_url: resolve(result.image_url ?? ""), preview_id: previewId, queue: result.queue };
-  };
-
+  let res: Response;
   try {
-    const res = await fetch(`${backendBase}/api/3d/text-to-image`, {
+    res = await fetch(`${backendBase}/api/3d/text-to-image`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         prompt: prompt.trim(),
+        provider: options.provider,
+        quality: options.quality,
+        aspect: options.aspect,
         chatId: context?.chatId || undefined,
         workspaceId: context?.workspaceId || undefined,
         parentJobId: context?.parentJobId || undefined,
         parentJobIds: context?.parentJobIds && context.parentJobIds.length > 0 ? context.parentJobIds : undefined,
       }),
     });
-    if (res.status === 402) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
-    }
-    if (!res.ok) throw new Error(await parseErrorResponse(res));
-    const result = await res.json();
-    return await handleResult(result);
   } catch (err: any) {
-    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient") || err?.message?.includes("Authentication")) throw err;
-    if (isApiUnavailableError(err)) {
-      if (shouldNotifyGpuOffline(err)) notifyGpuOffline(err.message || "API unavailable", getToken);
-      throw new Error(getGpuOfflineErrorMessage());
-    }
+    if (isApiUnavailableError(err)) throw new Error(IMAGE_NETWORK_ERROR);
     throw err;
   }
+  if (res.status === 402) {
+    throw await readImageError(res, "Insufficient credits. Please subscribe or buy more credits.");
+  }
+  if (!res.ok) throw await readImageError(res, "Failed to generate image");
+
+  const result = await res.json();
+  return {
+    image_url: resolveLoadableImageUrl(result.image_url ?? ""),
+    preview_id: result.preview_id ?? result.job_id,
+    provider: result.provider ?? options.provider,
+    quality: result.quality ?? options.quality,
+    model: result.model,
+    credits_used: result.credits_used,
+  };
 }
 
 /**
- * Edit image with prompt (image-to-image).
- * Gateway may return sync image_url or async (pending) — we poll until completed.
+ * Edit an image with a prompt via OpenAI or Gemini (auth required; 3 credits low / 6 high).
+ * The output keeps the input image's framing, so aspect is not sent.
  */
 export async function editImage(
   prompt: string,
   imageFile?: File | null,
   imageUrl?: string | null,
   getToken?: () => Promise<string | null>,
-  context?: {
-    chatId?: string | null;
-    workspaceId?: string | null;
-    parentJobId?: string | null;
-    parentJobIds?: string[] | null;
-    sourceImages?: string[] | null;
-  }
-): Promise<{ edit_id: string; image_url: string; prompt: string; strength: number }> {
+  context?: ImageRequestContext & { sourceImages?: string[] | null },
+  options: Pick<ImageOptions, "provider" | "quality"> = DEFAULT_IMAGE_OPTIONS
+): Promise<{ edit_id: string; image_url: string; prompt: string; provider: ImageProvider; quality: ImageQuality; model?: string }> {
   const formData = new FormData();
   formData.append("prompt", prompt.trim());
   if (imageFile) {
@@ -555,6 +530,8 @@ export async function editImage(
   } else {
     throw new Error("Either image file or image URL is required");
   }
+  formData.append("provider", options.provider);
+  formData.append("quality", options.quality);
   if (context?.chatId) formData.append("chatId", context.chatId);
   if (context?.workspaceId) formData.append("workspaceId", context.workspaceId);
   if (context?.parentJobId) formData.append("parentJobId", context.parentJobId);
@@ -565,204 +542,36 @@ export async function editImage(
     formData.append("sourceImages", JSON.stringify(context.sourceImages));
   }
 
-  const doRequest = async (url: string, headers: HeadersInit) => {
-    const res = await fetch(url, { method: "POST", headers, body: formData });
-    if (res.status === 402) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
-    }
-    if (!res.ok) {
-      let errorText: string;
-      let code: string | undefined;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || "Failed to edit image";
-        code = errorData.code;
-      } catch {
-        errorText = (await res.text()) || "Failed to edit image";
-      }
-      if (res.status === 403 || code === "FEATURE_UNAVAILABLE") {
-        throw new Error(errorText || "Edit is not available on this GPU tier.");
-      }
-      throw new Error(errorText);
-    }
-    return res.json();
-  };
+  const token = getToken ? await getToken() : null;
+  if (!token) {
+    throw new Error("Authentication required");
+  }
 
+  let res: Response;
   try {
-    if (!getToken) {
-      throw new Error("Authentication required");
-    }
-    const token = await getToken();
-    if (!token) {
-      throw new Error("Authentication required");
-    }
-    const result = await doRequest(`${backendBase}/api/3d/edit-image`, {
-      Authorization: `Bearer ${token}`,
+    res = await fetch(`${backendBase}/api/3d/edit-image`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
     });
-    const editId = result.edit_id ?? result.job_id;
-    if (result.status === "pending" || result.status === "queued" || (result.image_url == null && editId)) {
-      const statusData = await pollBackendStatusUntilCompleted(editId, getToken);
-      const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
-      return {
-        edit_id: editId,
-        image_url: resolveLoadableImageUrl(imageUrlFromStatus),
-        prompt: result.prompt || prompt,
-        strength: result.strength ?? 0.6,
-      };
-    }
-    return {
-      edit_id: editId,
-      image_url: resolveLoadableImageUrl(result.image_url || ""),
-      prompt: result.prompt || prompt,
-      strength: result.strength ?? 0.6,
-    };
   } catch (err: any) {
-    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient") || err?.message?.includes("Authentication")) throw err;
-    if (isApiUnavailableError(err)) {
-      markPrimaryDown();
-      if (shouldNotifyGpuOffline(err)) {
-        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
-      }
-      throw new Error(getGpuOfflineErrorMessage());
-    }
+    if (isApiUnavailableError(err)) throw new Error(IMAGE_NETWORK_ERROR);
     throw err;
   }
-}
-
-/**
- * Fetch a remote image URL and convert it to a File object for FormData uploads.
- * Routes through our backend image proxy to avoid S3 CORS issues.
- */
-async function urlToFile(url: string, filename: string): Promise<File> {
-  // Use the backend proxy to avoid CORS when fetching S3 images
-  const proxyUrl = getProxiedImageUrl(url) || url;
-  const response = await fetch(proxyUrl);
-  if (!response.ok) throw new Error(`Failed to fetch image: ${url}`);
-  const blob = await response.blob();
-
-  // Determine extension from URL
-  const rawExt = (url.split(".").pop()?.split("?")[0] || "png").toLowerCase();
-  const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "png";
-
-  // Always use a real image/* mimetype. S3 may return "application/octet-stream"
-  // when objects were uploaded without ContentType — that would cause the backend
-  // multer fileFilter to reject the upload.
-  const blobType = (blob.type || "").toLowerCase();
-  const mimeType = blobType.startsWith("image/")
-    ? blobType
-    : `image/${ext === "jpg" ? "jpeg" : ext}`;
-
-  // Re-wrap blob with the corrected type so the resulting File reports it.
-  const typed = new Blob([blob], { type: mimeType });
-  return new File([typed], `${filename}.${ext}`, { type: mimeType });
-}
-
-/**
- * Combined edit: Prompt + 2 images -> one combined/edited image.
- * Gateway may return sync image_url or async (pending) — we poll until completed.
- */
-export async function combinedEdit(
-  prompt: string,
-  imageFile1: File | null,
-  imageFile2: File | null,
-  getToken?: () => Promise<string | null>,
-  imageUrl1?: string | null,
-  imageUrl2?: string | null,
-  context?: {
-    chatId?: string | null;
-    workspaceId?: string | null;
-    parentJobId?: string | null;
-    parentJobIds?: string[] | null;
-    sourceImages?: string[] | null;
+  if (res.status === 402) {
+    throw await readImageError(res, "Insufficient credits. Please subscribe or buy more credits.");
   }
-): Promise<{ combined_id: string; image_url: string; prompt: string; prompt_used: string }> {
-  const file1 = imageFile1 || (imageUrl1 ? await urlToFile(imageUrl1, "image_1") : null);
-  const file2 = imageFile2 || (imageUrl2 ? await urlToFile(imageUrl2, "image_2") : null);
+  if (!res.ok) throw await readImageError(res, "Failed to edit image");
 
-  if (!file1 || !file2) {
-    throw new Error("Both images are required for combined edit");
-  }
-
-  const formData = new FormData();
-  formData.append("prompt", prompt.trim());
-  formData.append("image_1", file1);
-  formData.append("image_2", file2);
-  if (context?.chatId) formData.append("chatId", context.chatId);
-  if (context?.workspaceId) formData.append("workspaceId", context.workspaceId);
-  if (context?.parentJobId) formData.append("parentJobId", context.parentJobId);
-  if (context?.parentJobIds && context.parentJobIds.length > 0) {
-    formData.append("parentJobIds", JSON.stringify(context.parentJobIds));
-  }
-  if (context?.sourceImages && context.sourceImages.length > 0) {
-    formData.append("sourceImages", JSON.stringify(context.sourceImages));
-  }
-
-  const doRequest = async (url: string, headers: HeadersInit) => {
-    const res = await fetch(url, { method: "POST", headers, body: formData });
-    if (res.status === 402) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
-    }
-    if (!res.ok) {
-      let errorText: string;
-      let code: string | undefined;
-      try {
-        const errorData = await res.json();
-        errorText = errorData.error || "Failed to combine images";
-        code = errorData.code;
-      } catch {
-        errorText = (await res.text()) || "Failed to combine images";
-      }
-      if (res.status === 403 || code === "FEATURE_UNAVAILABLE") {
-        throw new Error(errorText || "Combine is not available on this GPU tier.");
-      }
-      throw new Error(errorText);
-    }
-    return res.json();
+  const result = await res.json();
+  return {
+    edit_id: result.edit_id ?? result.job_id,
+    image_url: resolveLoadableImageUrl(result.image_url ?? ""),
+    prompt: result.prompt || prompt,
+    provider: result.provider ?? options.provider,
+    quality: result.quality ?? options.quality,
+    model: result.model,
   };
-
-  try {
-    if (!getToken) {
-      throw new Error("Authentication required");
-    }
-    const token = await getToken();
-    if (!token) {
-      throw new Error("Authentication required");
-    }
-    const result = await doRequest(`${backendBase}/api/3d/combined-edit`, { Authorization: `Bearer ${token}` });
-
-    const combinedId = result.combined_id ?? result.job_id;
-
-    // Async: status "pending" → poll Node status until completed
-    if (result.status === "pending" || result.status === "queued" || (result.image_url == null && combinedId)) {
-      const statusData = await pollBackendStatusUntilCompleted(combinedId, getToken);
-      const imageUrlFromStatus = statusData.image_url ?? statusData.result?.image_url ?? "";
-      return {
-        combined_id: combinedId,
-        image_url: resolveLoadableImageUrl(imageUrlFromStatus),
-        prompt: result.prompt || prompt,
-        prompt_used: (statusData.result as { prompt_used?: string })?.prompt_used ?? result.prompt ?? prompt,
-      };
-    }
-
-    return {
-      combined_id: combinedId,
-      image_url: resolveLoadableImageUrl(result.image_url || ""),
-      prompt: result.prompt || prompt,
-      prompt_used: result.prompt_used || prompt,
-    };
-  } catch (err: any) {
-    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient") || err?.message?.includes("Authentication")) throw err;
-    if (isApiUnavailableError(err)) {
-      markPrimaryDown();
-      if (shouldNotifyGpuOffline(err)) {
-        notifyGpuOffline(err.message || "GPU/API unavailable", getToken);
-      }
-      throw new Error(getGpuOfflineErrorMessage());
-    }
-    throw err;
-  }
 }
 
 /** Credits info from GET /api/payments/credits */
@@ -1866,6 +1675,7 @@ export async function submitWater(params: {
   workspaceId?: string | null;
   parentJobId?: string | null;
   qualityTier?: "fast" | "standard" | "studio";
+  skillId?: string | null;
   factoryCode?: string | null;
   getToken?: () => Promise<string | null>;
 }): Promise<{
@@ -1882,6 +1692,7 @@ export async function submitWater(params: {
       workspaceId: params.workspaceId || undefined,
       parentJobId: params.parentJobId || undefined,
       qualityTier: params.qualityTier || undefined,
+      skillId: params.skillId && params.skillId !== "auto" ? params.skillId : undefined,
       factoryCode: params.factoryCode || undefined,
     }),
   });
@@ -2107,3 +1918,100 @@ export async function patchWaterScene(params: {
   }
   return ((body as { scene?: WaterSceneBundle }).scene || null);
 }
+
+export type DeveloperApiKeyMeta = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  status: "active" | "revoked";
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  totalCreditsUsed?: number;
+  totalRequests?: number;
+};
+
+export type DeveloperApiKeyUsageRecord = {
+  id: string;
+  apiKeyId: string;
+  endpoint: string;
+  method: string;
+  statusCode: number;
+  creditsDeducted: number;
+  details: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type DeveloperApiKeyDetails = {
+  key: DeveloperApiKeyMeta;
+  summary: {
+    totalCreditsUsed: number;
+    totalRequests: number;
+    credits3d: number;
+    credits2d: number;
+    requests3d: number;
+    requests2d: number;
+    endpointCounts: Record<string, { requests: number; credits: number }>;
+  };
+  recentLogs: DeveloperApiKeyUsageRecord[];
+};
+
+export async function fetchDeveloperApiKeys(
+  getToken?: () => Promise<string | null>
+): Promise<DeveloperApiKeyMeta[]> {
+  const res = await fetch(`${backendBase}/api/user/developer-keys`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to fetch developer API keys");
+  }
+  return (body.keys || []) as DeveloperApiKeyMeta[];
+}
+
+export async function fetchDeveloperKeyDetails(
+  keyId: string,
+  getToken?: () => Promise<string | null>
+): Promise<DeveloperApiKeyDetails> {
+  const res = await fetch(`${backendBase}/api/user/developer-keys/${keyId}`, {
+    headers: await authHeaders(getToken),
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to fetch developer API key details");
+  }
+  return (body as { details: DeveloperApiKeyDetails }).details;
+}
+
+export async function createDeveloperApiKey(
+  name: string,
+  getToken?: () => Promise<string | null>
+): Promise<{ apiKey: string; meta: DeveloperApiKeyMeta }> {
+  const res = await fetch(`${backendBase}/api/user/developer-keys`, {
+    method: "POST",
+    headers: await authHeaders(getToken),
+    body: JSON.stringify({ name }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || "Failed to create developer API key");
+  }
+  return body as { apiKey: string; meta: DeveloperApiKeyMeta };
+}
+
+export async function revokeDeveloperApiKey(
+  keyId: string,
+  getToken?: () => Promise<string | null>
+): Promise<void> {
+  const res = await fetch(`${backendBase}/api/user/developer-keys/${keyId}`, {
+    method: "DELETE",
+    headers: await authHeaders(getToken),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || "Failed to revoke developer API key");
+  }
+}
+

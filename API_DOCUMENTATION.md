@@ -12,7 +12,7 @@ This document provides comprehensive API documentation for the Hydrilla 3D Gener
 1. [Architecture Overview](#architecture-overview)
 2. [Authentication](#authentication)
 3. [Node.js Backend API](#nodejs-backend-api)
-4. [Python Backend API](#python-backend-api)
+4. [GPU VM API (Python)](#gpu-vm-api-python)
 5. [Data Models](#data-models)
 6. [Error Handling](#error-handling)
 7. [Examples](#examples)
@@ -26,9 +26,9 @@ This document provides comprehensive API documentation for the Hydrilla 3D Gener
 ```
 Frontend (Next.js)
     ↓
-Node.js Backend (Express) - Handles auth, DB, job management
-    ↓
-Python Backend (FastAPI) - Handles 3D generation, GPU processing
+Node.js Backend (Express) - Handles auth, DB, job management, credits
+    ├─→ OpenAI / Gemini image APIs - text-to-image and image edit
+    └─→ GPU VM (FastAPI, BlueFox3D) - image-to-3D
     ↓
 S3 Storage - Stores generated models and images
 ```
@@ -36,7 +36,7 @@ S3 Storage - Stores generated models and images
 ### Base URLs
 
 - **Node.js Backend**: `process.env.NEXT_PUBLIC_BACKEND_URL` (default: `http://localhost:4000`)
-- **Python Backend**: `process.env.NEXT_PUBLIC_API_URL` (default: `https://api.hydrilla.co`)
+- **GPU VM (Python)**: `process.env.NEXT_PUBLIC_API_URL` (default: `https://api.hydrilla.co`) — image-to-3D only
 
 ### Status Mapping
 
@@ -85,18 +85,11 @@ All endpoints are prefixed with `/api/3d`
 
 **Endpoint**: `POST /api/3d/generate`  
 **Auth**: Required  
-**Description**: Submit a job to generate a 3D model from text prompt or image
+**Description**: Submit an image-to-3D job to the GPU VM (10 credits). For text-to-3D, call
+`/api/3d/text-to-image` first and pass its `image_url` here (a `prompt`-only body returns `400`).
 
 #### Request Body
 
-**Text-to-3D:**
-```json
-{
-  "prompt": "A red sports car"
-}
-```
-
-**Image-to-3D:**
 ```json
 {
   "imageUrl": "https://example.com/image.jpg"
@@ -414,65 +407,104 @@ const { url } = await response.json();
 
 ---
 
-## Python Backend API
+### 11. Text-to-Image (OpenAI / Gemini)
 
-Base URL: `NEXT_PUBLIC_API_URL` (default: `https://api.hydrilla.co`)
+**Endpoint**: `POST /api/3d/text-to-image`  
+**Auth**: Required  
+**Description**: Generate an image synchronously. The backend calls OpenAI or Gemini, stores the PNG in S3 and creates a `TextToImage` job (DONE).
 
-**Note**: The frontend typically does NOT call the Python backend directly. All requests go through the Node.js backend, which then calls the Python backend. However, for preview image generation, the frontend may call the Python backend directly.
+#### Request Body
 
-### 1. Generate Preview Image (Text-to-Image)
+```json
+{
+  "prompt": "A red sports car, studio lighting",
+  "provider": "openai",
+  "quality": "low",
+  "aspect": "1:1",
+  "workspaceId": "optional",
+  "parentJobId": "optional"
+}
+```
 
-**Endpoint**: `POST /text-to-image`  
-**Auth**: Not required (but `user_id` can be passed)  
-**Description**: Generate a preview image from a text prompt (synchronous, returns immediately)
-
-#### Request
-
-**Form Data:**
-- `prompt`: string (required)
-- `user_id`: string (optional)
+- `provider`: `"openai"` (default) or `"gemini"`
+- `quality`: `"low"` (default, 2 credits) or `"high"` (5 credits)
+- `aspect`: `"1:1"` (default), `"3:2"` or `"2:3"`
 
 #### Response
 
 ```json
 {
-  "success": true,
-  "preview_id": "uuid-string",
-  "image_url": "https://s3.../preview_image.png",
-  "prompt": "A red sports car",
-  "message": "Preview image generated successfully",
-  "queue": {
-    "position": 0,
-    "previews_ahead": 0,
-    "estimated_wait_seconds": 0,
-    "estimated_total_seconds": 20,
-    "queue_length": 0,
-    "currently_generating": false
-  }
+  "job_id": "uuid",
+  "preview_id": "uuid",
+  "status": "completed",
+  "image_url": "https://<bucket>.s3.<region>.amazonaws.com/preview/<id>/preview_image.png",
+  "provider": "openai",
+  "quality": "low",
+  "aspect": "1:1",
+  "model": "gpt-image-2.5-flare",
+  "credits_used": 2
 }
 ```
 
-#### Example
+#### Errors
 
-```typescript
-const formData = new URLSearchParams();
-formData.append("prompt", "A red sports car");
+- `400` invalid prompt / provider / quality / aspect
+- `402` insufficient credits
+- `422` blocked by moderation or content policy (`code: "IMAGE_REQUEST_BLOCKED"`, message: `"This image request couldn't be generated. Try changing the prompt."`)
+- `503` `provider_not_configured` (no key) or provider rate limit
+- `504` provider timeout
 
-const response = await fetch(`${apiBase}/text-to-image`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/x-www-form-urlencoded"
-  },
-  body: formData.toString()
-});
+Credits are refunded on any provider failure. Frontend helper: `generatePreviewImage(prompt, getToken, context, { provider, quality, aspect })`.
 
-const data = await response.json();
-// data.image_url contains the preview image URL
+---
+
+### 12. Edit Image (OpenAI / Gemini)
+
+**Endpoint**: `POST /api/3d/edit-image`  
+**Auth**: Required  
+**Description**: Edit an image with a prompt. Synchronous; result stored at `edit/<id>/edited.png` with an `EditImage` job (DONE). The output keeps the input's framing.
+
+#### Request (multipart/form-data)
+
+- `prompt`: string (required)
+- `image`: file, or `image_url`: string (one required)
+- `provider`: `"openai"` | `"gemini"` (default `openai`)
+- `quality`: `"low"` (3 credits) | `"high"` (6 credits)
+- `workspaceId`, `parentJobId`, `parentJobIds` (JSON array), `sourceImages` (JSON array): optional
+
+#### Response
+
+Same as text-to-image, with `edit_id` instead of `preview_id` and no `aspect`.
+
+Frontend helper: `editImage(prompt, file, imageUrl, getToken, context, { provider, quality })`.
+
+---
+
+### 13. Health
+
+**Endpoint**: `GET /api/3d/health`  
+**Auth**: Not required
+
+```json
+{
+  "status": "ok",
+  "features": { "text_to_image": true, "edit_image": true, "image_to_3d": true, "text_to_3d": true },
+  "providers": { "openai": true, "gemini": false },
+  "gpu": { "reachable": true, "ready": true, "status": "ok", "model": "BlueFox3D" }
+}
 ```
 
 ---
 
-### 2. Submit Image-to-3D Job
+## GPU VM API (Python)
+
+Base URL: `NEXT_PUBLIC_API_URL` (default: `https://api.hydrilla.co`)
+
+**Note**: The frontend does NOT call the GPU VM for generation. All requests go through the Node.js backend.
+Images (text-to-image, edit) are generated by OpenAI / Gemini via the Node backend (see sections 11–12 above);
+the VM only runs image-to-3D (BlueFox3D).
+
+### 1. Submit Image-to-3D Job
 
 **Endpoint**: `POST /image-to-3d`  
 **Auth**: Not required (handled by Node.js backend)  
@@ -501,35 +533,7 @@ const data = await response.json();
 
 ---
 
-### 3. Submit Text-to-3D Job
-
-**Endpoint**: `POST /text-to-3d`  
-**Auth**: Not required (handled by Node.js backend)  
-**Description**: Submit a text-to-3D generation job (asynchronous)
-
-#### Request
-
-**Form Data:**
-- `prompt`: string (required)
-- `user_id`: string (optional) - User ID (typically not sent from frontend)
-
-#### Response
-
-```json
-{
-  "job_id": "uuid-string",
-  "status": "pending",
-  "message": "Job created successfully. Use /status/{job_id} to check progress.",
-  "status_url": "/status/{job_id}",
-  "stream_url": "/stream/{job_id}"
-}
-```
-
-**Note**: The frontend should NOT call this directly. Use the Node.js backend endpoint `/api/3d/generate` instead.
-
----
-
-### 4. Get Job Status (Python Backend)
+### 2. Get Job Status (GPU VM)
 
 **Endpoint**: `GET /status/:jobId`  
 **Auth**: Not required  
@@ -569,7 +573,7 @@ const data = await response.json();
 
 ---
 
-### 5. Get Queue Info
+### 3. Get Queue Info
 
 **Endpoint**: `GET /queue/info`  
 **Auth**: Not required  
@@ -594,7 +598,7 @@ const data = await response.json();
 
 ---
 
-### 6. Cancel Job
+### 4. Cancel Job
 
 **Endpoint**: `POST /cancel/:jobId`  
 **Auth**: Not required  
@@ -612,7 +616,7 @@ const data = await response.json();
 
 ---
 
-### 7. Health Check
+### 5. Health Check
 
 **Endpoint**: `GET /health`  
 **Auth**: Not required  
@@ -667,7 +671,7 @@ interface Job {
   queue?: QueueInfo;
   result?: {
     job_id: string;
-    mode: "text-to-3d" | "image-to-3d";
+    mode: "image-to-3d";
     prompt?: string;
     mesh_url?: string;
     generated_image_url?: string;
@@ -762,34 +766,20 @@ All endpoints return errors in the following format:
 ### Complete Workflow: Text-to-3D
 
 ```typescript
-// 1. Generate preview image
-const formData = new URLSearchParams();
-formData.append("prompt", "A red sports car");
-
-const previewResponse = await fetch(`${apiBase}/text-to-image`, {
-  method: "POST",
-  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  body: formData.toString()
-});
-
-const previewData = await previewResponse.json();
-const previewImageUrl = previewData.image_url;
-
-// 2. Register job with preview
-await fetch(`${backendBase}/api/3d/register-job`, {
+// 1. Generate the source image (OpenAI or Gemini, synchronous; job is created by the backend)
+const previewResponse = await fetch(`${backendBase}/api/3d/text-to-image`, {
   method: "POST",
   headers: {
     "Authorization": `Bearer ${token}`,
     "Content-Type": "application/json"
   },
-  body: JSON.stringify({
-    job_id: previewData.preview_id,
-    prompt: "A red sports car",
-    previewImageUrl: previewImageUrl
-  })
+  body: JSON.stringify({ prompt: "A red sports car", provider: "openai", quality: "low", aspect: "1:1" })
 });
 
-// 3. Generate 3D model (if user clicks "Generate 3D")
+const previewData = await previewResponse.json();
+const previewImageUrl = previewData.image_url;
+
+// 2. Generate 3D model from the image (if user clicks "Generate 3D")
 const generateResponse = await fetch(`${backendBase}/api/3d/generate`, {
   method: "POST",
   headers: {
@@ -797,13 +787,13 @@ const generateResponse = await fetch(`${backendBase}/api/3d/generate`, {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    prompt: "A red sports car"
+    imageUrl: previewImageUrl
   })
 });
 
 const { jobId } = await generateResponse.json();
 
-// 4. Poll for status
+// 3. Poll for status
 const pollStatus = async () => {
   const response = await fetch(`${backendBase}/api/3d/status/${jobId}`, {
     headers: { "Authorization": `Bearer ${token}` }
@@ -899,18 +889,16 @@ jobs.forEach(job => {
 
 ### 1. **Always use Node.js Backend for Job Operations**
 
-The frontend should **never** call the Python backend directly for job submission or status checking. Always use:
-- `/api/3d/generate` instead of `/text-to-3d` or `/image-to-3d`
+The frontend should **never** call the GPU VM directly for job submission or status checking. Always use:
+- `/api/3d/generate` instead of `/image-to-3d`
 - `/api/3d/status/:jobId` instead of `/status/:jobId`
 
-The only exception is `/text-to-image` for preview generation, which can be called directly.
+### 2. **Image Generation**
 
-### 2. **Preview Image Generation**
-
-When generating a preview image:
-1. Call `/text-to-image` on Python backend
-2. Immediately call `/api/3d/register-job` to create a job record with the preview
-3. This ensures the preview appears in the user's history
+- `/api/3d/text-to-image` and `/api/3d/edit-image` are synchronous and create the job record themselves.
+- Pass `provider` (`openai` / `gemini`) and `quality` (`low` / `high`); text-to-image also takes `aspect`.
+- Show `error` from `422` responses directly — it explains content-policy blocks.
+- Text-to-3D = text-to-image, then `/api/3d/generate` with the returned `image_url`.
 
 ### 3. **Status Polling**
 
@@ -957,7 +945,10 @@ NEXT_PUBLIC_API_URL=https://api.hydrilla.co
 ### Node.js Backend
 
 ```env
-HUNYUAN_API_URL=https://api.hydrilla.co
+HYDRILLA_GPU_API_URL=https://api.hydrilla.co
+HYDRILLA_INTERNAL_API_SECRET=...
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
 DATABASE_URL=postgresql://...
 CLERK_SECRET_KEY=sk_...
 AWS_ACCESS_KEY_ID=...

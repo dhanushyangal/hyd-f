@@ -23,7 +23,12 @@ import {
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { StudioOrb } from "../../components/workspace/StudioOrb";
-import { ChatComponent } from "../../components/workspace/ChatComponent";
+import { WorkspaceRail, type WorkspaceSection } from "../../components/workspace/WorkspaceRail";
+import { AgentPanel } from "../../components/workspace/AgentPanel";
+import { ImagePanel } from "../../components/workspace/ImagePanel";
+import { ModelPanel } from "../../components/workspace/ModelPanel";
+import { GalleryPanel } from "../../components/workspace/GalleryPanel";
+import { MAX_PROMPT } from "../../components/workspace/composer-parts";
 import type { WaterViewerHandle } from "../../components/WaterViewer";
 import { WaterPassRail } from "../../components/water/WaterPassRail";
 import { AssetInspector } from "../../components/workspace/AssetInspector";
@@ -54,7 +59,6 @@ import {
   generatePreviewImage,
   registerJobWithPreview,
   editImage,
-  combinedEdit,
   uploadImageViaApi,
   uploadImage,
   fetchWorkspace,
@@ -71,8 +75,8 @@ import {
   notifyGpuOffline,
   cancelJob,
   canEdit,
-  canCombine,
   onFeaturesChange,
+  getHealthState,
   BackendJob,
   QueueInfo,
   UserApiKeyMeta,
@@ -104,16 +108,27 @@ import {
   resolveEnabledModelIds,
 } from "../../lib/waterModels";
 import { isWaterJob, isWaterJobId } from "../../lib/engines";
+import type { ImageProviderAvailability } from "../../lib/apiHealth";
 import {
+  DEFAULT_IMAGE_OPTIONS,
+  IMAGE_TO_3D_CREDITS,
+  imageCredits,
+  loadImageOptions,
+  saveImageOptions,
+  type ImageOptions,
+} from "../../lib/imageOptions";
+import {
+  DEFAULT_WATER_SKILL,
+  WATER_SKILLS,
+  WATER_SKILL_STORAGE_KEY,
   WATER_TIER_STORAGE_KEY,
   parseQualityTier,
   waterPassLabel,
   type QualityTier,
+  type WaterSkillId,
 } from "../../lib/waterSkills";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
-const CREDITS_IMAGE = 2;
-const CREDITS_3D = 10;
 const WATER_POLL_INTERVAL_MS = 2_000;
 const WATER_POLL_MAX_MS = 18 * 60 * 1000;
 
@@ -144,24 +159,20 @@ const WaterViewer = dynamic(
   }
 );
 
-type InputMode = "text" | "image" | "text_1img" | "text_2img";
+type InputMode = "text" | "image" | "text_1img";
 
-// Per-mode state so each mode remembers its own prompt and images
+// Per-mode state so each mode remembers its own prompt and image
 interface ModeState {
   prompt: string;
   image1: string | null;
-  image2: string | null;
   file1: File | null;
-  file2: File | null;
   jobId1: string | null; // Workspace job ID for image1 (null if uploaded from disk)
-  jobId2: string | null; // Workspace job ID for image2 (null if uploaded from disk)
 }
 
 const defaultModeStates: Record<InputMode, ModeState> = {
-  text: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
-  image: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
-  text_1img: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
-  text_2img: { prompt: "", image1: null, image2: null, file1: null, file2: null, jobId1: null, jobId2: null },
+  text: { prompt: "", image1: null, file1: null, jobId1: null },
+  image: { prompt: "", image1: null, file1: null, jobId1: null },
+  text_1img: { prompt: "", image1: null, file1: null, jobId1: null },
 };
 
 type CenterView =
@@ -365,30 +376,34 @@ function WorkspacePage() {
   const [modeStates, setModeStates] = useState<Record<InputMode, ModeState>>(defaultModeStates);
   const [centerView, setCenterView] = useState<CenterView>({ type: "empty" });
 
-  // GPU features — Edit & Combine only when high-mode features.edit_image / combined_edit.
-  // Initialize optimistic so SSR/client first paint match; updated after mount from /api/3d/health.
+  // Edit needs an OpenAI or Gemini key on the backend (features.edit_image from /api/3d/health).
+  // Updated after mount so SSR/client first paint match.
   const [editAvailable, setEditAvailable] = useState(false);
-  const [combineAvailable, setCombineAvailable] = useState(false);
+  const [imageProviders, setImageProviders] = useState<ImageProviderAvailability>({ openai: true, gemini: true });
   useEffect(() => {
     setEditAvailable(canEdit());
-    setCombineAvailable(canCombine());
+    setImageProviders(getHealthState().providers);
     return onFeaturesChange((state) => {
       setEditAvailable(!!state.features.edit_image);
-      setCombineAvailable(!!state.features.combined_edit);
+      setImageProviders(state.providers);
     });
   }, []);
 
-  // When features drop to low, force back to "text" if on Combine.
-  // Cloud Edit snap (text_1img) is handled with Water awareness below.
+  const [imageOptions, setImageOptions] = useState<ImageOptions>(DEFAULT_IMAGE_OPTIONS);
   useEffect(() => {
-    if (!combineAvailable && inputMode === "text_2img") setInputMode("text");
-  }, [combineAvailable, inputMode]);
+    setImageOptions(loadImageOptions());
+  }, []);
+  const handleImageOptionsChange = useCallback((next: ImageOptions) => {
+    setImageOptions(next);
+    saveImageOptions(next);
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
   // Loading states
   const [loading, setLoading] = useState(false);
   const [generatingPreview, setGeneratingPreview] = useState(false);
+  const isSubmittingImageRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const mustCreateWorkspace = isLoaded && isSignedIn && !resolvingWorkspace && !workspaceId;
@@ -568,11 +583,35 @@ function WorkspacePage() {
   const [creditsUsed, setCreditsUsed] = useState<number>(0);
   const [creditsLoading, setCreditsLoading] = useState(false);
   const [clientMounted, setClientMounted] = useState(false);
+  const [activeSection, setActiveSection] = useState<WorkspaceSection>("model");
+  const [waterSkill, setWaterSkill] = useState<WaterSkillId>(DEFAULT_WATER_SKILL);
+  const [isImageEditMode, setIsImageEditMode] = useState<boolean>(false);
+
   useEffect(() => {
     setClientMounted(true);
     try {
-      const saved = window.localStorage.getItem(WATER_TIER_STORAGE_KEY);
-      if (saved) setWaterQualityTier(parseQualityTier(saved));
+      const savedTier = window.localStorage.getItem(WATER_TIER_STORAGE_KEY);
+      if (savedTier) {
+        setWaterQualityTier(parseQualityTier(savedTier));
+      }
+      const savedSkill = window.localStorage.getItem(
+        WATER_SKILL_STORAGE_KEY
+      ) as WaterSkillId | null;
+      if (savedSkill && WATER_SKILLS.some((s) => s.id === savedSkill)) {
+        setWaterSkill(savedSkill);
+      }
+      const savedSection = window.localStorage.getItem(
+        "hydrilla_workspace_section"
+      ) as WorkspaceSection | null;
+      if (
+        savedSection &&
+        (savedSection === "agent" || savedSection === "image" || savedSection === "model")
+      ) {
+        setActiveSection(savedSection);
+        setInputMode(savedSection === "model" ? "image" : "text");
+      } else {
+        setInputMode("image");
+      }
     } catch {
       /* ignore */
     }
@@ -598,6 +637,8 @@ function WorkspacePage() {
 
   // AI Model selection — Hydrilla mesh engines + Bring-your-own Water models
   const [selectedModel, setSelectedModel] = useState<ModelId>("trilles");
+  const [preferredWaterModelId, setPreferredWaterModelId] = useState<string | null>(null);
+  const [agentPrompt, setAgentPrompt] = useState("");
   const [enabledWaterIds, setEnabledWaterIds] = useState<string[]>([]);
   const [apiKeys, setApiKeys] = useState<UserApiKeyMeta[]>([]);
   const [sharedKeys, setSharedKeys] = useState<UserApiKeyMeta[]>([]);
@@ -648,11 +689,11 @@ function WorkspacePage() {
   const selectedIsCode =
     selectedProvider !== null && selectedProvider !== "hydrilla";
 
-  // Water: Text + Edit only. Snap away from cloud Image/Combine modes.
-  // Cloud: snap Edit off when GPU edit is unavailable.
+  // Water: Text + Edit only. Snap away from the cloud Image mode.
+  // Cloud: snap Edit off when image editing is unavailable.
   useEffect(() => {
     if (selectedIsCode) {
-      if (inputMode === "image" || inputMode === "text_2img") {
+      if (inputMode === "image") {
         setInputMode("text");
       }
       return;
@@ -712,15 +753,10 @@ function WorkspacePage() {
         const data = await fetchUserApiKeys(tokenGetter);
         setApiKeys(data.keys);
         setSharedKeys(data.sharedKeys ?? []);
-        // Prefer saved Water default when user already configured BYOK
+        // Chat box always opens on Cloud / BlueFox 1; the saved Water model is not auto-selected.
         const preferred = migrateCodeModelId(data.prefs?.defaultCodeModel);
         if (preferred && isCodeModel(preferred)) {
-          const provider = providerForModelId(preferred);
-          const keyOk =
-            !provider ||
-            provider === "hydrilla" ||
-            providerKeyAvailable(provider, data.keys, data.sharedKeys ?? []);
-          if (keyOk) setSelectedModel(preferred as ModelId);
+          setPreferredWaterModelId(preferred);
           // Persist migration when prefs still hold a retired 4.5 id
           if (data.prefs?.defaultCodeModel && data.prefs.defaultCodeModel !== preferred) {
             void saveUserModelPrefs({ defaultCodeModel: preferred }, tokenGetter).catch(() => {});
@@ -814,7 +850,36 @@ function WorkspacePage() {
   const [look, setLook] = useState<ViewerLook>(DEFAULT_VIEWER_LOOK);
   const updateLook = useCallback((patch: Partial<ViewerLook>) => setLook((prev) => applyLookPatch(prev, patch)), []);
 
-  const activeWaterJobId = centerView.type === "code" ? centerView.jobId : null;
+  const activeWaterJobId =
+    centerView.type === "code"
+      ? centerView.jobId
+      : selectedJobInfo && isWaterJobFn(selectedJobInfo)
+        ? selectedJobInfo.id
+        : null;
+  const waterThreadJobs = useMemo(() => {
+    if (!activeWaterJobId) {
+      return [];
+    }
+    const findJob = (id: string): BackendJob | null =>
+      library3DAssets.find((j) => j.id === id) ||
+      (selectedJobInfo?.id === id ? selectedJobInfo : null);
+    const chain: { id: string; prompt: string | null; createdAt: string }[] = [];
+    const seen = new Set<string>();
+    const cursor: { id: string | null } = { id: activeWaterJobId };
+    while (cursor.id && !seen.has(cursor.id)) {
+      seen.add(cursor.id);
+      const job = findJob(cursor.id);
+      chain.unshift({
+        id: cursor.id,
+        prompt: job?.prompt ?? null,
+        createdAt: job?.createdAt ?? "",
+      });
+      const parentId = job?.parentJobId ?? null;
+      cursor.id = parentId && isWaterJobId(parentId) ? parentId : null;
+    }
+    return chain;
+  }, [activeWaterJobId, library3DAssets, selectedJobInfo]);
+
   const activeWaterJobRef = useRef(activeWaterJobId);
   activeWaterJobRef.current = activeWaterJobId;
   const waterSceneForJob = waterScene && waterScene.jobId === activeWaterJobId ? waterScene : null;
@@ -861,8 +926,6 @@ function WorkspacePage() {
       savePartMaterial(`${activeWaterJobId}:${selectedPart}`, { jobId: activeWaterJobId, name: selectedPart, material: next });
     }
   };
-  const [numGenerations, setNumGenerations] = useState(1);
-
 
   const historyJobs = useMemo(() => [...libraryImages, ...library3DAssets], [libraryImages, library3DAssets]);
   const promptHistory = usePromptHistory(workspaceId, historyJobs);
@@ -924,11 +987,8 @@ function WorkspacePage() {
   const current = modeStates[inputMode];
   const prompt = current.prompt;
   const image1 = current.image1;
-  const image2 = current.image2;
   const file1 = current.file1;
-  const file2 = current.file2;
   const jobId1 = current.jobId1;
-  const jobId2 = current.jobId2;
 
   // Helper to update the current mode's state
   const updateCurrentMode = useCallback(
@@ -949,24 +1009,12 @@ function WorkspacePage() {
     (url: string | null) => updateCurrentMode({ image1: url }),
     [updateCurrentMode]
   );
-  const setImage2 = useCallback(
-    (url: string | null) => updateCurrentMode({ image2: url }),
-    [updateCurrentMode]
-  );
   const setFile1 = useCallback(
     (f: File | null) => updateCurrentMode({ file1: f }),
     [updateCurrentMode]
   );
-  const setFile2 = useCallback(
-    (f: File | null) => updateCurrentMode({ file2: f }),
-    [updateCurrentMode]
-  );
   const setJobId1 = useCallback(
     (id: string | null) => updateCurrentMode({ jobId1: id }),
-    [updateCurrentMode]
-  );
-  const setJobId2 = useCallback(
-    (id: string | null) => updateCurrentMode({ jobId2: id }),
     [updateCurrentMode]
   );
 
@@ -1357,7 +1405,7 @@ function WorkspacePage() {
 
   // ──────────── File handling ────────────
   const handleDrop = useCallback(
-    (e: React.DragEvent, slot: 1 | 2) => {
+    (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
 
@@ -1366,8 +1414,7 @@ function WorkspacePage() {
       const draggedImageUrl = e.dataTransfer.getData("text/uri-list");
       if (draggedJobId && draggedImageUrl) {
         // Dropped from library — use URL, track parent job ID, clear file
-        if (slot === 1) { setImage1(draggedImageUrl); setFile1(null); setJobId1(draggedJobId); }
-        else            { setImage2(draggedImageUrl); setFile2(null); setJobId2(draggedJobId); }
+        setImage1(draggedImageUrl); setFile1(null); setJobId1(draggedJobId);
         return;
       }
 
@@ -1375,42 +1422,35 @@ function WorkspacePage() {
       const file = e.dataTransfer.files?.[0];
       if (!file || !file.type.startsWith("image/")) return;
       const url = URL.createObjectURL(file);
-      if (slot === 1) { setImage1(url); setFile1(file); setJobId1(null); }
-      else            { setImage2(url); setFile2(file); setJobId2(null); }
+      setImage1(url); setFile1(file); setJobId1(null);
     },
-    [setImage1, setImage2, setFile1, setFile2, setJobId1, setJobId2]
+    [setImage1, setFile1, setJobId1]
   );
 
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent, slot: 1 | 2) => {
+    (e: React.ClipboardEvent) => {
       const file = e.clipboardData.files?.[0];
       if (!file || !file.type.startsWith("image/")) return;
       const url = URL.createObjectURL(file);
-      if (slot === 1) { setImage1(url); setFile1(file); setJobId1(null); }
-      else { setImage2(url); setFile2(file); setJobId2(null); }
+      setImage1(url); setFile1(file); setJobId1(null);
     },
-    [setImage1, setImage2, setFile1, setFile2, setJobId1, setJobId2]
+    [setImage1, setFile1, setJobId1]
   );
 
   const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const url = URL.createObjectURL(file);
-      if (slot === 1) { setImage1(url); setFile1(file); setJobId1(null); }
-      else { setImage2(url); setFile2(file); setJobId2(null); }
+      setImage1(url); setFile1(file); setJobId1(null);
       e.target.value = "";
     },
-    [setImage1, setImage2, setFile1, setFile2, setJobId1, setJobId2]
+    [setImage1, setFile1, setJobId1]
   );
 
-  const handleClearImage = useCallback(
-    (slot: 1 | 2) => {
-      if (slot === 1) { setImage1(null); setFile1(null); setJobId1(null); }
-      else { setImage2(null); setFile2(null); setJobId2(null); }
-    },
-    [setImage1, setImage2, setFile1, setFile2, setJobId1, setJobId2]
-  );
+  const handleClearImage = useCallback(() => {
+    setImage1(null); setFile1(null); setJobId1(null);
+  }, [setImage1, setFile1, setJobId1]);
 
   // ──────────── Water (bring-your-own model): text → procedural Three.js ────────────
   // No GPU, no credits, no image required. The backend runs the img2threejs-style pipeline
@@ -1505,6 +1545,7 @@ function WorkspacePage() {
           workspaceId,
           parentJobId: parentId,
           qualityTier: waterQualityTier,
+          skillId: waterSkill,
           factoryCode:
             parentId && centerView.type === "code" && centerView.jobId === parentId
               ? centerView.factoryCode
@@ -1860,11 +1901,13 @@ function WorkspacePage() {
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
   const handleGenerateImage = async (thenGenerate3D?: boolean) => {
-    if (loading || generatingPreview) return;
+    if (isSubmittingImageRef.current || loading || generatingPreview) {
+      return;
+    }
     setError(null);
 
     // Architectural guard: no caller can accidentally send a bring-your-own
-    // model through TextToImage, FLUX, Trellis, credits, or the GPU queue.
+    // model through TextToImage, the image providers, credits, or the GPU queue.
     if (selectedIsCode) {
       await runWaterFromPanel();
       return;
@@ -1885,9 +1928,27 @@ function WorkspacePage() {
 
     // ── Text-only: /text-to-image (generatePreviewImage) ──
     if (inputMode === "text") {
-      if (!prompt.trim()) { setError("Please enter a prompt"); return; }
+      const trimmedPrompt = prompt.trim();
+      if (!trimmedPrompt) {
+        setError("Please enter a prompt");
+        return;
+      }
+      if (trimmedPrompt.length < 2) {
+        setError("Prompt is too short. Please provide at least 2 characters.");
+        return;
+      }
+      if (prompt.length > MAX_PROMPT) {
+        setError(`Prompt exceeds maximum supported length of ${MAX_PROMPT} characters.`);
+        return;
+      }
 
-      track("text_to_image_started", { then_generate_3d: !!thenGenerate3D });
+      isSubmittingImageRef.current = true;
+      track("text_to_image_started", {
+        then_generate_3d: !!thenGenerate3D,
+        provider: imageOptions.provider,
+        quality: imageOptions.quality,
+        aspect: imageOptions.aspect,
+      });
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Generating image from text..." });
@@ -1916,20 +1977,7 @@ function WorkspacePage() {
       });
       setLeftLibraryTab("images");
 
-      let queueInfo: QueueInfo | null = null;
-      try { queueInfo = await fetchQueueInfo(); } catch (err: any) {
-        if (err.message?.includes("GPU is currently offline")) {
-          notifyGpuOffline(err.message, tokenGetter);
-          const userFacing = toUserFacingGpuError(err.message);
-          await waitMobileGpuOfflineMinimum(err.message, userFacing);
-          mobileGenStartedAtRef.current = null;
-          setCenterView({ type: "error", message: userFacing });
-          setGeneratingPreview(false);
-          return;
-        }
-      }
-
-      const estimatedTime = (queueInfo?.estimated_wait_seconds || 0) + 20;
+      const estimatedTime = imageOptions.quality === "high" ? 60 : 25;
       const startTime = Date.now();
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = setInterval(() => {
@@ -1939,9 +1987,7 @@ function WorkspacePage() {
       }, 200);
 
       try {
-        const result = await generatePreviewImage(prompt.trim(), tokenGetter, {
-          workspaceId,
-        });
+        const result = await generatePreviewImage(prompt.trim(), tokenGetter, { workspaceId }, imageOptions);
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
 
         setLastPreviewImageUrl(result.image_url);
@@ -1971,6 +2017,7 @@ function WorkspacePage() {
         try { await registerJobWithPreview(result.preview_id, result.image_url, prompt.trim(), tokenGetter, null, null, workspaceId, null); } catch { /* non-critical */ }
         removePendingJob(pendingTextImageId);
         refreshLibrary();
+        refreshCredits();
 
         // Update generation info panel
         const newJob = { id: result.preview_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "TextToImage", createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
@@ -1982,12 +2029,14 @@ function WorkspacePage() {
         if (isPaywallError(err?.message)) {
           track("paywall_hit", { source: "text_to_image", action: "generate_image" });
         }
-        const userFacing = toUserFacingGpuError(err.message || "Failed to generate image");
+        const userFacing = err?.message || "Failed to generate image";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
         removePendingJob(pendingTextImageId);
+      } finally {
+        isSubmittingImageRef.current = false;
       }
       return;
     }
@@ -2046,7 +2095,11 @@ function WorkspacePage() {
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Editing image..." });
-      track("image_edit_started", { mode: "text_1img" });
+      track("image_edit_started", {
+        mode: "text_1img",
+        provider: imageOptions.provider,
+        quality: imageOptions.quality,
+      });
 
       const pendingEditId = addPendingJob({
         generateType: "EditImage",
@@ -2075,7 +2128,7 @@ function WorkspacePage() {
       });
       setLeftLibraryTab("images");
 
-      const estimatedTime = 30;
+      const estimatedTime = imageOptions.quality === "high" ? 60 : 30;
       const startTime = Date.now();
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = setInterval(() => {
@@ -2091,12 +2144,19 @@ function WorkspacePage() {
           : (image1 ?? null);
         const editSrcImages = srcUrl ? [srcUrl] : [];
 
-        const result = await editImage(prompt.trim(), file1, image1, tokenGetter, {
-          workspaceId,
-          parentJobId: jobId1 || currentParentJobId || null,
-          parentJobIds: jobId1 ? [jobId1] : [],
-          sourceImages: editSrcImages,
-        });
+        const result = await editImage(
+          prompt.trim(),
+          file1,
+          file1 ? null : image1,
+          tokenGetter,
+          {
+            workspaceId,
+            parentJobId: jobId1 || currentParentJobId || null,
+            parentJobIds: jobId1 ? [jobId1] : [],
+            sourceImages: editSrcImages,
+          },
+          imageOptions
+        );
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
 
         const editParent = jobId1 || currentParentJobId; // The image being edited is the parent
@@ -2128,6 +2188,7 @@ function WorkspacePage() {
         try { await registerJobWithPreview(result.edit_id, result.image_url, prompt.trim(), tokenGetter, null, "EditImage", workspaceId, editParent, editParentIds, editSrcImages); } catch { /* non-critical */ }
         removePendingJob(pendingEditId);
         refreshLibrary();
+        refreshCredits();
 
         // Update generation info panel
         const editedJob = { id: result.edit_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "EditImage", parentJobId: editParent, parentJobIds: editParentIds, sourceImages: editSrcImages, createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
@@ -2139,7 +2200,7 @@ function WorkspacePage() {
         if (isPaywallError(err?.message)) {
           track("paywall_hit", { source: "image_edit", action: "edit_image" });
         }
-        const userFacing = toUserFacingGpuError(err.message || "Failed to edit image");
+        const userFacing = err?.message || "Failed to edit image";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
@@ -2147,154 +2208,6 @@ function WorkspacePage() {
         removePendingJob(pendingEditId);
       }
       return;
-    }
-
-    // ── Text + 2 images: /combined-edit ──
-    if (inputMode === "text_2img") {
-      // Need either a file or a URL for each slot
-      const hasImage1 = file1 || image1;
-      const hasImage2 = file2 || image2;
-      if (!hasImage1 || !hasImage2) { setError("Please provide both images"); return; }
-      if (!prompt.trim()) { setError("Please enter a prompt"); return; }
-
-      track("image_edit_started", { mode: "text_2img" });
-      setGeneratingPreview(true);
-      markMobileGenerationStart();
-      setCenterView({ type: "generating", progress: 0, message: "Combining images..." });
-
-      const combinedPendingParentIds: string[] = [];
-      if (jobId1) combinedPendingParentIds.push(jobId1);
-      if (jobId2) combinedPendingParentIds.push(jobId2);
-      const pendingCombinedId = addPendingJob({
-        generateType: "Combined",
-        prompt: prompt.trim(),
-        previewImageUrl: image1 ?? image2 ?? null,
-        imageUrl: image1 ?? image2 ?? null,
-        parentJobId: jobId1 ?? jobId2 ?? currentParentJobId ?? null,
-        parentJobIds: combinedPendingParentIds,
-      });
-      loadJobInfo({
-        id: pendingCombinedId,
-        userId: null,
-        status: "WAIT",
-        prompt: prompt.trim(),
-        imageUrl: image1 ?? image2 ?? null,
-        generateType: "Combined",
-        resultGlbUrl: null,
-        previewImageUrl: image1 ?? image2 ?? null,
-        errorMessage: null,
-        workspaceId: workspaceId ?? null,
-        parentJobId: jobId1 ?? jobId2 ?? currentParentJobId ?? null,
-        parentJobIds: combinedPendingParentIds,
-        sourceImages: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      setLeftLibraryTab("images");
-
-      const estimatedTime = 40;
-      const startTime = Date.now();
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        const progress = Math.min(90, (elapsed / estimatedTime) * 95);
-        setCenterView({ type: "generating", progress, message: "Combining images..." });
-      }, 200);
-
-      try {
-        // Resolve source image URLs via gateway API → S3 (so source_images are always S3 URLs, not localhost)
-        let url1: string;
-        let url2: string;
-        if (file1) {
-          url1 = await uploadSourceImageWithFallback(file1, tokenGetter);
-        } else {
-          url1 = image1!; // from library (already S3 or proxy URL)
-        }
-        if (file2) {
-          url2 = await uploadSourceImageWithFallback(file2, tokenGetter);
-        } else {
-          url2 = image2!; // from library
-        }
-        const srcImages: string[] = [url1, url2];
-        const parentIds: string[] = [];
-        if (jobId1) parentIds.push(jobId1);
-        if (jobId2) parentIds.push(jobId2);
-        const primaryParent = jobId1 || jobId2 || currentParentJobId;
-
-        // Send files if available, otherwise URLs (from workspace library)
-        const result = await combinedEdit(
-          prompt.trim(),
-          file1,
-          file2,
-          tokenGetter,
-          file1 ? null : image1,  // URL for slot 1 if no file
-          file2 ? null : image2,   // URL for slot 2 if no file
-          {
-            workspaceId,
-            parentJobId: primaryParent,
-            parentJobIds: parentIds,
-            sourceImages: srcImages,
-          }
-        );
-        if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-
-        setLastPreviewImageUrl(result.image_url);
-        setLastPreviewId(result.combined_id);
-        setCurrentParentJobId(result.combined_id); // This new combined image becomes parent for next iteration
-        setLeftLibraryTab("images"); // Keep on Images tab when showing combined image
-        setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.combined_id });
-        setGeneratingPreview(false);
-        mobileGenStartedAtRef.current = null;
-        setMobileTab("canvas");
-        setMobileGeneratedToast(true);
-
-        // Auto-select the new image in the right panel for next action
-        setInputMode("text_1img");
-        setModeStates((prev) => ({
-          ...prev,
-          text_1img: {
-            ...prev.text_1img,
-            image1: result.image_url,
-            file1: null,
-            jobId1: result.combined_id,
-            prompt: prev.text_1img.prompt ?? "",
-          },
-        }));
-
-        try {
-          await registerJobWithPreview(
-            result.combined_id, result.image_url, prompt.trim(), tokenGetter,
-            null, "Combined", workspaceId,
-            primaryParent,       // single parent (backward-compat)
-            parentIds,           // multi-parent IDs
-            srcImages            // actual source image URLs
-          );
-        } catch { /* non-critical */ }
-        removePendingJob(pendingCombinedId);
-        refreshLibrary();
-
-        // Update generation info panel
-        const combinedJob = {
-          id: result.combined_id, previewImageUrl: result.image_url, prompt: prompt.trim(),
-          status: "DONE" as const, generateType: "Combined",
-          parentJobId: primaryParent, parentJobIds: parentIds, sourceImages: srcImages,
-          createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString(),
-        } satisfies BackendJob;
-        loadJobInfo(combinedJob);
-
-        if (thenGenerate3D) await start3DFromImage(result.image_url, result.combined_id);
-      } catch (err: any) {
-        if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
-        if (isPaywallError(err?.message)) {
-          track("paywall_hit", { source: "combined_edit", action: "combine_images" });
-        }
-        const userFacing = toUserFacingGpuError(err.message || "Failed to combine images");
-        await waitMobileGpuOfflineMinimum(err.message, userFacing);
-        mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing });
-        setGeneratingPreview(false);
-        removePendingJob(pendingCombinedId);
-      }
     }
   };
 
@@ -2318,7 +2231,7 @@ function WorkspacePage() {
     }
 
     // Water engine writes Three.js straight from the prompt.
-    // Never touches FLUX, Trellis, the queue, or credits.
+    // Never touches the image providers, the GPU VM, the queue, or credits.
     if (selectedIsCode) {
       await runWaterFromPanel();
       return;
@@ -2438,29 +2351,6 @@ function WorkspacePage() {
           prompt: "",
         },
       }));
-      loadJobInfo(job);
-      return;
-    }
-
-    // If we're in text_2img mode, fill the next empty slot instead of switching modes
-    if (inputMode === "text_2img") {
-      setModeStates((prev) => {
-        const cur = prev.text_2img;
-        if (!cur.image1) {
-          return { ...prev, text_2img: { ...cur, image1: imageUrl, file1: null, jobId1: job.id } };
-        } else if (!cur.image2) {
-          return { ...prev, text_2img: { ...cur, image2: imageUrl, file2: null, jobId2: job.id } };
-        } else {
-          // Both slots full — replace slot 1
-          return { ...prev, text_2img: { ...cur, image1: imageUrl, file1: null, jobId1: job.id } };
-        }
-      });
-      // Show preview and set parent
-      setLastPreviewImageUrl(imageUrl);
-      setLastPreviewId(job.id);
-      setCurrentParentJobId(job.id);
-      setLeftLibraryTab("images");
-      setCenterView({ type: "preview", imageUrl, previewId: job.id });
       loadJobInfo(job);
       return;
     }
@@ -2719,84 +2609,6 @@ function WorkspacePage() {
     (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSelectInputMode = (mode: InputMode) => {
-    if (mode === "text") {
-      setInputMode("text");
-      return;
-    }
-    if (mode === "image") {
-      if (selectedIsCode) return;
-      setInputMode("image");
-      return;
-    }
-    if (mode === "text_2img") {
-      if (selectedIsCode || !combineAvailable) return;
-      setInputMode("text_2img");
-      return;
-    }
-    if (selectedIsCode) {
-      setInputMode("text_1img");
-      let parentId: string | null =
-        (centerView.type === "code" ? centerView.jobId : null) ||
-        waterEditTargetJobId ||
-        (selectedJobInfo && isWaterJobFn(selectedJobInfo) ? selectedJobInfo.id : null);
-      if (!parentId) {
-        const recent = library3DAssets.find(
-          (j) => (isWaterJobFn(j) || isWaterJobId(j.id)) && j.status === "DONE" && hasRealFactoryCode(j)
-        );
-        parentId = recent?.id ?? null;
-      }
-      if (!parentId) {
-        setError("Open or select a Water model to edit first");
-        return;
-      }
-      setWaterEditTargetJobId(parentId);
-      setError(null);
-      if (centerView.type !== "code" || centerView.jobId !== parentId) {
-        const job =
-          library3DAssets.find((j) => j.id === parentId) ||
-          (selectedJobInfo?.id === parentId ? selectedJobInfo : null);
-        if (job) {
-          handle3DClick(job);
-        } else {
-          setCenterView({
-            type: "generating",
-            progress: 40,
-            message: "Loading Water model…",
-          });
-          void (async () => {
-            try {
-              const cs = await fetchWaterJob(parentId!, async () => (await getToken()) ?? null);
-              if (cs.factoryCode) {
-                setCodeFactoryCode(cs.factoryCode);
-                if (cs.sculptPass) setCodeSculptPass(cs.sculptPass);
-                setCurrentGenerating(null);
-                setLoading(false);
-                setCenterView({
-                  type: "code",
-                  factoryCode: cs.factoryCode,
-                  jobId: parentId!,
-                });
-              } else {
-                setCenterView({
-                  type: "error",
-                  message: "Water model is not ready to edit yet",
-                });
-              }
-            } catch {
-              setCenterView({
-                type: "error",
-                message: "Could not load Water model",
-              });
-            }
-          })();
-        }
-      }
-      return;
-    }
-    if (editAvailable) setInputMode("text_1img");
-  };
-
   const handleSelectModel = (id: ModelId, option: CatalogModel) => {
     setSelectedModel(id);
     if (option.provider !== "hydrilla") {
@@ -2811,40 +2623,88 @@ function WorkspacePage() {
     }
   };
 
-  const handleChatGenerate = () => {
-    if (selectedIsCode) {
-      void runWaterFromPanel();
-    } else if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
-      void handleGenerate3D();
-    } else {
-      void handleGenerateImage();
+  // Agent runs only on Water (bring-your-own-key) models; Image and Model run only on Cloud.
+  useEffect(() => {
+    if (activeSection === "agent") {
+      if (selectedIsCode) {
+        return;
+      }
+      const usable = (m: CatalogModel) => providerKeyOk(m.provider);
+      const water =
+        waterPickerModels.find((m) => m.id === preferredWaterModelId && usable(m)) ||
+        waterPickerModels.find((m) => enabledWaterIds.includes(m.id) && usable(m)) ||
+        waterPickerModels.find(usable);
+      if (water) {
+        setSelectedModel(water.id);
+      }
+      return;
     }
-    // Handlers above capture `prompt` synchronously, so the composer can reset right away.
-    if (prompt.trim() && hasWorkspaceContext) {
-      promptHistory.record(prompt, selectedIsCode ? "water" : "cloud");
-      setPrompt("");
+    if (selectedIsCode) {
+      const cloud = MODEL_CATALOG.find((m) => m.provider === "hydrilla" && !m.comingSoon);
+      if (cloud) {
+        setSelectedModel(cloud.id);
+      }
+    }
+  }, [
+    activeSection,
+    selectedIsCode,
+    waterPickerModels,
+    enabledWaterIds,
+    preferredWaterModelId,
+    providerKeyOk,
+  ]);
+
+  const handleSelectSection = useCallback(
+    (section: WorkspaceSection) => {
+      setActiveSection(section);
+      try {
+        window.localStorage.setItem("hydrilla_workspace_section", section);
+      } catch {
+        /* ignore */
+      }
+      if (section === "agent") {
+        setInputMode("text");
+      } else if (section === "image") {
+        setInputMode(isImageEditMode ? "text_1img" : "text");
+      } else {
+        setInputMode("image");
+      }
+    },
+    [isImageEditMode]
+  );
+
+  const handleAgentGenerate = () => {
+    const text = agentPrompt.trim();
+    if (!text) {
+      return;
+    }
+    void runWater({ promptOverride: text });
+    if (hasWorkspaceContext) {
+      promptHistory.record(text, "water");
+      setAgentPrompt("");
+    }
+  };
+
+  const handleImageGenerate = () => {
+    if (isSubmittingImageRef.current || isGenerating) {
+      return;
+    }
+    const text = prompt.trim();
+    if (!text) {
+      setError("Please enter a prompt");
+      return;
+    }
+    if (text.length < 2) {
+      setError("Prompt is too short. Please provide at least 2 characters.");
+      return;
+    }
+    void handleGenerateImage(false);
+    if (hasWorkspaceContext) {
+      promptHistory.record(text, "cloud");
     }
   };
 
   const isGenerating = loading || generatingPreview || (currentGenerating?.status === "generating");
-  const chatCostLabel = selectedIsCode
-    ? "Water · 0 credits"
-    : `${
-        inputMode === "text_2img" && prompt.trim()
-          ? 4
-          : inputMode === "text_1img" && prompt.trim()
-            ? 3
-            : inputMode === "text" || (inputMode !== "image" && prompt.trim().length > 0 && (image1 || image2))
-              ? CREDITS_IMAGE
-              : CREDITS_3D
-      } / ${creditsLoading ? "…" : creditsTotal} credits`;
-  const chatGenerateLabel = selectedIsCode
-    ? inputMode === "text_1img"
-      ? "Refine with Water"
-      : "Generate with Water"
-    : inputMode === "image"
-      ? "Generate 3D"
-      : "Generate";
   const waterEditParentId = resolveWaterEditParentId();
   const waterEditParentJob =
     (waterEditParentId && library3DAssets.find((j) => j.id === waterEditParentId)) ||
@@ -2954,31 +2814,65 @@ function WorkspacePage() {
         </div>
       )}
 
-      {/* Compact-only: top bar — back + name + tools (phones + tablets) */}
-      <header className="lg:hidden flex items-center justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 border-b border-neutral-200 bg-white shrink-0">
-        <div className="flex items-center gap-2.5 min-w-0">
+      {/* Compact-only: top bar — back + name + section pills + tools (phones + tablets) */}
+      <header className="lg:hidden flex items-center justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2.5 border-b border-neutral-200 bg-white shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
           <Link
             href="/app/studio"
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
+            className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
             aria-label="Back to Studio"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </Link>
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Hydrilla</p>
-            <p className="text-[15px] font-semibold tracking-tight text-neutral-900 truncate" title={workspaceName.trim() ? workspaceName : "Workspace"}>
+          <div className="min-w-0 hidden sm:block">
+            <p className="text-[12px] font-semibold tracking-tight text-neutral-900 truncate" title={workspaceName.trim() ? workspaceName : "Workspace"}>
               {workspaceName.trim() ? workspaceName : "Workspace"}
             </p>
           </div>
         </div>
+
+        {/* 3 Section switcher pills for mobile */}
+        <div className="flex items-center rounded-full bg-neutral-100 p-0.5 text-[11px] border border-neutral-200/80">
+          <button
+            type="button"
+            onClick={() => handleSelectSection("agent")}
+            className={cn(
+              "rounded-full px-2.5 py-1 font-medium transition-colors",
+              activeSection === "agent" ? "bg-white text-sky-700 font-semibold shadow-xs" : "text-neutral-500"
+            )}
+          >
+            Agent
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectSection("image")}
+            className={cn(
+              "rounded-full px-2.5 py-1 font-medium transition-colors",
+              activeSection === "image" ? "bg-white text-pink-700 font-semibold shadow-xs" : "text-neutral-500"
+            )}
+          >
+            Image
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectSection("model")}
+            className={cn(
+              "rounded-full px-2.5 py-1 font-medium transition-colors",
+              activeSection === "model" ? "bg-white text-emerald-700 font-semibold shadow-xs" : "text-neutral-500"
+            )}
+          >
+            Model
+          </button>
+        </div>
+
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="hidden min-[400px]:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800" title="Credits remaining">
-            <svg className="w-3.5 h-3.5 shrink-0 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <span className="text-[12px] font-semibold tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
-            </div>
+          <div className="hidden min-[400px]:flex items-center gap-1.5 px-2 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-800" title="Credits remaining">
+            <span className="text-[11px] font-semibold tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
+            <span className="text-[9px] uppercase text-neutral-400">cr</span>
+          </div>
           <Link
             href="/generations"
-            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
+            className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 transition-colors shrink-0"
             aria-label="Workspace generations"
             title="Generations"
           >
@@ -3025,309 +2919,162 @@ function WorkspacePage() {
 
       {/* 3-panel on desktop; compact: single column via Canvas | Create */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative flex-col lg:flex-row">
-        {/* Left panel toggle */}
-        <button
-          type="button"
-          onClick={() => setLeftPanelOpen(true)}
-          className={cn(
-            "absolute left-4 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-2xl border border-neutral-200/60 bg-white px-2.5 py-4 text-neutral-700 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.14)] transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-neutral-50 active:scale-[0.98] lg:flex",
-            leftPanelOpen
-              ? "pointer-events-none -translate-x-2 opacity-0"
-              : "pointer-events-auto translate-x-0 opacity-100"
-          )}
-          title="Open library panel"
-          aria-label="Open library panel"
-          tabIndex={leftPanelOpen ? -1 : 0}
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Library</span>
-        </button>
+        {/* 1. Left Icon Rail (Desktop only) */}
+        <WorkspaceRail
+          activeSection={activeSection}
+          onSelectSection={handleSelectSection}
+          creditsTotal={creditsTotal}
+          creditsUsed={creditsUsed}
+          creditsLoading={creditsLoading}
+          clientMounted={clientMounted}
+          className="max-lg:hidden"
+        />
 
-        {/* Left Panel - Library (sliding & resizable); on mobile: hidden — use Assets icon to open /app/assets */}
-        <aside
-          ref={libraryPanelRef}
-          style={{
-            width: leftPanelOpen ? leftPanelWidth : 0,
-            minWidth: leftPanelOpen ? leftPanelWidth : 0,
-            transition: resizingLeft
-              ? "none"
-              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease",
-          }}
+        {/* 2. Left Active Section Panel (Agent / Image / Model) */}
+        <div
+          style={{ width: isCompact ? "100%" : leftPanelWidth }}
           className={cn(
-            "flex shrink-0 flex-col overflow-hidden border border-neutral-200/60 bg-white will-change-[width]",
-            "max-lg:hidden",
-            "lg:absolute lg:bottom-4 lg:left-4 lg:top-4 lg:z-30 lg:rounded-[26px] lg:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.14)]",
-            !leftPanelOpen && "border-transparent lg:pointer-events-none lg:opacity-0"
+            "relative shrink-0 flex flex-col h-full overflow-hidden bg-white z-10",
+            isCompact && mobileTab !== "create" && "max-lg:hidden"
           )}
         >
-          {/* Fixed inner width keeps content from reflowing while the panel animates */}
-          <div className="flex h-full shrink-0" style={{ width: leftPanelWidth }}>
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {/* Left navbar: Logo + New Workspace */}
-          <div className="hidden lg:flex h-14 px-4 border-b border-neutral-200/60 items-center justify-between gap-2">
-            <Link href="/app/studio" className="text-[17px] font-semibold text-neutral-900 tracking-[-0.03em] shrink-0 hover:opacity-70 transition-opacity">
-              Hydrilla
-            </Link>
-            <div className="flex items-center gap-0.5">
-              <Button
+          {error ? (
+            <div className="flex shrink-0 items-start gap-2 border-b border-red-100 bg-red-50 px-4 py-2.5 text-[12px] leading-5 text-red-700">
+              <span className="min-w-0 flex-1">{error}</span>
+              <button
                 type="button"
-                onClick={() => { setNewWorkspaceName(""); setShowNewWorkspaceModal(true); }}
-                variant="ghost"
-                size="sm"
-                className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium"
-                title="New Workspace"
+                onClick={() => setError(null)}
+                className="shrink-0 font-medium text-red-500 hover:text-red-700"
+                aria-label="Dismiss error"
               >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-                <span>New</span>
-              </Button>
-              <Button type="button" onClick={() => setLeftPanelOpen(false)} variant="ghost" size="sm" className="h-8 w-8 shrink-0 rounded-full p-0" title="Close library" aria-label="Close library panel">
-                <PanelLeftClose className="h-4 w-4" strokeWidth={2} />
-              </Button>
+                Dismiss
+              </button>
             </div>
-          </div>
-          {/* Tab bar — Images | 3D */}
-          <div className="px-3 pt-3 pb-2">
-            <div
-              role="tablist"
-              aria-label="Library tabs"
-              className="relative inline-flex h-9 w-full items-center rounded-full border border-neutral-200 bg-neutral-100 p-1 text-neutral-500"
-            >
-              <motion.div
-                className="absolute top-1 bottom-1 rounded-full bg-neutral-950 shadow-sm"
-                initial={false}
-                animate={{
-                  left: leftLibraryTab === "images" ? 4 : "50%",
-                  width: "calc(50% - 4px)",
-                }}
-                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
-                aria-hidden
-              />
-              <Button
-                type="button"
-                role="tab"
-                variant="ghost"
-                size="sm"
-                {...(leftLibraryTab === "images" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
-                aria-controls="library-images-panel"
-                id="library-tab-images"
-                tabIndex={leftLibraryTab === "images" ? 0 : -1}
-                onClick={() => setLeftLibraryTab("images")}
-                title="Images"
-                className={cn(
-                  "relative z-10 h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] hover:bg-transparent",
-                  leftLibraryTab === "images" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
-                )}
-              >
-                <ImageIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                <span>Images</span>
-              </Button>
-              <Button
-                type="button"
-                role="tab"
-                variant="ghost"
-                size="sm"
-                {...(leftLibraryTab === "3d" ? { "aria-selected": "true" as const } : { "aria-selected": "false" as const })}
-                aria-controls="library-3d-panel"
-                id="library-tab-3d"
-                tabIndex={leftLibraryTab === "3d" ? 0 : -1}
-                onClick={() => setLeftLibraryTab("3d")}
-                title="3D Assets"
-                className={cn(
-                  "relative z-10 h-7 flex-1 gap-1.5 rounded-full border-transparent px-3 text-[12px] hover:bg-transparent",
-                  leftLibraryTab === "3d" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
-                )}
-              >
-                <Box className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                <span>3D</span>
-              </Button>
-            </div>
-          </div>
-          <ScrollArea className="flex-1 min-h-0" role="tabpanel" id="library-images-panel" aria-labelledby="library-tab-images" hidden={leftLibraryTab !== "images"}>
-            <div className="px-3 py-3">
-            {leftLibraryTab === "images" && (
-              <div className="space-y-3">
-                <Link href="/library" className="flex items-center justify-between group px-0.5">
-                  <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-[0.14em]">Images</h3>
-                  <svg className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                </Link>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {libraryLoading ? (
-                    <div className="col-span-2 grid grid-cols-2 gap-2.5">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="aspect-square rounded-2xl bg-neutral-100 animate-pulse" />
-                      ))}
-                    </div>
-                  ) : filteredImages.length === 0 ? (
-                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[120px] rounded-2xl bg-neutral-50 border border-dashed border-neutral-200/80 text-neutral-500 text-xs gap-2">
-                      <svg className="w-7 h-7 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
-                      <span>No images yet</span>
-                    </div>
-                  ) : (
-                    filteredImages.map((item) => (
-                      <div
-                        key={item.id}
-                        draggable
-                        onDragStart={(e) => {
-                          const imgUrl = item.previewImageUrl || item.imageUrl || "";
-                          e.dataTransfer.setData("application/job-id", item.id);
-                          e.dataTransfer.setData("text/uri-list", imgUrl);
-                          e.dataTransfer.effectAllowed = "copy";
-                        }}
-                        onClick={() => handleImageClick(item)}
-                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-400 transition-colors duration-150 cursor-pointer bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] flex items-center justify-center active:scale-[0.98]"
-                      >
-                        {(item.previewImageUrl || item.imageUrl) ? (
-                          <img src={displayImageUrl(item.previewImageUrl || item.imageUrl)} alt={item.prompt || "Image"} className="w-full h-full object-cover pointer-events-none" />
-                        ) : (
-                          <span className="text-neutral-500 text-[10px] text-center px-1 truncate max-w-full font-medium">{item.prompt || "Image"}</span>
-                        )}
-                        {(item.status === "RUN" || item.status === "WAIT") && (
-                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1.5">
-                            <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                            <span className="text-[10px] font-medium text-white">
-                              {item.status === "WAIT" ? "Queued" : "Generating"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+          ) : null}
+
+          {activeSection === "agent" && (
+            <AgentPanel
+              prompt={agentPrompt}
+              onPromptChange={setAgentPrompt}
+              selectedModel={selectedModel}
+              selectedLabel={
+                selectedIsCode ? selectedCatalog?.label ?? selectedModel : "Select a model"
+              }
+              waterPickerModels={waterPickerModels}
+              enabledWaterIds={enabledWaterIds}
+              providerKeyOk={providerKeyOk}
+              onSelectModel={handleSelectModel}
+              qualityTier={waterQualityTier}
+              onQualityTierChange={(tier) => {
+                setWaterQualityTier(tier);
+                try {
+                  window.localStorage.setItem(WATER_TIER_STORAGE_KEY, tier);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              skillId={waterSkill}
+              onSkillChange={(skill) => {
+                setWaterSkill(skill);
+                try {
+                  window.localStorage.setItem(WATER_SKILL_STORAGE_KEY, skill);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              promptHistory={promptHistory.entries}
+              onSelectHistory={(item) => setAgentPrompt(item)}
+              onClearHistory={promptHistory.clear}
+              onGenerate={handleAgentGenerate}
+              generating={isGenerating}
+              disabled={isGenerating}
+              activeWaterJobId={activeWaterJobId}
+              waterThreadJobs={waterThreadJobs}
+              getToken={async () => await getToken()}
+              onWaterRefine={(refinePrompt) => {
+                void runWater({ promptOverride: refinePrompt, parentId: activeWaterJobId });
+              }}
+            />
+          )}
+
+          {activeSection === "image" && (
+            <ImagePanel
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              isEditMode={isImageEditMode}
+              onToggleEditMode={(edit) => {
+                setIsImageEditMode(edit);
+                setInputMode(edit ? "text_1img" : "text");
+              }}
+              editAvailable={editAvailable}
+              imageOptions={imageOptions}
+              onImageOptionsChange={handleImageOptionsChange}
+              imageProviders={imageProviders}
+              image={image1}
+              isDragging={isDragging}
+              onImageDrop={handleDrop}
+              onImagePaste={handlePaste}
+              onImageFileSelect={handleFileSelect}
+              onImageClear={handleClearImage}
+              onDragOver={() => setIsDragging(true)}
+              onDragLeave={() => setIsDragging(false)}
+              promptHistory={promptHistory.entries}
+              onSelectHistory={(item) => setPrompt(item)}
+              onClearHistory={promptHistory.clear}
+              onGenerate={handleImageGenerate}
+              generating={isGenerating}
+              disabled={isGenerating}
+              onSwitchToModel={() => {
+                if (centerView.type === "preview" && centerView.imageUrl) {
+                  setImage1(centerView.imageUrl);
+                }
+                handleSelectSection("model");
+              }}
+            />
+          )}
+
+          {activeSection === "model" && (
+            <ModelPanel
+              image={image1}
+              isDragging={isDragging}
+              onImageDrop={handleDrop}
+              onImagePaste={handlePaste}
+              onImageFileSelect={handleFileSelect}
+              onImageClear={handleClearImage}
+              onDragOver={() => setIsDragging(true)}
+              onDragLeave={() => setIsDragging(false)}
+              selectedModel={selectedModel}
+              selectedLabel={selectedCatalog?.label ?? selectedModel}
+              waterPickerModels={waterPickerModels}
+              enabledWaterIds={enabledWaterIds}
+              providerKeyOk={providerKeyOk}
+              onSelectModel={handleSelectModel}
+              onGenerate={handleGenerate3D}
+              generating={isGenerating}
+              disabled={isGenerating}
+              onSwitchToImage={() => handleSelectSection("image")}
+            />
+          )}
+
+          {/* Left panel resize drag handle (desktop only) */}
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              resizeStartRef.current = { x: e.clientX, leftW: leftPanelWidth };
+              setResizingLeft(true);
+            }}
+            className={cn(
+              "hidden lg:block absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-neutral-300 transition-colors z-20",
+              resizingLeft && "bg-neutral-400"
             )}
-            </div>
-          </ScrollArea>
-          <ScrollArea role="tabpanel" id="library-3d-panel" aria-labelledby="library-tab-3d" hidden={leftLibraryTab !== "3d"} className="flex-1 min-h-0">
-            <div className="px-3 py-3">
-            {leftLibraryTab === "3d" && (
-              <div className="space-y-3">
-                <Link href="/library" className="flex items-center justify-between group px-0.5">
-                  <h3 className="text-[11px] font-medium text-neutral-400 uppercase tracking-[0.14em]">3D Assets</h3>
-                  <svg className="w-3.5 h-3.5 text-neutral-300 group-hover:text-neutral-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                </Link>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {libraryLoading ? (
-                    <div className="col-span-2 grid grid-cols-2 gap-2.5">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="aspect-square rounded-2xl bg-neutral-100 animate-pulse" />
-                      ))}
-                    </div>
-                  ) : filtered3DAssets.length === 0 ? (
-                    <div className="col-span-2 flex flex-col items-center justify-center min-h-[120px] rounded-2xl bg-neutral-50 border border-dashed border-neutral-200/80 text-neutral-500 text-xs gap-2">
-                      <svg className="w-7 h-7 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                      <span>No 3D assets yet</span>
-                    </div>
-                  ) : (
-                    filtered3DAssets.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        draggable={isWaterJobFn(item)}
-                        onDragStart={(e) => {
-                          if (!isWaterJobFn(item)) return;
-                          e.dataTransfer.setData("application/job-id", item.id);
-                          e.dataTransfer.setData("application/water-job", "1");
-                          e.dataTransfer.setData(
-                            "text/uri-list",
-                            item.previewImageUrl || item.imageUrl || ""
-                          );
-                          e.dataTransfer.effectAllowed = "copy";
-                        }}
-                        onClick={() => handle3DClick(item)}
-                        className="group/card relative aspect-square rounded-2xl overflow-hidden border border-neutral-200/70 hover:border-neutral-400 transition-colors duration-150 cursor-pointer bg-neutral-100 shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-left active:scale-[0.98]"
-                      >
-                        {item.previewImageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={displayImageUrl(item.previewImageUrl)}
-                            alt={item.prompt || "3D Asset"}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : isWaterJobFn(item) ? (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-neutral-50 to-neutral-100 text-neutral-300">
-                            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                            </svg>
-                          </div>
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-neutral-300">
-                            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                            </svg>
-                          </div>
-                        )}
-                        {/* Status: only in-progress (amber) or failed (red) — no Done / Code labels */}
-                        {(item.status === "RUN" || item.status === "WAIT" || item.status === "FAIL") && (
-                          <span
-                            className={cn(
-                              "absolute left-2 top-2 h-2 w-2 rounded-full ring-2 ring-white shadow-sm",
-                              item.status === "FAIL"
-                                ? "bg-red-500"
-                                : "bg-amber-400 animate-pulse"
-                            )}
-                            title={
-                              item.status === "FAIL"
-                                ? "Failed"
-                                : item.status === "WAIT"
-                                  ? "Queued"
-                                  : "Generating"
-                            }
-                          />
-                        )}
-                        {(item.status === "RUN" || item.status === "WAIT") && !item.previewImageUrl && (
-                          <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
-                            <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                          </div>
-                        )}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-            </div>
-          </ScrollArea>
-          <div className="hidden lg:block shrink-0 border-t border-neutral-200/60 px-3 py-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" strokeWidth={2} />
-              <Input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search…"
-                className="h-9 rounded-full border-neutral-200/80 bg-neutral-50/80 pl-9 shadow-none focus-visible:border-neutral-300 focus-visible:ring-neutral-900/[0.04]"
-              />
-            </div>
-          </div>
-            </div>
-            {/* Left resize handle — desktop only */}
-            {leftPanelOpen && (
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  resizeStartRef.current = { x: e.clientX, leftW: leftPanelWidth };
-                  setResizingLeft(true);
-                }}
-                className={`hidden lg:block w-1 flex-shrink-0 bg-transparent hover:bg-neutral-200 active:bg-black/20 cursor-col-resize transition-colors ${resizingLeft ? "bg-black/20" : ""}`}
-              />
-            )}
-          </div>
-        </aside>
+          />
+        </div>
 
         {/* Center - Preview / 3D / generating; on mobile: visible only when Canvas tab */}
         <main className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white", mobileTab === "canvas" ? "max-lg:flex" : "max-lg:hidden")}>
           {(centerView.type === "3d" || centerView.type === "code") && (
             <div
-              className="pointer-events-none absolute top-4 z-[25] hidden items-center justify-center lg:flex"
-              style={{
-                left: leftPanelOpen ? leftPanelWidth + 32 : 16,
-                right: rightPanelOpen ? RIGHT_PANEL_WIDTH + 32 : 16,
-                transition: resizingLeft
-                  ? "none"
-                  : "left 150ms cubic-bezier(0.22, 1, 0.36, 1), right 150ms cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
+              className="pointer-events-none absolute top-4 z-[25] hidden items-center justify-center lg:flex left-0 right-0"
             >
               <div className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-neutral-200/70 bg-white px-1.5 py-1 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
                 {centerView.type === "3d" ? (
@@ -3461,7 +3208,13 @@ function WorkspacePage() {
                 {showGenerate3DButton ? (
                   <Button
                     type="button"
-                    onClick={handleGenerate3D}
+                    onClick={() => {
+                      if (centerView.imageUrl) {
+                        setImage1(centerView.imageUrl);
+                      }
+                      handleSelectSection("model");
+                      void handleGenerate3D();
+                    }}
                     size="lg"
                     className="h-11 rounded-full px-6"
                   >
@@ -3693,6 +3446,7 @@ function WorkspacePage() {
           </div>
         </main>
 
+        {/* Toggle button to reopen Gallery panel when collapsed on desktop */}
         <button
           type="button"
           onClick={() => setRightPanelOpen(true)}
@@ -3702,190 +3456,48 @@ function WorkspacePage() {
               ? "pointer-events-none translate-x-2 opacity-0"
               : "pointer-events-auto translate-x-0 opacity-100"
           )}
-          title="Open scene controls"
-          aria-label="Open scene controls"
+          title="Open generations gallery"
+          aria-label="Open generations gallery"
           tabIndex={rightPanelOpen ? -1 : 0}
         >
           <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Scene</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Gallery</span>
         </button>
 
-        {/* Right Panel — fixed inner width on desktop; full-bleed on phone/tablet */}
-        <aside
-          style={{
-            width: isCompact
-              ? mobileTab === "create"
-                ? "100%"
-                : 0
-              : rightPanelOpen
-                ? RIGHT_PANEL_WIDTH
-                : 0,
-            minWidth: isCompact
-              ? mobileTab === "create"
-                ? "100%"
-                : 0
-              : rightPanelOpen
-                ? RIGHT_PANEL_WIDTH
-                : 0,
-            transition: isCompact
-              ? "none"
-              : "width 150ms cubic-bezier(0.22, 1, 0.36, 1), min-width 150ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease",
-          }}
-          className={cn(
-            "flex-shrink-0 flex flex-col bg-white border border-neutral-200/60 overflow-hidden will-change-[width]",
-            "lg:absolute lg:bottom-4 lg:right-4 lg:top-4 lg:z-30 lg:rounded-[26px] lg:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.14)]",
-            "max-lg:border-l-0 max-lg:border-t max-lg:border-neutral-200 max-lg:bg-white",
-            !rightPanelOpen && "max-lg:border-transparent lg:pointer-events-none lg:opacity-0",
-            mobileTab === "create"
-              ? "max-lg:!w-full max-lg:!min-w-0 max-lg:flex-1 max-lg:min-h-0 max-lg:overflow-auto"
-              : "max-lg:hidden"
-          )}
-        >
-          <div
-            className="flex h-full shrink-0 max-lg:!w-full max-lg:!min-w-0 max-lg:!max-w-full"
-            style={{ width: isCompact ? "100%" : RIGHT_PANEL_WIDTH, maxWidth: isCompact ? "100%" : undefined }}
-          >
-          <div className="h-full min-w-0 flex-1 overflow-y-auto flex flex-col [tab-size:4]">
-          {/* Right navbar: workspace name, credits, My Library, Profile, Collapse — desktop only */}
-          <div className="hidden lg:flex h-[72px] flex-shrink-0 px-3 border-b border-neutral-200/60 items-center gap-2 min-w-0">
-            <div className="shrink-0 [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-full">
-              {clientMounted ? <UserButton afterSignOutUrl="/" /> : <div className="w-8 h-8 rounded-full bg-neutral-200 animate-pulse" aria-hidden />}
-            </div>
-            <Input
-              type="text"
-              value={workspaceName}
-              onChange={(e) => handleWorkspaceNameChange(e.target.value)}
-              placeholder="Name workspace"
-              className="h-9 min-w-0 flex-1 border-transparent bg-transparent px-1 text-[13px] font-semibold tracking-tight shadow-none focus-visible:border-neutral-200 focus-visible:ring-0"
-            />
-            <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded-full bg-neutral-900/[0.04] border border-neutral-200/60" title="Credits remaining">
-              <span className="text-[12px] font-semibold text-neutral-800 tabular-nums">{creditsLoading ? "…" : Math.max(0, creditsTotal - creditsUsed)}</span>
-            </div>
-            <Link href="/library" className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors shrink-0" title="My Library" aria-label="My Library">
-              <Library className="h-4 w-4" strokeWidth={2} />
-            </Link>
-            <ModeToggle />
-            <button type="button" onClick={() => setRightPanelOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition-colors duration-200 shrink-0" title="Collapse panel" aria-label="Collapse panel">
-              <PanelRightClose className="h-4 w-4" strokeWidth={2} />
-            </button>
-          </div>
-          <ScrollArea className="flex-1 min-h-0 w-full">
-          <div className="mx-auto w-full max-w-xl lg:max-w-none px-4 sm:px-6 lg:px-5 pt-3 sm:pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:pb-6">
-            <AssetInspector
-              kind={
-                centerView.type === "3d" || centerView.type === "code"
-                  ? centerView.type
-                  : centerView.type === "preview"
-                    ? "preview"
-                    : "empty"
-              }
-              parts={Object.keys(authoredParts)}
-              selectedPart={selectedPart}
-              onSelectPart={setSelectedPart}
-              look={look}
-              onLookChange={updateLook}
-              partMaterial={selectedPartMaterial}
-              onPartMaterial={handlePartMaterial}
-            />
-          </div>
-          </ScrollArea>
-          </div>
-          </div>
-        </aside>
-
-        <div
-          className="pointer-events-none absolute z-40 flex justify-center px-3 max-lg:left-0 max-lg:right-0 bottom-3 lg:bottom-5"
-          style={
-            isCompact
-              ? undefined
-              : {
-                  left: leftPanelOpen ? leftPanelWidth + 32 : 16,
-                  right: rightPanelOpen ? RIGHT_PANEL_WIDTH + 32 : 16,
-                }
+        {/* Right Gallery & Inspector Panel */}
+        <GalleryPanel
+          workspaceName={workspaceName}
+          onWorkspaceNameChange={handleWorkspaceNameChange}
+          activeSection={activeSection}
+          images={mergedLibraryImages}
+          assets3D={mergedLibrary3DAssets}
+          loading={libraryLoading}
+          onImageClick={handleImageClick}
+          on3DClick={handle3DClick}
+          isWaterJobFn={isWaterJobFn}
+          isOpen={rightPanelOpen}
+          onClose={() => setRightPanelOpen(false)}
+          inspectorKind={
+            centerView.type === "3d" || centerView.type === "code"
+              ? centerView.type
+              : centerView.type === "preview"
+                ? "preview"
+                : "empty"
           }
-        >
-          <div className="pointer-events-auto w-full max-w-[760px]">
-            <ChatComponent
-              prompt={prompt}
-              onPromptChange={setPrompt}
-              textareaRef={promptTextareaRef}
-              inputMode={inputMode}
-              onInputModeChange={handleSelectInputMode}
-              selectedIsCode={selectedIsCode}
-              editAvailable={editAvailable}
-              combineAvailable={combineAvailable}
-              selectedModel={selectedModel}
-              selectedLabel={selectedCatalog?.label ?? selectedModel}
-              waterPickerModels={waterPickerModels}
-              enabledWaterIds={enabledWaterIds}
-              providerKeyOk={providerKeyOk}
-              onSelectModel={handleSelectModel}
-              qualityTier={waterQualityTier}
-              onQualityTierChange={(tier) => {
-                setWaterQualityTier(tier);
-                try {
-                  window.localStorage.setItem(WATER_TIER_STORAGE_KEY, tier);
-                } catch {
-                  /* ignore */
-                }
-              }}
-              numGenerations={numGenerations}
-              onNumGenerationsChange={setNumGenerations}
-              promptHistory={promptHistory.entries}
-              onSelectHistory={(item) => {
-                setPrompt(item);
-                promptTextareaRef.current?.focus();
-              }}
-              onClearHistory={promptHistory.clear}
-              image1={image1}
-              image2={image2}
-              isDragging={isDragging}
-              onImageDrop={handleDrop}
-              onImagePaste={handlePaste}
-              onImageFileSelect={handleFileSelect}
-              onImageClear={handleClearImage}
-              onDragOver={() => setIsDragging(true)}
-              onDragLeave={() => setIsDragging(false)}
-              waterEdit={
-                selectedIsCode && inputMode === "text_1img"
-                  ? {
-                      parentId: waterEditParentId,
-                      title:
-                        waterEditParentJob?.prompt?.trim() ||
-                        (waterEditParentId ? `Water · ${waterEditParentId.slice(0, 10)}…` : "No model selected"),
-                      previewUrl: waterEditParentJob?.previewImageUrl || waterEditParentJob?.imageUrl || null,
-                      highlight: waterDropHighlight,
-                      onDragOver: (e) => {
-                        if (![...e.dataTransfer.types].includes("application/job-id")) return;
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "copy";
-                        setWaterDropHighlight(true);
-                      },
-                      onDragLeave: () => setWaterDropHighlight(false),
-                      onDrop: (e) => {
-                        e.preventDefault();
-                        setWaterDropHighlight(false);
-                        const droppedId = e.dataTransfer.getData("application/job-id");
-                        if (!droppedId) return;
-                        const target = library3DAssets.find((j) => j.id === droppedId);
-                        if (!target) {
-                          setError("Drop a Water model from the library");
-                          return;
-                        }
-                        applyWaterEditParent(target);
-                      },
-                      onClear: () => setWaterEditTargetJobId(""),
-                    }
-                  : null
-              }
-              onGenerate={handleChatGenerate}
-              generating={isGenerating}
-              error={error}
-              costLabel={chatCostLabel}
-              generateLabel={chatGenerateLabel}
-            />
-          </div>
-        </div>
+          inspectorAssetKey={viewerAssetKey}
+          parts={Object.keys(authoredParts)}
+          selectedPart={selectedPart}
+          onSelectPart={setSelectedPart}
+          look={look}
+          onLookChange={updateLook}
+          partMaterial={selectedPartMaterial}
+          onPartMaterial={handlePartMaterial}
+          onUploadFile={handleFileSelect}
+          className={cn(
+            "max-lg:hidden",
+            !rightPanelOpen && "hidden"
+          )}
+        />
       </div>
 
       {/* Compact: bottom Canvas | Create with sliding pill */}

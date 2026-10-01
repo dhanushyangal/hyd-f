@@ -91,23 +91,25 @@ export default function ApiPage() {
 
         <div className="mt-14 flex flex-wrap gap-3">
           <Link
-            href="/contact"
+            href="/app/api-keys"
             className="inline-flex items-center rounded-xl bg-[#111] px-5 py-3 text-[15px] font-semibold text-white hover:bg-neutral-800"
           >
-            Request API access
-          </Link>
-          <Link
-            href="/docs"
-            className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
-          >
-            Docs
+            Get API Key
           </Link>
           <a
-            href={`mailto:${CONTACT_EMAIL}`}
+            href="https://docs.hydrilla.ai"
+            target="_blank"
+            rel="noreferrer"
             className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
           >
-            {CONTACT_EMAIL}
+            API Reference (docs.hydrilla.ai)
           </a>
+          <Link
+            href="/contact"
+            className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
+          >
+            Enterprise &amp; Volume Access
+          </Link>
         </div>
       </MarketingArticle>
     </MarketingPage>

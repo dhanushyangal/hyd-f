@@ -19,7 +19,6 @@ import {
   Sparkles,
   ChevronRight,
   PenLine,
-  Layers,
   Download,
   Check,
 } from "lucide-react";
@@ -97,15 +96,13 @@ const BREAKDOWN_ICONS: Record<string, typeof Box> = {
   "3d": Box,
   image: ImageIcon,
   edit: PenLine,
-  combined: Layers,
 };
 
-const CHART_TYPE_ORDER = ["Image generation", "3D model", "Edit image", "Combine images"] as const;
+const CHART_TYPE_ORDER = ["Image generation", "3D model", "Edit image"] as const;
 const CHART_COLORS: Record<string, string> = {
   "Image generation": "#525252",
   "3D model": "#171717",
   "Edit image": "#a3a3a3",
-  "Combine images": "#737373",
 };
 
 function formatResetDate(iso: string | null | undefined): string {

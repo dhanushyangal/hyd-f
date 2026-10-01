@@ -16,21 +16,24 @@ import {
   Trash2,
   Sparkles,
   Wand2,
-  Layers,
   Plus,
 } from "lucide-react";
 import { cn } from "../../../lib/utils";
 
-type FilterTab = "all" | "TextToImage" | "EditImage" | "Combined";
+type FilterTab = "all" | "TextToImage" | "EditImage";
 
 const filterTabs: { id: FilterTab; label: string }[] = [
   { id: "all", label: "All" },
   { id: "TextToImage", label: "Text" },
   { id: "EditImage", label: "Edit" },
-  { id: "Combined", label: "Combined" },
 ];
 
+/** "Combined" = legacy rows from the removed combine feature; shown as edits. */
 const IMAGE_GENERATE_TYPES = new Set(["TextToImage", "EditImage", "Combined"]);
+
+function filterType(t: string): FilterTab {
+  return t === "EditImage" || t === "Combined" ? "EditImage" : "TextToImage";
+}
 
 function pickImageUrl(job: BackendJob): string | null {
   return getProxiedImageUrl(job.previewImageUrl || job.imageUrl);
@@ -41,8 +44,7 @@ function proxiedSource(url: string | null | undefined): string | null {
 }
 
 function typeLabel(t: string): { label: string; icon: typeof Sparkles } {
-  if (t === "EditImage") return { label: "Edit", icon: Wand2 };
-  if (t === "Combined") return { label: "Combined", icon: Layers };
+  if (filterType(t) === "EditImage") return { label: "Edit", icon: Wand2 };
   return { label: "Text", icon: Sparkles };
 }
 
@@ -323,7 +325,7 @@ export default function ImagePage() {
 
   const filteredJobs = useMemo(() => {
     if (filter === "all") return jobs;
-    return jobs.filter((j) => j.generateType === filter);
+    return jobs.filter((j) => filterType(j.generateType) === filter);
   }, [jobs, filter]);
 
   const handleDelete = useCallback(

@@ -156,8 +156,9 @@ Admin **Platform keys** (`/api/admin/api-keys`) are used only when the member ha
 
 ## Hydrilla cloud (brief)
 
-Image → FLUX (optional) → Trellis → GLB. Credits. GPU host: `https://api.hydrilla.co` (overridable).  
-Edit / combine need GPU `mode=high`. Details: [`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md).
+Text or edit → OpenAI / Gemini image (optional) → GPU VM (BlueFox3D) → GLB. Credits.
+GPU host: `https://api.hydrilla.co` (overridable). Image quality Low / High picks the model and resolution.
+Details: [`GENERATION_FLOWS.md`](./GENERATION_FLOWS.md).
 
 ---
 

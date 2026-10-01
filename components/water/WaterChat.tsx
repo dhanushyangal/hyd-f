@@ -4,8 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { fetchWaterMessages, sendWaterChat, type WaterChatMessage } from "@/lib/api";
 
+export type WaterThreadJob = {
+  id: string;
+  prompt: string | null;
+  createdAt: string;
+};
+
+type ThreadMessage = WaterChatMessage & { generation?: boolean };
+
 type Props = {
   jobId: string | null;
+  /** Jobs in this model's refine chain, oldest first. Defaults to just `jobId`. */
+  threadJobs?: WaterThreadJob[];
   modelId: string;
   getToken: () => Promise<string | null>;
   disabled?: boolean;
@@ -18,6 +28,7 @@ type Props = {
 
 export function WaterChat({
   jobId,
+  threadJobs,
   modelId,
   getToken,
   disabled,
@@ -27,28 +38,57 @@ export function WaterChat({
   onRefine,
   onScene,
 }: Props) {
-  const [messages, setMessages] = useState<WaterChatMessage[]>([]);
+  const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+
+  const thread: WaterThreadJob[] =
+    threadJobs && threadJobs.length > 0
+      ? threadJobs
+      : jobId
+        ? [{ id: jobId, prompt: null, createdAt: "" }]
+        : [];
+  const threadKey = thread.map((j) => `${j.id}:${j.prompt ?? ""}`).join("|");
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
 
   useEffect(() => {
-    if (!jobId) {
+    const jobs = threadRef.current;
+    if (jobs.length === 0) {
       setMessages([]);
       return;
     }
-    let cancelled = false;
-    void fetchWaterMessages(jobId, getToken)
-      .then((rows) => {
-        if (!cancelled) setMessages(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setMessages([]);
+    const state = { cancelled: false };
+    const tokenGetter = () => getTokenRef.current();
+    void Promise.all(
+      jobs.map((job) => fetchWaterMessages(job.id, tokenGetter).catch(() => []))
+    ).then((perJob) => {
+      if (state.cancelled) {
+        return;
+      }
+      const merged = jobs.flatMap((job, i): ThreadMessage[] => {
+        const intro: ThreadMessage[] = job.prompt?.trim()
+          ? [
+              {
+                id: `gen-${job.id}`,
+                role: "user",
+                content: job.prompt.trim(),
+                createdAt: job.createdAt,
+                generation: true,
+              },
+            ]
+          : [];
+        return [...intro, ...(perJob[i] ?? [])];
       });
+      setMessages(merged);
+    });
     return () => {
-      cancelled = true;
+      state.cancelled = true;
     };
-  }, [jobId, getToken]);
+  }, [threadKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -56,7 +96,9 @@ export function WaterChat({
 
   const send = async () => {
     const text = draft.trim();
-    if (!jobId || !text || busy || disabled) return;
+    if (!jobId || !text || busy || disabled) {
+      return;
+    }
     setDraft("");
     setMessages((prev) => [
       ...prev,
@@ -64,7 +106,12 @@ export function WaterChat({
     ]);
     setBusy(true);
     try {
-      const result = await sendWaterChat({ jobId, message: text, modelId, getToken });
+      const result = await sendWaterChat({
+        jobId,
+        message: text,
+        modelId,
+        getToken: () => getTokenRef.current(),
+      });
       setMessages((prev) => [
         ...prev,
         {
@@ -74,8 +121,12 @@ export function WaterChat({
           createdAt: new Date().toISOString(),
         },
       ]);
-      if (result.scene) onScene?.(result.scene);
-      if (result.kind === "refine" && result.refinePrompt) onRefine?.(result.refinePrompt);
+      if (result.scene) {
+        onScene?.(result.scene);
+      }
+      if (result.kind === "refine" && result.refinePrompt) {
+        onRefine?.(result.refinePrompt);
+      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -116,17 +167,29 @@ export function WaterChat({
         {!jobId && !docked && (
           <p className="text-[12px] text-neutral-500 leading-5">Generate first, then type a follow-up here.</p>
         )}
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={cn(
-              "rounded-xl px-2.5 py-2 text-[12px] leading-5",
-              m.role === "user" ? "bg-neutral-900 text-white" : "bg-neutral-50 text-neutral-800 border border-neutral-200"
-            )}
-          >
-            {m.content}
-          </div>
-        ))}
+        {jobId && messages.length === 0 && (
+          <p className="text-[12px] text-neutral-500 leading-5">No messages yet. Describe a change below.</p>
+        )}
+        {messages.map((m) =>
+          m.generation ? (
+            <div key={m.id} className="rounded-xl border border-sky-100 bg-sky-50/70 px-2.5 py-2 text-[12px] leading-5 text-sky-900">
+              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wider text-sky-600">
+                Build
+              </span>
+              {m.content}
+            </div>
+          ) : (
+            <div
+              key={m.id}
+              className={cn(
+                "rounded-xl px-2.5 py-2 text-[12px] leading-5",
+                m.role === "user" ? "bg-neutral-900 text-white" : "bg-neutral-50 text-neutral-800 border border-neutral-200"
+              )}
+            >
+              {m.content}
+            </div>
+          )
+        )}
         <div ref={bottomRef} />
       </div>
       <form

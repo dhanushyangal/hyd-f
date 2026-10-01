@@ -61,14 +61,14 @@ Sign in (Clerk)
 
 Credits (cloud):
 
-| Op | Credits |
-|----|---------|
-| Text → image | 2 |
-| Edit image | 3 |
-| Combine 2 images | 4 |
-| Image → 3D | 10 |
+| Op | Low | High |
+|----|-----|------|
+| Text → image (OpenAI / Gemini) | 2 | 5 |
+| Edit image (OpenAI / Gemini) | 3 | 6 |
+| Image → 3D (GPU VM) | 10 | 10 |
 
-Workspace text→mesh = 2 + 10 = **12**. Edit/combine need GPU `mode=high`.
+Workspace text→mesh = 2 + 10 = **12** (Low) or 5 + 10 = **15** (High). Pick the image model, quality and
+aspect from the composer's settings menu. Edit needs an OpenAI or Gemini key on the backend.
 
 ## Key routes
 
@@ -91,7 +91,8 @@ Protected by `middleware.ts`: `/app`, `/workspace`, `/generate`, `/generations`,
 | Path | Role |
 |------|------|
 | `lib/api.ts` | Backend / GPU HTTP client |
-| `lib/apiHealth.ts` | Single-host GPU health + edit/combine features |
+| `lib/apiHealth.ts` | Feature health: image providers (OpenAI / Gemini) + GPU VM |
+| `lib/imageOptions.ts` | Image model / quality / aspect options + credit table |
 | `lib/engines.ts` / `lib/models.ts` | Engine constants + model catalog |
 | `lib/clerkConfig.ts` | Pinned Clerk JS version + preconnect |
 

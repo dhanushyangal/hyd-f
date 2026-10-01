@@ -97,6 +97,12 @@ export default function DocsPage() {
               structured mesh with parts you can continue editing.
             </p>
             <p>
+              Hydrilla first renders a reference image with OpenAI or Gemini.
+              Pick Low for quick drafts or High for more detail, and choose a
+              square, landscape, or portrait frame. Refine the image with an
+              Edit prompt until it looks right, then generate the 3D model.
+            </p>
+            <p>
               Be specific about scale and use. “Low-poly crate for Unity” and
               “hero prop with PBR wear” produce different starting points.
             </p>
@@ -149,10 +155,12 @@ export default function DocsPage() {
               to a client-ready file without scattering assets across folders.
             </p>
             <p>
-              Usage is metered in credits. The free plan includes a monthly
-              credit allotment so you can evaluate the pipeline; Creator and
-              Studio raise volume and unlock additional export options. Plans
-              can be changed from account settings.
+              Usage is metered in credits. A reference image costs 2 credits
+              on Low or 5 on High, an edit costs 3 or 6, and each 3D model
+              costs 10. The free plan includes a monthly credit allotment so
+              you can evaluate the pipeline; Creator and Studio raise volume
+              and unlock additional export options. Plans can be changed from
+              account settings.
             </p>
           </DocSection>
 

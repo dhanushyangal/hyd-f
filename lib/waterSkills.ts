@@ -7,6 +7,50 @@
 
 export type QualityTier = "fast" | "standard" | "studio";
 
+export type WaterSkillId =
+  | "auto"
+  | "object-studio"
+  | "character"
+  | "animation"
+  | "game";
+
+export type WaterSkillDef = {
+  id: WaterSkillId;
+  label: string;
+  description: string;
+};
+
+export const WATER_SKILLS: WaterSkillDef[] = [
+  {
+    id: "auto",
+    label: "Auto",
+    description: "Infers skill from your prompt",
+  },
+  {
+    id: "object-studio",
+    label: "Object / Prop",
+    description: "Hard-surface props, products, architectural assets",
+  },
+  {
+    id: "character",
+    label: "Character",
+    description: "Stylized characters, creatures, humanoids with pivots",
+  },
+  {
+    id: "animation",
+    label: "Animation-ready",
+    description: "Rigging/pivot hierarchy and named socket points",
+  },
+  {
+    id: "game",
+    label: "Game-ready",
+    description: "Metric scale, collider hints, optimized runtime nodes",
+  },
+];
+
+export const DEFAULT_WATER_SKILL: WaterSkillId = "auto";
+export const WATER_SKILL_STORAGE_KEY = "hydrilla_water_skill";
+
 /** img2threejs-style locked build passes (after planner/spec). */
 export type BuildPassId =
   | "blockout"

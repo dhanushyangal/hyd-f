@@ -1,8 +1,7 @@
 /**
- * API capability monitor for hydrilla_runtime (low / high).
- *
- * Uses backend `GET /api/3d/health` (or direct GPU `/health`) for `{ mode, features, status }`.
- * Single GPU host: https://api.hydrilla.co — no alternate/fallback host.
+ * Capability monitor. Uses backend `GET /api/3d/health`:
+ * - text_to_image / edit_image: an OpenAI or Gemini key is configured
+ * - image_to_3d: the GPU VM (https://api.hydrilla.co) has its pipeline loaded
  */
 
 export type GpuFeatures = {
@@ -10,21 +9,36 @@ export type GpuFeatures = {
   text_to_3d: boolean;
   image_to_3d: boolean;
   edit_image: boolean;
-  combined_edit: boolean;
+};
+
+export type ImageProviderAvailability = {
+  openai: boolean;
+  gemini: boolean;
 };
 
 export type GpuHealthState = {
   status: "ok" | "degraded" | "down" | "unknown";
-  mode: "low" | "high" | string;
+  mode: string;
   features: GpuFeatures;
+  providers: ImageProviderAvailability;
 };
 
-const LOW_FEATURES: GpuFeatures = {
+/** Optimistic defaults until the first probe returns. */
+const DEFAULT_FEATURES: GpuFeatures = {
   text_to_image: true,
   text_to_3d: true,
   image_to_3d: true,
+  edit_image: true,
+};
+
+const DEFAULT_PROVIDERS: ImageProviderAvailability = { openai: true, gemini: true };
+
+/** Backend unreachable: nothing works. */
+const OFFLINE_FEATURES: GpuFeatures = {
+  text_to_image: false,
+  text_to_3d: false,
+  image_to_3d: false,
   edit_image: false,
-  combined_edit: false,
 };
 
 /** Single GPU runtime — no fallback to another host */
@@ -45,8 +59,9 @@ const RECOVERY_POLL_MS = 30_000;
 
 let _state: GpuHealthState = {
   status: "unknown",
-  mode: "low",
-  features: { ...LOW_FEATURES },
+  mode: "cloud",
+  features: { ...DEFAULT_FEATURES },
+  providers: { ...DEFAULT_PROVIDERS },
 };
 
 let _gpuAvailable = true;
@@ -77,18 +92,22 @@ export function onFeaturesChange(listener: FeaturesListener): () => void {
 }
 
 function applyHealthPayload(data: any): void {
-  const mode = (data?.mode as string) || "low";
+  const mode = (data?.mode as string) || "cloud";
   const f = data?.features;
   const features: GpuFeatures = {
     text_to_image: f?.text_to_image ?? true,
     text_to_3d: f?.text_to_3d ?? true,
     image_to_3d: f?.image_to_3d ?? true,
-    edit_image: f?.edit_image ?? mode === "high",
-    combined_edit: f?.combined_edit ?? mode === "high",
+    edit_image: f?.edit_image ?? true,
+  };
+  const p = data?.providers;
+  const providers: ImageProviderAvailability = {
+    openai: p?.openai ?? true,
+    gemini: p?.gemini ?? true,
   };
   const status = (data?.status as GpuHealthState["status"]) || "unknown";
-  _state = { status, mode, features };
-  _gpuAvailable = status === "ok" || status === "degraded";
+  _state = { status, mode, features, providers };
+  _gpuAvailable = features.image_to_3d;
 }
 
 async function probeBackendHealth(): Promise<boolean> {
@@ -115,8 +134,9 @@ async function refreshCapabilities(): Promise<void> {
   if (!ok) {
     _state = {
       status: "down",
-      mode: "low",
-      features: { ...LOW_FEATURES },
+      mode: "cloud",
+      features: { ...OFFLINE_FEATURES },
+      providers: { openai: false, gemini: false },
     };
     _gpuAvailable = false;
   }
@@ -136,12 +156,12 @@ function startRecoveryPolling(): void {
 }
 
 export function markPrimaryDown(): void {
-  if (!_gpuAvailable && _state.status === "down") return;
+  if (!_gpuAvailable) return;
   _gpuAvailable = false;
   _state = {
-    status: "down",
-    mode: _state.mode || "low",
-    features: { ...LOW_FEATURES },
+    ..._state,
+    status: _state.features.text_to_image ? "degraded" : "down",
+    features: { ..._state.features, image_to_3d: false, text_to_3d: false },
   };
   console.warn("[apiHealth] GPU unavailable at api.hydrilla.co — retrying until recovery");
   _notify();
@@ -160,10 +180,6 @@ export function canEdit(): boolean {
   return !!_state.features.edit_image;
 }
 
-export function canCombine(): boolean {
-  return !!_state.features.combined_edit;
-}
-
 export function canTextToImage(): boolean {
   return !!_state.features.text_to_image;
 }
@@ -174,6 +190,10 @@ export function canTextTo3d(): boolean {
 
 export function canImageTo3d(): boolean {
   return !!_state.features.image_to_3d;
+}
+
+export function imageProviderAvailable(provider: keyof ImageProviderAvailability): boolean {
+  return !!_state.providers[provider];
 }
 
 export function getPrimaryUrl(): string {

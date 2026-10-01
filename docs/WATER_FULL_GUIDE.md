@@ -51,7 +51,7 @@ Related shorter docs:
 
 - Trellis / Hydrilla Cloud GPU mesh generation.
 - A one-shot “ask LLM for a GLB URL” call.
-- Image Edit / Combine (those stay on the image path and are disabled when a code/Water model is selected).
+- Image Edit (stays on the image path and is disabled when a code/Water model is selected).
 - Runtime loaded from the markdown files under `frontend/skills/water/*.md` (those are docs for humans/agents only).
 
 ---
