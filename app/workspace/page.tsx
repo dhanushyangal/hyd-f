@@ -404,6 +404,7 @@ function WorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const isSubmittingImageRef = useRef(false);
+  const isSubmitting3DRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const mustCreateWorkspace = isLoaded && isSignedIn && !resolvingWorkspace && !workspaceId;
@@ -931,7 +932,9 @@ function WorkspacePage() {
   const promptHistory = usePromptHistory(workspaceId, historyJobs);
 
   useEffect(() => {
-    if (isSignedIn && workspaceId) refreshCredits();
+    if (isSignedIn && workspaceId) {
+      refreshCredits();
+    }
   }, [isSignedIn, workspaceId, refreshCredits]);
 
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1174,8 +1177,8 @@ function WorkspacePage() {
       return;
     }
 
-    let consecutiveFailures = 0;
-    const MAX_FAILURES = 5;
+    const failureTracker = { count: 0 };
+    const MAX_FAILURES = 20;
 
     // Hard cap on how long we keep polling a single job. Trellis can take
     // 10–15 min on hard inputs, so we allow up to 25 min before giving up
@@ -1193,6 +1196,8 @@ function WorkspacePage() {
         }
         setCurrentGenerating(null);
         setLoading(false);
+        refreshCredits();
+        refreshLibrary();
         setCenterView({
           type: "error",
           message:
@@ -1202,7 +1207,7 @@ function WorkspacePage() {
       }
       try {
         const status = await fetchStatus(currentGenerating.jobId, async () => (await getToken()) ?? null);
-        consecutiveFailures = 0;
+        failureTracker.count = 0;
 
         if (status.queue) {
           const estimatedTotal = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 300;
@@ -1345,6 +1350,8 @@ function WorkspacePage() {
           const userFacing = toUserFacingGpuError(status.error || "Generation failed");
           setCurrentGenerating(null);
           setLoading(false);
+          refreshCredits();
+          refreshLibrary();
           void (async () => {
             await waitMobileGpuOfflineMinimum(status.error, userFacing);
             mobileGenStartedAtRef.current = null;
@@ -1361,11 +1368,13 @@ function WorkspacePage() {
           });
           setCurrentGenerating(null);
           setLoading(false);
+          refreshCredits();
+          refreshLibrary();
           setCenterView({ type: "error", message: "Job cancelled" });
         }
       } catch {
-        consecutiveFailures++;
-        if (consecutiveFailures >= MAX_FAILURES) {
+        failureTracker.count += 1;
+        if (failureTracker.count >= MAX_FAILURES) {
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
@@ -1376,6 +1385,8 @@ function WorkspacePage() {
           });
           setCurrentGenerating(null);
           setLoading(false);
+          refreshCredits();
+          refreshLibrary();
           setCenterView({ type: "error", message: "Lost connection to server" });
         }
       }
@@ -1765,17 +1776,21 @@ function WorkspacePage() {
         return;
       }
 
+      if (isSubmitting3DRef.current) {
+        return;
+      }
+      isSubmitting3DRef.current = true;
+
       // Water engine. The image is only ever an extra reference.
       if (isCodeModel(selectedModel)) {
-        let reference: string | null = imageUrl || null;
-        if (localFile) {
-          try {
-            reference = await uploadImage(localFile, async () => await getToken());
-          } catch {
-            reference = null;
-          }
+        try {
+          const reference = localFile
+            ? await uploadImage(localFile, async () => await getToken()).catch(() => null)
+            : (imageUrl || null);
+          await runWater({ referenceImageUrl: reference, parentId: previewId });
+        } finally {
+          isSubmitting3DRef.current = false;
         }
-        await runWater({ referenceImageUrl: reference, parentId: previewId });
         return;
       }
 
@@ -1893,10 +1908,14 @@ function WorkspacePage() {
         mobileGenStartedAtRef.current = null;
         setCenterView({ type: "error", message: userFacing });
         removePendingJob(pendingId);
+        refreshCredits();
+        refreshLibrary();
+      } finally {
+        isSubmitting3DRef.current = false;
+        setLoading(false);
       }
-      setLoading(false);
     },
-    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, selectedModel, waitMobileGpuOfflineMinimum, addPendingJob, removePendingJob, refreshLibrary, runWater]
+    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, selectedModel, waitMobileGpuOfflineMinimum, addPendingJob, removePendingJob, refreshLibrary, refreshCredits, runWater]
   );
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
@@ -2035,6 +2054,8 @@ function WorkspacePage() {
         setCenterView({ type: "error", message: userFacing });
         setGeneratingPreview(false);
         removePendingJob(pendingTextImageId);
+        refreshCredits();
+        refreshLibrary();
       } finally {
         isSubmittingImageRef.current = false;
       }
@@ -2043,6 +2064,9 @@ function WorkspacePage() {
 
     // ── Image only: upload or library image → 3D (no text-to-image, no edit API) ──
     if (inputMode === "image") {
+      if (isSubmitting3DRef.current || isSubmittingImageRef.current) {
+        return;
+      }
       if (!file1 && !image1) {
         setError("Please upload an image");
         return;
@@ -2068,7 +2092,13 @@ function WorkspacePage() {
 
     // ── Text + 1 image: /edit-image (image-to-image), or image-to-3D if no prompt ──
     if (inputMode === "text_1img") {
-      if (!file1 && !image1) { setError("Please upload an image"); return; }
+      if (isSubmitting3DRef.current || isSubmittingImageRef.current) {
+        return;
+      }
+      if (!file1 && !image1) {
+        setError("Please upload an image");
+        return;
+      }
 
       // No prompt: send the image directly to 3D model generation
       if (!prompt.trim()) {
@@ -2222,7 +2252,9 @@ function WorkspacePage() {
   // 3D Model" flow intact and uses an identical code path for fresh uploads.
   const handleGenerate3D = async () => {
     setError(null);
-    if (loading || generatingPreview) return;
+    if (loading || generatingPreview || isSubmitting3DRef.current || isSubmittingImageRef.current) {
+      return;
+    }
     if (!hasWorkspaceContext) {
       setForcedWorkspaceModal(true);
       setShowNewWorkspaceModal(true);
@@ -3291,7 +3323,9 @@ function WorkspacePage() {
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!currentGenerating?.jobId) return;
+                        if (!currentGenerating?.jobId) {
+                          return;
+                        }
                         const jobId = currentGenerating.jobId;
                         try {
                           waterPollGenRef.current += 1;
@@ -3302,6 +3336,8 @@ function WorkspacePage() {
                           }
                           setCurrentGenerating(null);
                           setLoading(false);
+                          refreshCredits();
+                          refreshLibrary();
                           setCenterView({ type: "error", message: "Job cancelled" });
                         } catch (e: any) {
                           setCenterView({
