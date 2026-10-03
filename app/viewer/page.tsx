@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState, Suspense, useRef } from "react";
-import { fetchStatus, Job, getGlbUrl, getPreviewImageUrl, cancelJob, downloadGlbWithAuth } from "../../lib/api";
+import {
+  fetchStatus,
+  Job,
+  getGlbUrl,
+  getPreviewImageUrl,
+  cancelJob,
+  downloadGlbWithAuth,
+} from "../../lib/api";
 import { ThreeViewer } from "../../components/ThreeViewer";
 import { JobStatusBadge } from "../../components/JobStatusBadge";
 import { useSearchParams } from "next/navigation";
@@ -9,7 +16,7 @@ import { ConfirmModal } from "../../components/ConfirmModal";
 import { useAuth } from "@clerk/nextjs";
 
 // Force dynamic rendering to prevent prerendering errors with useSearchParams
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 const POLL_INTERVAL = 5000;
 
@@ -27,7 +34,11 @@ function ViewerContent() {
 
   // Start progress simulation when job is pending/processing
   useEffect(() => {
-    if (job && (job.status === "pending" || job.status === "processing") && modelProgressIntervalRef.current === null) {
+    if (
+      job &&
+      (job.status === "pending" || job.status === "processing") &&
+      modelProgressIntervalRef.current === null
+    ) {
       // Get estimated duration from queue info or use default
       const estimatedTotalSeconds = job.queue?.estimated_total_seconds || 150; // Default 2m 30s
       const modelDuration = estimatedTotalSeconds * 1000; // Convert to milliseconds
@@ -40,24 +51,37 @@ function ViewerContent() {
         const now = Date.now();
         const elapsed = now - job.created_at; // Elapsed time in milliseconds
         const elapsedSeconds = elapsed / 1000;
-        
+
         // Account for queue wait time if available
         let processingElapsed = elapsedSeconds;
         if (job.queue && job.queue.estimated_wait_seconds) {
           // If we're still waiting, progress is based on wait time
           if (job.queue.position > 0) {
-            const waitProgress = Math.min(45, (elapsedSeconds / job.queue.estimated_wait_seconds) * 45);
+            const waitProgress = Math.min(
+              45,
+              (elapsedSeconds / job.queue.estimated_wait_seconds) * 45,
+            );
             initialProgress = waitProgress;
           } else {
             // We're processing, subtract wait time from elapsed
-            processingElapsed = Math.max(0, elapsedSeconds - job.queue.estimated_wait_seconds);
+            processingElapsed = Math.max(
+              0,
+              elapsedSeconds - job.queue.estimated_wait_seconds,
+            );
             // Processing takes 50-95% of progress bar
-            const processingProgress = 50 + (processingElapsed / (estimatedTotalSeconds - job.queue.estimated_wait_seconds)) * 45;
+            const processingProgress =
+              50 +
+              (processingElapsed /
+                (estimatedTotalSeconds - job.queue.estimated_wait_seconds)) *
+                45;
             initialProgress = Math.min(95, processingProgress);
           }
         } else {
           // No queue info, estimate based on elapsed time
-          initialProgress = Math.min(95, (elapsedSeconds / estimatedTotalSeconds) * 100);
+          initialProgress = Math.min(
+            95,
+            (elapsedSeconds / estimatedTotalSeconds) * 100,
+          );
         }
       }
 
@@ -65,7 +89,7 @@ function ViewerContent() {
 
       // Start progress simulation from current point
       modelProgressIntervalRef.current = setInterval(() => {
-        setModelGenerationProgress(prev => {
+        setModelGenerationProgress((prev) => {
           if (prev >= 99) {
             // Stop at 99% - wait for actual completion
             if (modelProgressIntervalRef.current) {
@@ -77,7 +101,12 @@ function ViewerContent() {
           return Math.min(prev + progressStep, 99);
         });
       }, updateInterval);
-    } else if (job && (job.status === "completed" || job.status === "failed" || job.status === "cancelled")) {
+    } else if (
+      job &&
+      (job.status === "completed" ||
+        job.status === "failed" ||
+        job.status === "cancelled")
+    ) {
       // Clear progress simulation when job completes
       if (modelProgressIntervalRef.current) {
         clearInterval(modelProgressIntervalRef.current);
@@ -120,16 +149,23 @@ function ViewerContent() {
           job_id: jobId,
           status: "failed",
           progress: 0,
-          message: "Generation timed out. Credits have been automatically refunded.",
-          error: "Generation timed out. Your credits have been automatically refunded.",
+          message:
+            "Generation timed out. Credits have been automatically refunded.",
+          error:
+            "Generation timed out. Your credits have been automatically refunded.",
           creditsRefunded: true,
         });
-        setError("Generation timed out. Your credits have been automatically refunded.");
+        setError(
+          "Generation timed out. Your credits have been automatically refunded.",
+        );
         return;
       }
 
       try {
-        const data = await fetchStatus(jobId, async () => (await getToken()) ?? null);
+        const data = await fetchStatus(
+          jobId,
+          async () => (await getToken()) ?? null,
+        );
         if (!state.active) {
           return;
         }
@@ -143,7 +179,7 @@ function ViewerContent() {
           return;
         }
         state.consecutiveFailures += 1;
-        
+
         // Check if it's a GPU offline or network error
         const isNetworkError =
           err.name === "TypeError" &&
@@ -151,16 +187,21 @@ function ViewerContent() {
             err.message?.includes("Failed to fetch") ||
             err.message?.includes("NetworkError") ||
             err.message?.includes("GPU is currently offline"));
-        
+
         // Stop polling if API is offline or too many failures
         if (isNetworkError || state.consecutiveFailures >= MAX_FAILURES) {
-          setError(err.message || "Failed to fetch status. API appears to be offline.");
+          setError(
+            err.message || "Failed to fetch status. API appears to be offline.",
+          );
           return; // Stop polling
         }
-        
+
         setError(err.message || "Failed to fetch status");
         // Retry with exponential backoff, but stop after max failures
-        setTimeout(fetchAndSchedule, POLL_INTERVAL * 2 * state.consecutiveFailures);
+        setTimeout(
+          fetchAndSchedule,
+          POLL_INTERVAL * 2 * state.consecutiveFailures,
+        );
       }
     };
 
@@ -179,7 +220,7 @@ function ViewerContent() {
     setCancelling(true);
     try {
       await cancelJob(jobId, async () => (await getToken()) ?? null);
-      setJob((prev) => prev ? { ...prev, status: "cancelled" } : null);
+      setJob((prev) => (prev ? { ...prev, status: "cancelled" } : null));
     } catch (err: any) {
       setError(err.message || "Failed to cancel job");
     } finally {
@@ -196,13 +237,28 @@ function ViewerContent() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center p-8 rounded-2xl bg-white border border-gray-200 shadow-lg">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-black/5 flex items-center justify-center">
-            <svg className="w-8 h-8 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="w-8 h-8 text-black"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
           </div>
           <h2 className="text-xl font-bold text-black mb-2">Job ID Required</h2>
-          <p className="text-gray-600 mb-4">Please provide a job ID in the URL.</p>
-          <a href="/generate" className="text-black hover:text-gray-700 transition-colors">
+          <p className="text-gray-600 mb-4">
+            Please provide a job ID in the URL.
+          </p>
+          <a
+            href="/generate"
+            className="text-black hover:text-gray-700 transition-colors"
+          >
             ← Go to Generate
           </a>
         </div>
@@ -212,7 +268,9 @@ function ViewerContent() {
 
   const glbUrl = job ? getGlbUrl(job) : null;
   const previewUrl = job ? getPreviewImageUrl(job) : null;
-  const showImageMode = mode === "image" || (job?.status === "completed" && !glbUrl && !!previewUrl);
+  const showImageMode =
+    mode === "image" ||
+    (job?.status === "completed" && !glbUrl && !!previewUrl);
 
   return (
     <div className="space-y-6 px-4 lg:px-8 py-6 max-w-6xl mx-auto pt-20 sm:pt-24">
@@ -222,7 +280,10 @@ function ViewerContent() {
             {showImageMode ? "Image Viewer" : "3D Model Viewer"}
           </h1>
           <p className="text-gray-600 mt-1 text-sm sm:text-base">
-            Job ID: <code className="bg-gray-100 px-2 py-1 rounded text-black text-xs sm:text-sm">{jobId}</code>
+            Job ID:{" "}
+            <code className="bg-gray-100 px-2 py-1 rounded text-black text-xs sm:text-sm">
+              {jobId}
+            </code>
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -241,8 +302,18 @@ function ViewerContent() {
 
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
-          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="w-5 h-5 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           {error}
         </div>
@@ -252,13 +323,27 @@ function ViewerContent() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
-              <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-6 h-6 text-red-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </div>
             <div>
-              <div className="font-semibold text-neutral-900">Generation Failed</div>
-              <div className="text-sm text-red-700">{job.error || "An error occurred during generation"}</div>
+              <div className="font-semibold text-neutral-900">
+                Generation Failed
+              </div>
+              <div className="text-sm text-red-700">
+                {job.error || "An error occurred during generation"}
+              </div>
             </div>
           </div>
           <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/90 p-3 text-xs text-emerald-900">
@@ -276,13 +361,27 @@ function ViewerContent() {
         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
-              <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg
+                className="w-6 h-6 text-gray-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             </div>
             <div>
-              <div className="font-semibold text-neutral-900">Job Cancelled</div>
-              <div className="text-sm text-gray-600">{job.error || "This job was cancelled"}</div>
+              <div className="font-semibold text-neutral-900">
+                Job Cancelled
+              </div>
+              <div className="text-sm text-gray-600">
+                {job.error || "This job was cancelled"}
+              </div>
             </div>
           </div>
           <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/90 p-3 text-xs text-emerald-900">
@@ -310,7 +409,9 @@ function ViewerContent() {
                 </div>
               </div>
               {job.result?.prompt && (
-                <p className="text-sm text-gray-600 line-clamp-3">{job.result.prompt}</p>
+                <p className="text-sm text-gray-600 line-clamp-3">
+                  {job.result.prompt}
+                </p>
               )}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 flex-wrap">
                 <a
@@ -320,8 +421,18 @@ function ViewerContent() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  <svg
+                    className="w-4 h-4 sm:w-5 sm:h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
                   </svg>
                   Download Image
                 </a>
@@ -345,16 +456,30 @@ function ViewerContent() {
                     void downloadGlbWithAuth(
                       glbUrl,
                       `hydrilla-${job.job_id || "model"}.glb`,
-                      async () => (await getToken()) ?? null
+                      async () => (await getToken()) ?? null,
                     ).catch((err) => {
                       console.error(err);
-                      alert(err instanceof Error ? err.message : "Failed to download model");
+                      alert(
+                        err instanceof Error
+                          ? err.message
+                          : "Failed to download model",
+                      );
                     });
                   }}
                   className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-black text-white font-medium hover:bg-gray-900 transition-all text-sm sm:text-base"
                 >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  <svg
+                    className="w-4 h-4 sm:w-5 sm:h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
                   </svg>
                   Download GLB
                 </button>
@@ -365,8 +490,18 @@ function ViewerContent() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <svg
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
                     </svg>
                     View Preview Image
                   </a>
@@ -385,33 +520,45 @@ function ViewerContent() {
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-8">
           <div className="w-full max-w-md mx-auto">
             <div className="text-center mb-6">
-              <h3 className="text-xl font-semibold text-black mb-2">Generating your 3D model...</h3>
-              <p className="text-3xl font-bold text-black mb-1">{Math.round(modelGenerationProgress)}%</p>
+              <h3 className="text-xl font-semibold text-black mb-2">
+                Generating your 3D model...
+              </h3>
+              <p className="text-3xl font-bold text-black mb-1">
+                {Math.round(modelGenerationProgress)}%
+              </p>
               {job.queue && job.queue.estimated_total_seconds ? (
                 <p className="text-sm text-neutral-400">
                   {job.queue.jobs_ahead > 0 ? (
                     <>
-                      {job.queue.jobs_ahead} job{job.queue.jobs_ahead !== 1 ? 's' : ''} ahead • 
-                      ~{Math.ceil(job.queue.estimated_total_seconds / 60)}m {Math.ceil(job.queue.estimated_total_seconds % 60)}s total
+                      {job.queue.jobs_ahead} job
+                      {job.queue.jobs_ahead !== 1 ? "s" : ""} ahead • ~
+                      {Math.ceil(job.queue.estimated_total_seconds / 60)}m{" "}
+                      {Math.ceil(job.queue.estimated_total_seconds % 60)}s total
                     </>
                   ) : (
-                    <>Estimated time: ~{Math.ceil(job.queue.estimated_total_seconds / 60)}m {Math.ceil(job.queue.estimated_total_seconds % 60)}s</>
+                    <>
+                      Estimated time: ~
+                      {Math.ceil(job.queue.estimated_total_seconds / 60)}m{" "}
+                      {Math.ceil(job.queue.estimated_total_seconds % 60)}s
+                    </>
                   )}
                 </p>
               ) : (
-                <p className="text-sm text-neutral-400">Estimated time: ~2m 30s</p>
+                <p className="text-sm text-neutral-400">
+                  Estimated time: ~2m 30s
+                </p>
               )}
             </div>
-            
+
             {/* Linear Progress Bar */}
             <div className="w-full bg-neutral-200 rounded-full h-3 overflow-hidden mb-4">
               {/* eslint-disable-next-line @next/next/no-inline-styles */}
-              <div 
+              <div
                 className="h-full bg-black rounded-full transition-all duration-500 ease-out"
                 style={{ width: `${modelGenerationProgress}%` }}
               ></div>
             </div>
-            
+
             {/* Progress Steps */}
             <div className="flex justify-between text-xs text-neutral-400">
               <span>Processing</span>
@@ -448,14 +595,16 @@ function ViewerContent() {
 
 export default function ViewerPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center py-20">
-        <div className="flex items-center gap-3 text-gray-600">
-          <div className="w-6 h-6 spinner"></div>
-          <span>Loading...</span>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <div className="flex items-center gap-3 text-gray-600">
+            <div className="w-6 h-6 spinner"></div>
+            <span>Loading...</span>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <ViewerContent />
     </Suspense>
   );

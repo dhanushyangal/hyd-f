@@ -34,7 +34,7 @@ export function WorkspaceRail({
     <aside
       className={cn(
         "flex w-[68px] shrink-0 flex-col items-center justify-between border-r border-neutral-200/80 bg-white py-3.5 select-none",
-        className
+        className,
       )}
     >
       {/* Top: Logo & Main Navigation */}
@@ -75,17 +75,20 @@ export function WorkspaceRail({
               "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
               activeSection === "agent"
                 ? "bg-neutral-900 text-white font-semibold shadow-sm"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
             )}
           >
             <div className="relative">
-              <Bot className="h-5 w-5" strokeWidth={activeSection === "agent" ? 2.2 : 1.8} />
+              <Bot
+                className="h-5 w-5"
+                strokeWidth={activeSection === "agent" ? 2.2 : 1.8}
+              />
               <span
                 className={cn(
                   "absolute -right-2.5 -top-1.5 rounded-full px-1 py-0.2 text-[8px] font-bold uppercase tracking-wider transition-colors",
                   activeSection === "agent"
                     ? "bg-white text-neutral-950"
-                    : "bg-neutral-900 text-white"
+                    : "bg-neutral-900 text-white",
                 )}
               >
                 BETA
@@ -103,10 +106,13 @@ export function WorkspaceRail({
               "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
               activeSection === "image"
                 ? "bg-neutral-900 text-white font-semibold shadow-sm"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
             )}
           >
-            <ImageIcon className="h-5 w-5" strokeWidth={activeSection === "image" ? 2.2 : 1.8} />
+            <ImageIcon
+              className="h-5 w-5"
+              strokeWidth={activeSection === "image" ? 2.2 : 1.8}
+            />
             <span className="text-[10px] tracking-tight">Image</span>
           </button>
 
@@ -119,10 +125,13 @@ export function WorkspaceRail({
               "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
               activeSection === "model"
                 ? "bg-neutral-900 text-white font-semibold shadow-sm"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
             )}
           >
-            <Box className="h-5 w-5" strokeWidth={activeSection === "model" ? 2.2 : 1.8} />
+            <Box
+              className="h-5 w-5"
+              strokeWidth={activeSection === "model" ? 2.2 : 1.8}
+            />
             <span className="text-[10px] tracking-tight">Model</span>
           </button>
 
@@ -135,10 +144,13 @@ export function WorkspaceRail({
               "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
               activeSection === "edit"
                 ? "bg-neutral-900 text-white font-semibold shadow-sm"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900",
             )}
           >
-            <Wand2 className="h-5 w-5" strokeWidth={activeSection === "edit" ? 2.2 : 1.8} />
+            <Wand2
+              className="h-5 w-5"
+              strokeWidth={activeSection === "edit" ? 2.2 : 1.8}
+            />
             <span className="text-[10px] tracking-tight">Edit</span>
           </button>
         </div>
@@ -154,7 +166,9 @@ export function WorkspaceRail({
           <span className="text-[11px] font-bold tabular-nums text-neutral-800">
             {creditsLoading ? "…" : creditsRemaining}
           </span>
-          <span className="text-[9px] uppercase tracking-wider text-neutral-400">credits</span>
+          <span className="text-[9px] uppercase tracking-wider text-neutral-400">
+            credits
+          </span>
         </div>
 
         {/* Dark/Light mode */}
