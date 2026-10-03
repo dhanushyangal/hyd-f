@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { UserButton } from "@clerk/nextjs";
-import { Bot, Box, Image as ImageIcon, Sparkles, User } from "lucide-react";
+import { Bot, Box, Image as ImageIcon, User, Wand2 } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceSection = "agent" | "image" | "model";
+export type WorkspaceSection = "agent" | "image" | "model" | "edit";
 
 type Props = {
   activeSection: WorkspaceSection;
@@ -37,19 +38,33 @@ export function WorkspaceRail({
       )}
     >
       {/* Top: Logo & Main Navigation */}
-      <div className="flex flex-col items-center gap-4 w-full">
-        {/* App Logo / Link to Studio */}
+      <div className="flex flex-col items-center gap-2.5 w-full">
+        {/* App Logo & Text / Link to Studio */}
         <Link
-          href="/app/studio"
-          className="group flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-950 text-white shadow-sm transition-transform hover:scale-105 active:scale-95"
-          title="Back to Studio"
+          href="/"
+          className="group flex flex-col items-center gap-1 transition-all duration-200 hover:opacity-85 active:scale-95"
+          title="Hydrilla"
         >
-          <Sparkles className="h-5 w-5 text-white" />
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-900 shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:shadow-md">
+            <div className="relative h-5 w-5 transition-transform duration-300 group-hover:scale-110 logo-spin-hover">
+              <Image
+                src="/hyd01.png"
+                alt="Hydrilla Logo"
+                fill
+                className="object-contain"
+                sizes="20px"
+                priority
+              />
+            </div>
+          </div>
+          <span className="font-dm-sans text-[11px] font-bold tracking-tight text-neutral-900 leading-none">
+            Hydrilla
+          </span>
         </Link>
 
         <div className="h-px w-8 bg-neutral-200/80" />
 
-        {/* 3 Main Sections */}
+        {/* 4 Main Sections */}
         <div className="flex flex-col items-center gap-2 w-full px-2">
           {/* 1. Agent */}
           <button
@@ -59,13 +74,20 @@ export function WorkspaceRail({
             className={cn(
               "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
               activeSection === "agent"
-                ? "bg-sky-50 text-sky-700 font-semibold shadow-xs"
+                ? "bg-neutral-900 text-white font-semibold shadow-sm"
                 : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
             )}
           >
             <div className="relative">
               <Bot className="h-5 w-5" strokeWidth={activeSection === "agent" ? 2.2 : 1.8} />
-              <span className="absolute -right-2.5 -top-1.5 rounded-full bg-sky-500 px-1 py-0.2 text-[8px] font-bold text-white uppercase tracking-wider">
+              <span
+                className={cn(
+                  "absolute -right-2.5 -top-1.5 rounded-full px-1 py-0.2 text-[8px] font-bold uppercase tracking-wider transition-colors",
+                  activeSection === "agent"
+                    ? "bg-white text-neutral-950"
+                    : "bg-neutral-900 text-white"
+                )}
+              >
                 BETA
               </span>
             </div>
@@ -80,7 +102,7 @@ export function WorkspaceRail({
             className={cn(
               "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
               activeSection === "image"
-                ? "bg-pink-50 text-pink-700 font-semibold shadow-xs"
+                ? "bg-neutral-900 text-white font-semibold shadow-sm"
                 : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
             )}
           >
@@ -96,12 +118,28 @@ export function WorkspaceRail({
             className={cn(
               "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
               activeSection === "model"
-                ? "bg-emerald-50 text-emerald-700 font-semibold shadow-xs"
+                ? "bg-neutral-900 text-white font-semibold shadow-sm"
                 : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
             )}
           >
             <Box className="h-5 w-5" strokeWidth={activeSection === "model" ? 2.2 : 1.8} />
             <span className="text-[10px] tracking-tight">Model</span>
+          </button>
+
+          {/* 4. Edit (Prompt to 3D / Chained Edit-to-3D) */}
+          <button
+            type="button"
+            onClick={() => onSelectSection("edit")}
+            title="Edit - Prompt to 3D & Model Editing"
+            className={cn(
+              "group relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl py-2.5 transition-all duration-150",
+              activeSection === "edit"
+                ? "bg-neutral-900 text-white font-semibold shadow-sm"
+                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+            )}
+          >
+            <Wand2 className="h-5 w-5" strokeWidth={activeSection === "edit" ? 2.2 : 1.8} />
+            <span className="text-[10px] tracking-tight">Edit</span>
           </button>
         </div>
       </div>

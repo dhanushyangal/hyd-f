@@ -19,6 +19,12 @@ import {
   type ViewerMaterialType,
 } from "@/lib/viewer/look";
 import { SELECTION_HIGHLIGHT } from "@/lib/viewer/highlight";
+import {
+  calculateMeshStats,
+  type ModelMeshStats,
+} from "@/lib/viewer/meshStats";
+import { ModelStatsOverlay } from "@/components/workspace/ModelStatsOverlay";
+import { getProxiedGlbUrl } from "@/lib/api";
 
 type Props = {
   glbUrl: string;
@@ -30,6 +36,12 @@ type Props = {
   selectedPart?: string | null;
   /** Part clicked in the canvas (null = empty space). */
   onPick?: (name: string | null) => void;
+  /** Whether to show the corner model statistics overlay (faces, vertices, topology). Defaults to true. */
+  showStats?: boolean;
+  /** Corner position for the stats overlay. Defaults to "bottom-left". */
+  statsCorner?: "bottom-left" | "bottom-right" | "top-left" | "top-right";
+  /** Optional callback reporting the calculated model statistics. */
+  onModelStats?: (stats: ModelMeshStats) => void;
 };
 
 // Default neutral matcap texture (baked sphere lighting)
@@ -224,6 +236,9 @@ export function ThreeViewer({
   onParts,
   selectedPart = null,
   onPick,
+  showStats = true,
+  statsCorner = "bottom-left",
+  onModelStats,
 }: Props) {
   const { getToken } = useAuth();
   const resolved = useMemo(() => resolveViewerLook(look), [look]);
@@ -250,11 +265,14 @@ export function ThreeViewer({
   onPartsRef.current = onParts;
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
+  const onModelStatsRef = useRef(onModelStats);
+  onModelStatsRef.current = onModelStats;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
   const [modelReady, setModelReady] = useState(false);
   const [materialsVersion, setMaterialsVersion] = useState(0);
+  const [modelStats, setModelStats] = useState<ModelMeshStats | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || !glbUrl) return;
@@ -263,6 +281,7 @@ export function ThreeViewer({
     containerRef.current.innerHTML = "";
     modelRef.current = null;
     setModelReady(false);
+    setModelStats(null);
     setMaterialsVersion(0);
     setLoading(true);
     setError(null);
@@ -416,23 +435,38 @@ export function ThreeViewer({
       setLoadProgress(1);
       const loader = new GLTFLoader();
       loader.setMeshoptDecoder(MeshoptDecoder);
-      loader.setWithCredentials(true);
-      try {
-        const token = await getToken();
-        if (cancelled) return;
-        if (token) {
-          loader.setRequestHeader({ Authorization: `Bearer ${token}` });
+
+      const targetUrl = getProxiedGlbUrl(glbUrl) || glbUrl;
+      const isBackendUrl =
+        !targetUrl.startsWith("blob:") &&
+        !targetUrl.startsWith("data:") &&
+        (targetUrl.includes("/api/3d/glb/") || targetUrl.startsWith("/"));
+
+      if (isBackendUrl) {
+        loader.setWithCredentials(true);
+        try {
+          const token = await getToken();
+          if (cancelled) {
+            return;
+          }
+          if (token) {
+            loader.setRequestHeader({ Authorization: `Bearer ${token}` });
+          }
+        } catch {
+          // proceed without token; server will 401 if required
         }
-      } catch {
-        // proceed without token; server will 401 if required
       }
 
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
 
       loader.load(
-        glbUrl,
+        targetUrl,
         (gltf) => {
-          if (cancelled) return;
+          if (cancelled) {
+            return;
+          }
           try {
             const model = gltf.scene;
             modelRef.current = model;
@@ -446,15 +480,22 @@ export function ThreeViewer({
             model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
 
             const authored: PartMaterialMap = {};
-            let unnamed = 0;
+            const counter = { count: 0 };
             model.traverse((child) => {
-              if (!(child instanceof THREE.Mesh)) return;
+              if (!(child instanceof THREE.Mesh)) {
+                return;
+              }
               child.castShadow = true;
               child.receiveShadow = true;
-              if (!child.name) child.name = `Part ${++unnamed}`;
+              if (!child.name) {
+                counter.count += 1;
+                child.name = `Part ${counter.count}`;
+              }
               child.userData.sourceMaterial = child.material;
               const first = materialList(child.material)[0];
-              if (first && !authored[child.name]) authored[child.name] = readPartMaterial(first);
+              if (first && !authored[child.name]) {
+                authored[child.name] = readPartMaterial(first);
+              }
             });
             onPartsRef.current?.(authored);
 
@@ -470,6 +511,10 @@ export function ThreeViewer({
             controls.target.set(0, 0, 0);
             controls.update();
 
+            const stats = calculateMeshStats(model);
+            setModelStats(stats);
+            onModelStatsRef.current?.(stats);
+
             setLoading(false);
             setModelReady(true);
           } catch (err: any) {
@@ -478,7 +523,9 @@ export function ThreeViewer({
           }
         },
         (progress) => {
-          if (cancelled) return;
+          if (cancelled) {
+            return;
+          }
           if (progress.total > 0) {
             const percent = Math.round((progress.loaded / progress.total) * 100);
             setLoadProgress(Math.max(1, Math.min(99, percent))); // Clamp between 1-99%
@@ -494,20 +541,25 @@ export function ThreeViewer({
           }
         },
         (err) => {
-          if (cancelled) return;
-          let errorMessage = "Unknown error";
-
-          if (err instanceof Error) {
-            errorMessage = err.message;
-            if (err.message.includes("CORS") || err.message.includes("Failed to fetch")) {
-              errorMessage = "CORS error: Unable to load model. The file may be blocked by browser security.";
-            } else if (err.message.includes("401") || err.message.includes("Unauthorized")) {
-              errorMessage = "Unauthorized: sign in again to load this model.";
-            }
-          } else if (err instanceof ProgressEvent) {
-            errorMessage = "Network error: Failed to download model file";
+          if (cancelled) {
+            return;
           }
-          setError(`Failed to load model: ${errorMessage}`);
+          const getErrorDetail = () => {
+            if (err instanceof Error) {
+              if (err.message.includes("CORS") || err.message.includes("Failed to fetch")) {
+                return "CORS error: Unable to load model. The file may be blocked by browser security.";
+              }
+              if (err.message.includes("401") || err.message.includes("Unauthorized")) {
+                return "Unauthorized: sign in again to load this model.";
+              }
+              return err.message;
+            }
+            if (err instanceof ProgressEvent) {
+              return "Network error: Failed to download model file";
+            }
+            return "Unknown error";
+          };
+          setError(`Failed to load model: ${getErrorDetail()}`);
           setLoading(false);
         }
       );
@@ -665,6 +717,10 @@ export function ThreeViewer({
             <div className="text-xs text-neutral-400 break-all mt-2">URL: {glbUrl}</div>
           </div>
         </div>
+      )}
+
+      {modelReady && showStats && modelStats && (
+        <ModelStatsOverlay stats={modelStats} corner={statsCorner} />
       )}
     </div>
   );

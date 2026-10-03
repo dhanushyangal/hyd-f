@@ -18,6 +18,7 @@ import type {
   ViewerMaterialRoughness,
   ViewerMaterialType,
 } from "@/lib/viewer/look";
+import type { ModelMeshStats } from "@/lib/viewer/meshStats";
 
 type Props = {
   kind: "empty" | "preview" | "3d" | "code";
@@ -28,6 +29,7 @@ type Props = {
   onLookChange: (patch: Partial<ViewerLook>) => void;
   partMaterial?: PartMaterial | null;
   onPartMaterial?: (patch: Partial<PartMaterial>) => void;
+  modelStats?: ModelMeshStats | null;
 };
 
 const MATERIAL_OPTIONS = [
@@ -53,6 +55,7 @@ export function AssetInspector({
   onLookChange,
   partMaterial,
   onPartMaterial,
+  modelStats,
 }: Props) {
   if (kind === "empty" || kind === "preview") {
     return (
@@ -69,6 +72,31 @@ export function AssetInspector({
 
   return (
     <div className="asset-dials dialkit-root flex min-h-0 flex-1 flex-col">
+      {modelStats && (
+        <Folder title="Geometry & Topology" defaultOpen>
+          <div className="space-y-1.5 px-3 py-2 text-[11px] font-mono">
+            <div className="flex justify-between">
+              <span className="text-neutral-500 font-sans">Faces:</span>
+              <span className="font-semibold text-neutral-900">{modelStats.faces.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-neutral-500 font-sans">Vertices:</span>
+              <span className="font-semibold text-neutral-900">{modelStats.vertices.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-neutral-500 font-sans">Topology:</span>
+              <span className="font-semibold text-emerald-600">{modelStats.topology}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-neutral-500 font-sans">Watertight:</span>
+              <span className="font-medium text-neutral-700">
+                {modelStats.isWatertight ? "Yes (Manifold)" : "Standard"}
+              </span>
+            </div>
+          </div>
+        </Folder>
+      )}
+
       {parts.length > 0 && (
         <Folder title="Parts" defaultOpen>
           <WaterOutliner meshNames={parts} selectedName={selectedPart} onSelect={onSelectPart} />

@@ -16,14 +16,24 @@ import {
 
 // Re-export health utilities for UI components
 
-export { isPrimaryUp, onHealthChange, canEdit, onFeaturesChange, getHealthState };
+export {
+  isPrimaryUp,
+  onHealthChange,
+  canEdit,
+  onFeaturesChange,
+  getHealthState,
+};
 
 const apiBase = getPrimaryUrl();
 
 // Backend URL - must be set in Vercel environment variables as NEXT_PUBLIC_BACKEND_URL
 const getBackendBase = (): string => {
   const url = process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
+  if (
+    !url ||
+    url === "NEXT_PUBLIC_BACKEND_URL" ||
+    url.includes("NEXT_PUBLIC_BACKEND_URL")
+  ) {
     return "https://hydrilla-backend.vercel.app"; // Fallback for local dev
   }
   return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -67,7 +77,10 @@ function shouldNotifyGpuOffline(err: any): boolean {
 /**
  * Notify backend about GPU offline error (non-blocking)
  */
-export async function notifyGpuOffline(errorMessage: string, getToken?: () => Promise<string | null>) {
+export async function notifyGpuOffline(
+  errorMessage: string,
+  getToken?: () => Promise<string | null>,
+) {
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
     if (getToken) {
@@ -81,7 +94,7 @@ export async function notifyGpuOffline(errorMessage: string, getToken?: () => Pr
     // Add timeout to prevent hanging
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
+
     fetch(`${backendBase}/api/3d/notify-gpu-offline`, {
       method: "POST",
       headers,
@@ -91,7 +104,11 @@ export async function notifyGpuOffline(errorMessage: string, getToken?: () => Pr
       .then((res) => {
         clearTimeout(timeoutId);
         if (!res.ok) {
-          console.warn("Failed to send GPU offline notification:", res.status, res.statusText);
+          console.warn(
+            "Failed to send GPU offline notification:",
+            res.status,
+            res.statusText,
+          );
         } else {
           console.log("GPU offline notification sent successfully");
         }
@@ -110,11 +127,16 @@ export async function notifyGpuOffline(errorMessage: string, getToken?: () => Pr
   }
 }
 
-export type JobStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+export type JobStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 // Queue information for accurate time estimation
 export interface QueueInfo {
-  position: number;  // 0 = processing, 1+ = waiting
+  position: number; // 0 = processing, 1+ = waiting
   jobs_ahead: number;
   estimated_wait_seconds: number;
   estimated_total_seconds: number;
@@ -129,7 +151,7 @@ export interface Job {
   message: string;
   created_at?: number;
   updated_at?: number;
-  queue?: QueueInfo;  // Queue position and wait time
+  queue?: QueueInfo; // Queue position and wait time
   result?: {
     job_id: string;
     mode: "image-to-3d";
@@ -143,6 +165,7 @@ export interface Job {
     elapsed_seconds: number;
   };
   error?: string;
+  creditsRefunded?: boolean;
 }
 
 // Backend API types
@@ -171,7 +194,11 @@ export type WaterVisualEvidence = {
   sheetDataUrl?: string | null;
 };
 
-type WaterMaterialPatch = { color?: string; roughness?: number; metalness?: number };
+type WaterMaterialPatch = {
+  color?: string;
+  roughness?: number;
+  metalness?: number;
+};
 
 export type WaterSceneInstance = {
   nodeId: string;
@@ -193,8 +220,16 @@ export type WaterSceneBundle = {
   nodeId: string;
   ir: {
     version: 0;
-    camera: { position: [number, number, number]; target: [number, number, number]; fov: number };
-    lights: Array<{ type: string; intensity: number; position?: [number, number, number] }>;
+    camera: {
+      position: [number, number, number];
+      target: [number, number, number];
+      fov: number;
+    };
+    lights: Array<{
+      type: string;
+      intensity: number;
+      position?: [number, number, number];
+    }>;
     instances: WaterSceneInstance[];
   };
   /** This job's instance within the (shared) project scene. */
@@ -225,7 +260,7 @@ export interface BackendJob {
   errorMessage: string | null;
   workspaceId?: string | null;
   parentJobId?: string | null;
-  parentJobIds?: string[];       // All parent IDs (multi-parent merges)
+  parentJobIds?: string[]; // All parent IDs (multi-parent merges)
   sourceImages?: string[] | null; // Actual source image URLs used as input
   engine?: string | null;
   resultKind?: string | null;
@@ -241,7 +276,13 @@ export interface BackendJob {
 }
 
 export type UserApiKeyMeta = {
-  provider: "anthropic" | "openai" | "google" | "gemini" | "openrouter" | "cursor";
+  provider:
+    | "anthropic"
+    | "openai"
+    | "google"
+    | "gemini"
+    | "openrouter"
+    | "cursor";
   label?: string;
   configured: boolean;
   last4: string | null;
@@ -280,7 +321,7 @@ function keyUsable(k: UserApiKeyMeta | undefined): boolean {
 
 function providerSlot(
   provider: string,
-  keys: UserApiKeyMeta[]
+  keys: UserApiKeyMeta[],
 ): UserApiKeyMeta | undefined {
   const want = provider === "gemini" ? "google" : provider;
   return keys.find((k) => {
@@ -292,10 +333,13 @@ function providerSlot(
 export function providerKeyAvailable(
   provider: string,
   keys: UserApiKeyMeta[],
-  sharedKeys: UserApiKeyMeta[] = []
+  sharedKeys: UserApiKeyMeta[] = [],
 ): boolean {
   if (provider === "hydrilla") return true;
-  return keyUsable(providerSlot(provider, keys)) || keyUsable(providerSlot(provider, sharedKeys));
+  return (
+    keyUsable(providerSlot(provider, keys)) ||
+    keyUsable(providerSlot(provider, sharedKeys))
+  );
 }
 
 export type UserModelPrefs = {
@@ -304,37 +348,52 @@ export type UserModelPrefs = {
   enabledCodeModels?: string[] | null;
 };
 
-
 /**
  * Transform backend job format to frontend Job format
  */
 function transformBackendJobToJob(backendJob: BackendJob | any): Job {
   // Map backend status to frontend status
   const statusMap: Record<BackendJobStatus, JobStatus> = {
-    "WAIT": "pending",
-    "RUN": "processing",
-    "DONE": "completed",
-    "FAIL": "failed"
+    WAIT: "pending",
+    RUN: "processing",
+    DONE: "completed",
+    FAIL: "failed",
   };
 
   return {
     job_id: backendJob.id,
     status: statusMap[backendJob.status as BackendJobStatus] || "pending",
-    progress: backendJob.status === "DONE" ? 100 : backendJob.status === "RUN" ? 50 : 0,
-    message: backendJob.errorMessage || (backendJob.status === "DONE" ? "Completed" : "Processing..."),
-    created_at: backendJob.createdAt ? new Date(backendJob.createdAt).getTime() : undefined,
-    updated_at: backendJob.updatedAt ? new Date(backendJob.updatedAt).getTime() : undefined,
-    result: backendJob.resultGlbUrl || backendJob.previewImageUrl ? {
-      job_id: backendJob.id,
-      mode: "image-to-3d",
-      prompt: backendJob.prompt || undefined,
-      mesh_url: backendJob.resultGlbUrl || undefined,
-      processed_image_url: backendJob.previewImageUrl || undefined,
-      generated_image_url: backendJob.previewImageUrl || undefined,
-      output: backendJob.resultGlbUrl || undefined,
-      elapsed_seconds: 0
-    } : undefined,
-    error: backendJob.errorMessage || undefined
+    progress:
+      backendJob.status === "DONE" ? 100 : backendJob.status === "RUN" ? 50 : 0,
+    message:
+      backendJob.errorMessage ||
+      (backendJob.status === "DONE" ? "Completed" : "Processing..."),
+    created_at: backendJob.createdAt
+      ? new Date(backendJob.createdAt).getTime()
+      : undefined,
+    updated_at: backendJob.updatedAt
+      ? new Date(backendJob.updatedAt).getTime()
+      : undefined,
+    result:
+      backendJob.resultGlbUrl || backendJob.previewImageUrl
+        ? {
+            job_id: backendJob.id,
+            mode: "image-to-3d",
+            prompt: backendJob.prompt || undefined,
+            mesh_url: backendJob.resultGlbUrl || undefined,
+            processed_image_url: backendJob.previewImageUrl || undefined,
+            generated_image_url: backendJob.previewImageUrl || undefined,
+            output: backendJob.resultGlbUrl || undefined,
+            elapsed_seconds: 0,
+          }
+        : undefined,
+    error: backendJob.errorMessage || undefined,
+    creditsRefunded: Boolean(
+      backendJob.creditsRefunded ||
+      backendJob.credits_refunded ||
+      (backendJob.status === "FAIL" &&
+        backendJob.errorMessage?.toLowerCase().includes("refund")),
+    ),
   };
 }
 
@@ -351,7 +410,7 @@ export async function registerJobWithPreview(
   workspaceId?: string | null,
   parentJobId?: string | null,
   parentJobIds?: string[] | null,
-  sourceImages?: string[] | null
+  sourceImages?: string[] | null,
 ): Promise<void> {
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
@@ -362,10 +421,10 @@ export async function registerJobWithPreview(
       }
     }
 
-    const body: any = { 
-      job_id: previewId, 
+    const body: any = {
+      job_id: previewId,
       prompt,
-      previewImageUrl 
+      previewImageUrl,
     };
     if (chatId) {
       body.chatId = chatId;
@@ -421,7 +480,8 @@ type ImageRequestContext = {
   parentJobIds?: string[] | null;
 };
 
-const IMAGE_NETWORK_ERROR = "Could not reach Hydrilla. Check your connection and try again.";
+const IMAGE_NETWORK_ERROR =
+  "Could not reach Hydrilla. Check your connection and try again.";
 
 async function readImageError(res: Response, fallback: string): Promise<Error> {
   const text = await res.text().catch(() => "");
@@ -434,7 +494,11 @@ async function readImageError(res: Response, fallback: string): Promise<Error> {
       if (typeof data.error === "string") {
         return data.error;
       }
-      if (data.error && typeof data.error === "object" && typeof data.error.message === "string") {
+      if (
+        data.error &&
+        typeof data.error === "object" &&
+        typeof data.error.message === "string"
+      ) {
         return data.error.message;
       }
       if (typeof data.message === "string") {
@@ -459,7 +523,7 @@ export async function generatePreviewImage(
   prompt: string,
   getToken?: () => Promise<string | null>,
   context?: ImageRequestContext,
-  options: ImageOptions = DEFAULT_IMAGE_OPTIONS
+  options: ImageOptions = DEFAULT_IMAGE_OPTIONS,
 ): Promise<{
   image_url: string;
   preview_id: string;
@@ -477,7 +541,10 @@ export async function generatePreviewImage(
   try {
     res = await fetch(`${backendBase}/api/3d/text-to-image`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         prompt: prompt.trim(),
         provider: options.provider,
@@ -486,7 +553,10 @@ export async function generatePreviewImage(
         chatId: context?.chatId || undefined,
         workspaceId: context?.workspaceId || undefined,
         parentJobId: context?.parentJobId || undefined,
-        parentJobIds: context?.parentJobIds && context.parentJobIds.length > 0 ? context.parentJobIds : undefined,
+        parentJobIds:
+          context?.parentJobIds && context.parentJobIds.length > 0
+            ? context.parentJobIds
+            : undefined,
       }),
     });
   } catch (err: any) {
@@ -494,7 +564,10 @@ export async function generatePreviewImage(
     throw err;
   }
   if (res.status === 402) {
-    throw await readImageError(res, "Insufficient credits. Please subscribe or buy more credits.");
+    throw await readImageError(
+      res,
+      "Insufficient credits. Please subscribe or buy more credits.",
+    );
   }
   if (!res.ok) throw await readImageError(res, "Failed to generate image");
 
@@ -511,35 +584,57 @@ export async function generatePreviewImage(
 
 /**
  * Edit an image with a prompt via OpenAI or Gemini (auth required; 3 credits low / 6 high).
- * The output keeps the input image's framing, so aspect is not sent.
+ * Supports single image editing or multi-view 3D screenshot editing (Angle 1 through 4).
  */
 export async function editImage(
   prompt: string,
-  imageFile?: File | null,
-  imageUrl?: string | null,
+  imageFile?: File | File[] | null,
+  imageUrl?: string | string[] | null,
   getToken?: () => Promise<string | null>,
-  context?: ImageRequestContext & { sourceImages?: string[] | null },
-  options: Pick<ImageOptions, "provider" | "quality"> = DEFAULT_IMAGE_OPTIONS
-): Promise<{ edit_id: string; image_url: string; prompt: string; provider: ImageProvider; quality: ImageQuality; model?: string }> {
+  context?: ImageRequestContext & { sourceImages?: string[] | null; additionalPrompt?: string | null },
+  options: Pick<ImageOptions, "provider" | "quality"> = DEFAULT_IMAGE_OPTIONS,
+): Promise<{
+  edit_id: string;
+  image_url: string;
+  prompt: string;
+  provider: ImageProvider;
+  quality: ImageQuality;
+  model?: string;
+}> {
   const formData = new FormData();
   formData.append("prompt", prompt.trim());
-  if (imageFile) {
+  if (Array.isArray(imageFile) && imageFile.length > 0) {
+    imageFile.forEach((file) => {
+      formData.append("images", file);
+    });
+  } else if (imageFile && !Array.isArray(imageFile)) {
     formData.append("image", imageFile);
-  } else if (imageUrl) {
+  } else if (Array.isArray(imageUrl) && imageUrl.length > 0) {
+    formData.append("sourceImages", JSON.stringify(imageUrl));
+  } else if (imageUrl && typeof imageUrl === "string") {
     formData.append("image_url", imageUrl);
   } else {
-    throw new Error("Either image file or image URL is required");
+    throw new Error("Either image file(s) or image URL(s) are required");
   }
   formData.append("provider", options.provider);
   formData.append("quality", options.quality);
-  if (context?.chatId) formData.append("chatId", context.chatId);
-  if (context?.workspaceId) formData.append("workspaceId", context.workspaceId);
-  if (context?.parentJobId) formData.append("parentJobId", context.parentJobId);
+  if (context?.chatId) {
+    formData.append("chatId", context.chatId);
+  }
+  if (context?.workspaceId) {
+    formData.append("workspaceId", context.workspaceId);
+  }
+  if (context?.parentJobId) {
+    formData.append("parentJobId", context.parentJobId);
+  }
   if (context?.parentJobIds && context.parentJobIds.length > 0) {
     formData.append("parentJobIds", JSON.stringify(context.parentJobIds));
   }
   if (context?.sourceImages && context.sourceImages.length > 0) {
     formData.append("sourceImages", JSON.stringify(context.sourceImages));
+  }
+  if (context?.additionalPrompt) {
+    formData.append("additionalPrompt", context.additionalPrompt);
   }
 
   const token = getToken ? await getToken() : null;
@@ -547,21 +642,30 @@ export async function editImage(
     throw new Error("Authentication required");
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${backendBase}/api/3d/edit-image`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-  } catch (err: any) {
-    if (isApiUnavailableError(err)) throw new Error(IMAGE_NETWORK_ERROR);
-    throw err;
-  }
+  const res = await (async () => {
+    try {
+      return await fetch(`${backendBase}/api/3d/edit-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+    } catch (err: any) {
+      if (isApiUnavailableError(err)) {
+        throw new Error(IMAGE_NETWORK_ERROR);
+      }
+      throw err;
+    }
+  })();
+
   if (res.status === 402) {
-    throw await readImageError(res, "Insufficient credits. Please subscribe or buy more credits.");
+    throw await readImageError(
+      res,
+      "Insufficient credits. Please subscribe or buy more credits.",
+    );
   }
-  if (!res.ok) throw await readImageError(res, "Failed to edit image");
+  if (!res.ok) {
+    throw await readImageError(res, "Failed to edit image");
+  }
 
   const result = await res.json();
   return {
@@ -586,11 +690,16 @@ export interface CreditsInfo {
 /**
  * Fetch current user credits (requires auth). Backend creates free-tier row if missing.
  */
-export async function getCredits(getToken: () => Promise<string | null>): Promise<CreditsInfo> {
+export async function getCredits(
+  getToken: () => Promise<string | null>,
+): Promise<CreditsInfo> {
   const token = await getToken();
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${backendBase}/api/payments/credits`, { method: "GET", headers });
+  const res = await fetch(`${backendBase}/api/payments/credits`, {
+    method: "GET",
+    headers,
+  });
   if (!res.ok) {
     const fallback = { used: 0, total: 200, remaining: 200, plan: null };
     try {
@@ -600,7 +709,12 @@ export async function getCredits(getToken: () => Promise<string | null>): Promis
     return fallback;
   }
   const data = (await res.json()) as { credits?: CreditsInfo };
-  return (data.credits ?? { used: 0, total: 200, remaining: 200, plan: null }) as CreditsInfo;
+  return (data.credits ?? {
+    used: 0,
+    total: 200,
+    remaining: 200,
+    plan: null,
+  }) as CreditsInfo;
 }
 
 /**
@@ -609,7 +723,7 @@ export async function getCredits(getToken: () => Promise<string | null>): Promis
  */
 export async function checkEarlyAccess(
   _email: string | undefined,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{ hasAccess: boolean }> {
   if (!getToken) return { hasAccess: false };
   try {
@@ -630,7 +744,10 @@ export async function checkEarlyAccess(
 /**
  * Upload image file to backend and get URL (backend may use local uploads or S3).
  */
-export async function uploadImage(file: File, getToken?: () => Promise<string | null>): Promise<string> {
+export async function uploadImage(
+  file: File,
+  getToken?: () => Promise<string | null>,
+): Promise<string> {
   const formData = new FormData();
   formData.append("image", file);
 
@@ -667,7 +784,10 @@ export async function uploadImage(file: File, getToken?: () => Promise<string | 
  * Upload image via the Node backend (S3). Auth required.
  * Kept for callers that used the old GPU upload helper.
  */
-export async function uploadImageViaApi(file: File, getToken?: () => Promise<string | null>): Promise<string> {
+export async function uploadImageViaApi(
+  file: File,
+  getToken?: () => Promise<string | null>,
+): Promise<string> {
   if (!getToken) {
     throw new Error("Authentication required");
   }
@@ -682,11 +802,12 @@ export async function uploadImageViaApi(file: File, getToken?: () => Promise<str
  */
 async function ensurePublicImageUrlFor3d(
   imageUrl: string | null,
-  imageFile: File | null
+  imageFile: File | null,
 ): Promise<{ imageUrl: string | null; imageFile: File | null }> {
   if (imageFile || !imageUrl) return { imageUrl, imageFile };
   const t = imageUrl.trim();
-  if (!t.startsWith("blob:") && !t.startsWith("data:")) return { imageUrl, imageFile: null };
+  if (!t.startsWith("blob:") && !t.startsWith("data:"))
+    return { imageUrl, imageFile: null };
   try {
     const res = await fetch(imageUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -704,7 +825,7 @@ async function ensurePublicImageUrlFor3d(
     return { imageUrl: null, imageFile: file };
   } catch {
     throw new Error(
-      "Could not read the image from your device. Please select the file again or pick the image from your library."
+      "Could not read the image from your device. Please select the file again or pick the image from your library.",
     );
   }
 }
@@ -722,38 +843,50 @@ export async function submitImageTo3D(
   chatId?: string | null,
   workspaceId?: string | null,
   parentJobId?: string | null,
-  aiModel?: string | null
+  aiModel?: string | null,
+  resolution?: "standard" | "ultra1k" | null,
+  prompt?: string | null,
 ): Promise<{ job_id: string }> {
-  const resolved = await ensurePublicImageUrlFor3d(imageUrl, imageFile);
-  imageUrl = resolved.imageUrl;
-  imageFile = resolved.imageFile;
+  const unwrapped = unwrapProxiedImageUrl(imageUrl) || imageUrl;
+  const resolved = await ensurePublicImageUrlFor3d(unwrapped, imageFile);
+  const targetImageUrl = resolved.imageUrl;
+  const targetImageFile = resolved.imageFile;
 
-  let sourceImageUrl: string | null = imageUrl || null;
-
-  if (imageFile) {
-    if (isPrimaryUp()) {
-      try {
-        sourceImageUrl = await uploadImageViaApi(imageFile, getToken);
-      } catch {
-        sourceImageUrl = null;
+  const sourceImageUrl = await (async (): Promise<string> => {
+    if (targetImageFile) {
+      if (isPrimaryUp()) {
+        try {
+          const apiUploaded = await uploadImageViaApi(targetImageFile, getToken);
+          if (apiUploaded) {
+            return apiUploaded;
+          }
+        } catch {
+          // ignore
+        }
       }
-    }
-    if (!sourceImageUrl) {
       try {
-        sourceImageUrl = await uploadImage(imageFile, getToken);
+        const fallbackUploaded = await uploadImage(targetImageFile, getToken);
+        if (fallbackUploaded) {
+          return fallbackUploaded;
+        }
       } catch {
         throw new Error("Failed to upload image. Please try again.");
       }
+      throw new Error("Failed to upload image. Please try again.");
     }
-  } else if (!imageUrl) {
-    throw new Error("Either imageUrl or imageFile must be provided");
-  }
+    if (!targetImageUrl) {
+      throw new Error("Either imageUrl or imageFile must be provided");
+    }
+    return targetImageUrl;
+  })();
 
-  const urlToSend = sourceImageUrl || imageUrl!;
+  const urlToSend = sourceImageUrl;
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (getToken) {
     const token = await getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
   }
 
   try {
@@ -762,17 +895,25 @@ export async function submitImageTo3D(
       headers,
       body: JSON.stringify({
         imageUrl: urlToSend,
+        prompt: prompt || undefined,
         aiModel: aiModel || undefined,
         chatId: chatId || undefined,
         workspaceId: workspaceId || undefined,
-        parentJobId: (parentJobId || previewJobId) || undefined,
-        parentJobIds: (parentJobId || previewJobId) ? [parentJobId || previewJobId] : undefined,
+        parentJobId: parentJobId || previewJobId || undefined,
+        parentJobIds:
+          parentJobId || previewJobId
+            ? [parentJobId || previewJobId]
+            : undefined,
+        resolution: resolution || undefined,
       }),
     });
 
     if (res.status === 402) {
       const data = await res.json().catch(() => ({}));
-      throw new Error((data as { error?: string }).error || "Insufficient credits. Please subscribe or buy more credits.");
+      throw new Error(
+        (data as { error?: string }).error ||
+          "Insufficient credits. Please subscribe or buy more credits.",
+      );
     }
 
     if (!res.ok) {
@@ -800,7 +941,8 @@ export async function submitImageTo3D(
         if (previewJobId) body.previewJobId = previewJobId;
         if (chatId) body.chatId = chatId;
         if (workspaceId) body.workspaceId = workspaceId;
-        if (parentJobId || previewJobId) body.parentJobId = parentJobId || previewJobId;
+        if (parentJobId || previewJobId)
+          body.parentJobId = parentJobId || previewJobId;
         if (aiModel) body.aiModel = aiModel;
         await fetch(`${backendBase}/api/3d/register-job`, {
           method: "POST",
@@ -812,7 +954,11 @@ export async function submitImageTo3D(
 
     return { job_id: jobId ?? "" };
   } catch (err: any) {
-    if (err?.message?.includes("credits") || err?.message?.includes("Insufficient")) throw err;
+    if (
+      err?.message?.includes("credits") ||
+      err?.message?.includes("Insufficient")
+    )
+      throw err;
     if (isApiUnavailableError(err)) {
       markPrimaryDown();
       if (shouldNotifyGpuOffline(err)) {
@@ -832,11 +978,12 @@ async function submitImageTo3DViaGateway(
   _previewJobId?: string | null,
   _chatId?: string | null,
   _workspaceId?: string | null,
-  _parentJobId?: string | null
+  _parentJobId?: string | null,
 ): Promise<{ job_id: string }> {
-  throw new Error("Direct GPU gateway submit is disabled. Use submitImageTo3D via the Node backend.");
+  throw new Error(
+    "Direct GPU gateway submit is disabled. Use submitImageTo3D via the Node backend.",
+  );
 }
-
 
 /**
  * Fetch job lineage (iterative prompting chain from root to the given job)
@@ -844,8 +991,8 @@ async function submitImageTo3DViaGateway(
 export interface LineageItem {
   id: string;
   parentJobId: string | null;
-  parentJobIds: string[];         // All parent IDs (multi-parent merges)
-  sourceImages: string[] | null;  // Source image URLs used as input
+  parentJobIds: string[]; // All parent IDs (multi-parent merges)
+  sourceImages: string[] | null; // Source image URLs used as input
   prompt: string | null;
   previewImageUrl: string | null;
   resultGlbUrl: string | null;
@@ -856,7 +1003,7 @@ export interface LineageItem {
 
 export async function fetchJobLineage(
   jobId: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<LineageItem[]> {
   const headers: HeadersInit = {};
   if (getToken) {
@@ -865,7 +1012,9 @@ export async function fetchJobLineage(
       headers["Authorization"] = `Bearer ${token}`;
     }
   }
-  const res = await fetch(`${backendBase}/api/3d/jobs/${jobId}/lineage`, { headers });
+  const res = await fetch(`${backendBase}/api/3d/jobs/${jobId}/lineage`, {
+    headers,
+  });
   if (!res.ok) return [];
   const data = await res.json();
   return data.lineage || [];
@@ -876,7 +1025,7 @@ export async function fetchJobLineage(
  */
 export async function fetchStatus(
   jobId: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<Job> {
   const headers: HeadersInit = {};
   if (getToken) {
@@ -910,6 +1059,9 @@ export async function fetchStatus(
   if (data.queue) {
     job.queue = data.queue;
   }
+  if (data.creditsRefunded || data.credits_refunded || job.creditsRefunded) {
+    job.creditsRefunded = true;
+  }
 
   return job;
 }
@@ -917,26 +1069,29 @@ export async function fetchStatus(
 /**
  * Fetch queue info for accurate time estimation
  */
-export async function fetchQueueInfo(): Promise<(QueueInfo & { 
-  estimated_wait_for_preview_seconds?: number;
-  estimated_preview_time_seconds?: number;
-  api_available?: boolean;
-}) | null> {
+export async function fetchQueueInfo(): Promise<
+  | (QueueInfo & {
+      estimated_wait_for_preview_seconds?: number;
+      estimated_preview_time_seconds?: number;
+      api_available?: boolean;
+    })
+  | null
+> {
   let timeoutId: NodeJS.Timeout | null = null;
   try {
     // Backend responds within 1.5s (its own Python timeout); use 3.5s so we don't abort before backend responds
     const controller = new AbortController();
     timeoutId = setTimeout(() => controller.abort(), 3500);
-    
+
     const res = await fetch(`${backendBase}/api/3d/queue/info`, {
       signal: controller.signal,
     });
-    
+
     if (timeoutId) {
       clearTimeout(timeoutId);
       timeoutId = null;
     }
-    
+
     // Backend may return 200 with api_available: false when gateway is unreachable (no 503)
     const data = await res.json();
 
@@ -944,7 +1099,11 @@ export async function fetchQueueInfo(): Promise<(QueueInfo & {
     // GPU offline is only shown when an actual 3D submit (register-job / text-to-3d / image-to-3d) fails.
     if (!res.ok) {
       // If we still get 503, use response body as fallback if it has queue shape
-      if (res.status === 503 && data && typeof data.estimated_total_seconds === "number") {
+      if (
+        res.status === 503 &&
+        data &&
+        typeof data.estimated_total_seconds === "number"
+      ) {
         return {
           position: 0,
           jobs_ahead: data.jobs_ahead_for_new ?? 0,
@@ -952,8 +1111,10 @@ export async function fetchQueueInfo(): Promise<(QueueInfo & {
           estimated_total_seconds: data.estimated_total_seconds ?? 300,
           queue_length: data.queue_length ?? 0,
           currently_processing: data.currently_processing ?? false,
-          estimated_wait_for_preview_seconds: data.estimated_wait_for_preview_seconds ?? 0,
-          estimated_preview_time_seconds: data.estimated_preview_time_seconds ?? 25,
+          estimated_wait_for_preview_seconds:
+            data.estimated_wait_for_preview_seconds ?? 0,
+          estimated_preview_time_seconds:
+            data.estimated_preview_time_seconds ?? 25,
           api_available: false,
         };
       }
@@ -962,12 +1123,18 @@ export async function fetchQueueInfo(): Promise<(QueueInfo & {
 
     return {
       position: 0,
-      jobs_ahead: data.jobs_ahead_for_new ?? data.queue_length + (data.currently_processing ? 1 : 0),
+      jobs_ahead:
+        data.jobs_ahead_for_new ??
+        data.queue_length + (data.currently_processing ? 1 : 0),
       estimated_wait_seconds: data.estimated_wait_for_new_job_seconds || 0,
-      estimated_total_seconds: data.estimated_total_seconds ?? (data.estimated_wait_for_new_job_seconds || 0) + (data.estimated_time_per_job_seconds || 300),
+      estimated_total_seconds:
+        data.estimated_total_seconds ??
+        (data.estimated_wait_for_new_job_seconds || 0) +
+          (data.estimated_time_per_job_seconds || 300),
       queue_length: data.queue_length || 0,
       currently_processing: data.currently_processing || false,
-      estimated_wait_for_preview_seconds: data.estimated_wait_for_preview_seconds || 0,
+      estimated_wait_for_preview_seconds:
+        data.estimated_wait_for_preview_seconds || 0,
       estimated_preview_time_seconds: data.estimated_preview_time_seconds ?? 25,
       api_available: data.api_available !== false,
     };
@@ -976,7 +1143,11 @@ export async function fetchQueueInfo(): Promise<(QueueInfo & {
       clearTimeout(timeoutId);
     }
     // Timeout or network error: return null so callers use defaults; do not show "GPU offline"
-    if (err.name === "AbortError" || err.name === "TimeoutError" || (err.name === "TypeError" && err.message?.includes("fetch"))) {
+    if (
+      err.name === "AbortError" ||
+      err.name === "TimeoutError" ||
+      (err.name === "TypeError" && err.message?.includes("fetch"))
+    ) {
       return null;
     }
     if (err.message?.includes("GPU is currently offline")) {
@@ -1000,9 +1171,56 @@ export function getGlbUrl(job: Job): string | null {
   if (jobId) {
     return `${backendBase}/api/3d/glb/${jobId}`;
   }
-  
+
   // Fallback to direct URL if no jobId
   return url;
+}
+
+/**
+ * Convert any direct S3 or raw GLB URL into an auth-friendly backend proxy URL.
+ * Prevents browser CORS errors when loading S3 models in ThreeViewer.
+ */
+export function getProxiedGlbUrl(
+  urlOrJobId: string | null | undefined,
+): string | null {
+  if (!urlOrJobId) {
+    return null;
+  }
+  const s = urlOrJobId.trim();
+  if (!s) {
+    return null;
+  }
+
+  // Blob or data URLs (e.g. locally dropped or generated files)
+  if (s.startsWith("blob:") || s.startsWith("data:")) {
+    return s;
+  }
+
+  // Already proxied via backend
+  if (s.startsWith(backendBase) && s.includes("/api/3d/glb/")) {
+    return s;
+  }
+
+  // Raw UUID job ID
+  const uuidRegex =
+    /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
+  if (/^[0-9a-fA-F-]{36}$/.test(s)) {
+    return `${backendBase}/api/3d/glb/${s}`;
+  }
+
+  // S3 or external URL containing a job UUID
+  const match = s.match(uuidRegex);
+  if (
+    match &&
+    (s.includes("amazonaws.com") ||
+      s.includes("s3.") ||
+      s.includes("hydrilla-outputs") ||
+      s.includes("/mesh.glb"))
+  ) {
+    return `${backendBase}/api/3d/glb/${match[0]}`;
+  }
+
+  return s;
 }
 
 /**
@@ -1018,12 +1236,22 @@ export function getProxyGlbUrl(jobId: string): string {
 export async function downloadGlbWithAuth(
   glbUrl: string,
   filename: string,
-  getToken: () => Promise<string | null>
+  getToken: () => Promise<string | null>,
 ): Promise<void> {
+  const targetUrl = getProxiedGlbUrl(glbUrl) || glbUrl;
   const token = await getToken();
-  const headers: HeadersInit = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(glbUrl, { headers, credentials: "include" });
+  const isBackendUrl =
+    !targetUrl.startsWith("blob:") &&
+    !targetUrl.startsWith("data:") &&
+    (targetUrl.startsWith(backendBase) ||
+      targetUrl.startsWith("/") ||
+      targetUrl.includes("/api/3d/glb/"));
+  const headers: HeadersInit =
+    token && isBackendUrl ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(targetUrl, {
+    headers,
+    credentials: isBackendUrl ? "include" : "omit",
+  });
   if (!res.ok) {
     throw new Error(`Failed to download model (${res.status})`);
   }
@@ -1042,21 +1270,67 @@ export async function downloadGlbWithAuth(
 }
 
 /**
+ * Extract target URL if input is wrapped in backend /api/3d/image-proxy
+ */
+export function unwrapProxiedImageUrl(
+  url: string | null | undefined,
+): string | null {
+  if (!url) {
+    return null;
+  }
+  const s = url.trim();
+  if (s.includes("/api/3d/image-proxy")) {
+    try {
+      const parsed = new URL(s, "http://localhost");
+      const real = parsed.searchParams.get("url");
+      if (real) {
+        return real;
+      }
+    } catch {
+      const idx = s.indexOf("?url=");
+      if (idx !== -1) {
+        return decodeURIComponent(s.slice(idx + 5));
+      }
+    }
+  }
+  return s;
+}
+
+/**
  * Proxy S3 / gateway image URLs through the backend to avoid CORS.
  * - data:/blob:/already-proxied → returned as-is
  * - Anything else → returned as-is (won't be proxied) unless S3/gateway
  */
-export function getProxiedImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
+export function getProxiedImageUrl(
+  url: string | null | undefined,
+): string | null {
+  if (!url) {
+    return null;
+  }
   const s = url.trim();
-  if (!s) return null;
+  if (!s) {
+    return null;
+  }
 
-  if (s.startsWith("data:") || s.startsWith("blob:")) return s;
-  if (s.startsWith(backendBase)) return s;
-  if (s.includes("/api/3d/image-proxy")) return s;
+  if (s.startsWith("data:") || s.startsWith("blob:")) {
+    return s;
+  }
+  if (s.includes("/api/3d/image-proxy")) {
+    if (!s.includes("?url=")) {
+      return null;
+    }
+    return s;
+  }
+  if (s.startsWith(backendBase)) {
+    return s;
+  }
 
   const resolved = s.startsWith("/") ? resolveImageUrl(s) : s;
-  if (resolved.includes("amazonaws.com") || resolved.includes("s3.") || isGatewayOutputImageUrl(resolved)) {
+  if (
+    resolved.includes("amazonaws.com") ||
+    resolved.includes("s3.") ||
+    isGatewayOutputImageUrl(resolved)
+  ) {
     return `${backendBase}/api/3d/image-proxy?url=${encodeURIComponent(resolved)}`;
   }
   return resolved;
@@ -1068,32 +1342,34 @@ export function getProxiedImageUrl(url: string | null | undefined): string | nul
  */
 export function getPreviewImageUrl(job: Job): string | null {
   if (!job.result) return null;
-  const url = (
+  const url =
     job.result.processed_image_url ||
     job.result.generated_image_url ||
     job.result.processed_image ||
     job.result.generated_image ||
-    null
-  );
-  
+    null;
+
   // If we have a URL, proxy it so private S3 and gateway output URLs load reliably.
   if (url) return getProxiedImageUrl(url);
-  
+
   // If no URL but we have a job_id, try gateway output path (file may not be on public S3).
   if (job.job_id) {
     const base = getPrimaryUrl().replace(/\/$/, "");
-    return getProxiedImageUrl(`${base}/outputs/preview/${job.job_id}/preview_image.png`);
+    return getProxiedImageUrl(
+      `${base}/outputs/preview/${job.job_id}/preview_image.png`,
+    );
   }
-  
+
   return null;
 }
 
-
-export async function fetchHistory(getToken?: () => Promise<string | null>): Promise<BackendJob[]> {
+export async function fetchHistory(
+  getToken?: () => Promise<string | null>,
+): Promise<BackendJob[]> {
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   };
-  
+
   if (getToken) {
     const token = await getToken();
     if (token) {
@@ -1103,33 +1379,37 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
 
   try {
     const url = `${backendBase}/api/3d/history`;
-    
+
     // Add timeout to prevent hanging requests (30 seconds for database queries)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    
+
     try {
-      const res = await fetch(url, { 
+      const res = await fetch(url, {
         headers,
         method: "GET",
         cache: "no-store",
         signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       // Check if response is ok
       if (!res.ok) {
         let errorText: string;
         try {
           const errorData = await res.json();
-          errorText = errorData.error || `Failed to fetch history: ${res.status} ${res.statusText}`;
+          errorText =
+            errorData.error ||
+            `Failed to fetch history: ${res.status} ${res.statusText}`;
         } catch {
-          errorText = await res.text() || `Failed to fetch history: ${res.status} ${res.statusText}`;
+          errorText =
+            (await res.text()) ||
+            `Failed to fetch history: ${res.status} ${res.statusText}`;
         }
         throw new Error(errorText);
       }
-      
+
       // Parse response
       let data: any;
       try {
@@ -1141,33 +1421,39 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
       } catch {
         throw new Error("Invalid response format from backend");
       }
-      
+
       // Handle both { jobs: [...] } and direct array response
-      return Array.isArray(data) ? data : (data.jobs || []);
+      return Array.isArray(data) ? data : data.jobs || [];
     } catch (fetchErr: any) {
       clearTimeout(timeoutId);
-      
+
       // Handle abort (timeout)
       if (fetchErr.name === "AbortError") {
-        throw new Error("Request timeout: Backend took too long to respond (30s timeout)");
+        throw new Error(
+          "Request timeout: Backend took too long to respond (30s timeout)",
+        );
       }
       throw fetchErr;
     }
   } catch (err: any) {
     // Handle network errors
-    const isNetworkError = err.name === "TypeError" && 
-                          (err.message.includes("fetch") || 
-                           err.message.includes("Failed to fetch") ||
-                           err.message.includes("NetworkError") ||
-                           err.message.includes("Network request failed"));
-    
+    const isNetworkError =
+      err.name === "TypeError" &&
+      (err.message.includes("fetch") ||
+        err.message.includes("Failed to fetch") ||
+        err.message.includes("NetworkError") ||
+        err.message.includes("Network request failed"));
+
     if (isNetworkError) {
       // For history fetching, return empty array instead of throwing error
       // This allows the app to continue working even if history can't be loaded
-      console.warn("Failed to fetch history - backend may be temporarily unavailable:", err.message);
+      console.warn(
+        "Failed to fetch history - backend may be temporarily unavailable:",
+        err.message,
+      );
       return [];
     }
-    
+
     // Re-throw other errors (API errors, parsing errors, etc.)
     throw err;
   }
@@ -1176,7 +1462,10 @@ export async function fetchHistory(getToken?: () => Promise<string | null>): Pro
 /**
  * Delete a job (requires auth)
  */
-export async function deleteJob(jobId: string, getToken: () => Promise<string | null>): Promise<void> {
+export async function deleteJob(
+  jobId: string,
+  getToken: () => Promise<string | null>,
+): Promise<void> {
   const token = await getToken();
   if (!token) {
     throw new Error("Authentication required");
@@ -1201,7 +1490,7 @@ export async function deleteJob(jobId: string, getToken: () => Promise<string | 
  */
 export async function cancelJob(
   jobId: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<void> {
   const headers: HeadersInit = {};
   if (getToken) {
@@ -1226,7 +1515,9 @@ export async function cancelJob(
 /**
  * Sync user to backend database (call after login)
  */
-export async function syncUser(getToken: () => Promise<string | null>): Promise<{ success: boolean; user?: any }> {
+export async function syncUser(
+  getToken: () => Promise<string | null>,
+): Promise<{ success: boolean; user?: any }> {
   const token = await getToken();
   if (!token) {
     return { success: false };
@@ -1252,7 +1543,6 @@ export async function syncUser(getToken: () => Promise<string | null>): Promise<
   }
 }
 
-
 export type CurrentUserResult =
   | { ok: true; user: any; stats: any }
   | { ok: false; reason: "no_token" | "http_error" | "network_error" };
@@ -1262,7 +1552,7 @@ export type CurrentUserResult =
  * Distinguishes transport/auth failures from a successful profile response.
  */
 export async function getCurrentUser(
-  getToken: () => Promise<string | null>
+  getToken: () => Promise<string | null>,
 ): Promise<CurrentUserResult> {
   let token: string | null;
   try {
@@ -1300,7 +1590,9 @@ export async function getCurrentUser(
 /**
  * Fetch all workspaces for the current user
  */
-export async function fetchWorkspaces(getToken?: () => Promise<string | null>): Promise<Workspace[]> {
+export async function fetchWorkspaces(
+  getToken?: () => Promise<string | null>,
+): Promise<Workspace[]> {
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
     if (getToken) {
@@ -1310,16 +1602,22 @@ export async function fetchWorkspaces(getToken?: () => Promise<string | null>): 
       }
     }
 
-    const response = await fetch(`${backendBase}/api/3d/workspaces?t=${Date.now()}`, {
-      method: "GET",
-      headers,
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${backendBase}/api/3d/workspaces?t=${Date.now()}`,
+      {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      },
+    );
 
     if (!response.ok) {
       if (response.status === 500) {
         const errorData = await response.json().catch(() => ({}));
-        if (errorData.error?.includes("relation") || errorData.error?.includes("does not exist")) {
+        if (
+          errorData.error?.includes("relation") ||
+          errorData.error?.includes("does not exist")
+        ) {
           console.warn("Workspaces table not found, returning empty array.");
           return [];
         }
@@ -1338,7 +1636,10 @@ export async function fetchWorkspaces(getToken?: () => Promise<string | null>): 
 /**
  * Create a new workspace
  */
-export async function createWorkspaceApi(name?: string, getToken?: () => Promise<string | null>): Promise<Workspace> {
+export async function createWorkspaceApi(
+  name?: string,
+  getToken?: () => Promise<string | null>,
+): Promise<Workspace> {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (getToken) {
     const token = await getToken();
@@ -1356,14 +1657,18 @@ export async function createWorkspaceApi(name?: string, getToken?: () => Promise
     });
   } catch {
     throw new Error(
-      `Cannot reach backend at ${backendBase}. Is the API running?`
+      `Cannot reach backend at ${backendBase}. Is the API running?`,
     );
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({} as { error?: string; message?: string }));
+    const body = await response
+      .json()
+      .catch(() => ({}) as { error?: string; message?: string });
     throw new Error(
-      body.message || body.error || `Failed to create workspace (${response.status})`
+      body.message ||
+        body.error ||
+        `Failed to create workspace (${response.status})`,
     );
   }
 
@@ -1374,7 +1679,10 @@ export async function createWorkspaceApi(name?: string, getToken?: () => Promise
 /**
  * Get a workspace by ID
  */
-export async function fetchWorkspace(workspaceId: string, getToken?: () => Promise<string | null>): Promise<Workspace | null> {
+export async function fetchWorkspace(
+  workspaceId: string,
+  getToken?: () => Promise<string | null>,
+): Promise<Workspace | null> {
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
     if (getToken) {
@@ -1384,10 +1692,13 @@ export async function fetchWorkspace(workspaceId: string, getToken?: () => Promi
       }
     }
 
-    const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}`, {
-      method: "GET",
-      headers,
-    });
+    const response = await fetch(
+      `${backendBase}/api/3d/workspaces/${workspaceId}`,
+      {
+        method: "GET",
+        headers,
+      },
+    );
 
     if (!response.ok) {
       if (response.status === 404) return null;
@@ -1405,7 +1716,10 @@ export async function fetchWorkspace(workspaceId: string, getToken?: () => Promi
 /**
  * Get all jobs for a workspace
  */
-export async function fetchWorkspaceJobs(workspaceId: string, getToken?: () => Promise<string | null>): Promise<BackendJob[]> {
+export async function fetchWorkspaceJobs(
+  workspaceId: string,
+  getToken?: () => Promise<string | null>,
+): Promise<BackendJob[]> {
   try {
     const headers: HeadersInit = { "Content-Type": "application/json" };
     if (getToken) {
@@ -1415,11 +1729,14 @@ export async function fetchWorkspaceJobs(workspaceId: string, getToken?: () => P
       }
     }
 
-    const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}/jobs?t=${Date.now()}`, {
-      method: "GET",
-      headers,
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${backendBase}/api/3d/workspaces/${workspaceId}/jobs?t=${Date.now()}`,
+      {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      },
+    );
 
     if (!response.ok) {
       if (response.status === 404) return [];
@@ -1437,7 +1754,11 @@ export async function fetchWorkspaceJobs(workspaceId: string, getToken?: () => P
 /**
  * Update workspace name
  */
-export async function updateWorkspaceNameApi(workspaceId: string, name: string, getToken?: () => Promise<string | null>): Promise<void> {
+export async function updateWorkspaceNameApi(
+  workspaceId: string,
+  name: string,
+  getToken?: () => Promise<string | null>,
+): Promise<void> {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (getToken) {
     const token = await getToken();
@@ -1446,11 +1767,14 @@ export async function updateWorkspaceNameApi(workspaceId: string, name: string, 
     }
   }
 
-  const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}/name`, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify({ name }),
-  });
+  const response = await fetch(
+    `${backendBase}/api/3d/workspaces/${workspaceId}/name`,
+    {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ name }),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to update workspace name: ${response.statusText}`);
@@ -1460,7 +1784,10 @@ export async function updateWorkspaceNameApi(workspaceId: string, name: string, 
 /**
  * Delete a workspace
  */
-export async function deleteWorkspaceApi(workspaceId: string, getToken?: () => Promise<string | null>): Promise<void> {
+export async function deleteWorkspaceApi(
+  workspaceId: string,
+  getToken?: () => Promise<string | null>,
+): Promise<void> {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (getToken) {
     const token = await getToken();
@@ -1469,10 +1796,13 @@ export async function deleteWorkspaceApi(workspaceId: string, getToken?: () => P
     }
   }
 
-  const response = await fetch(`${backendBase}/api/3d/workspaces/${workspaceId}`, {
-    method: "DELETE",
-    headers,
-  });
+  const response = await fetch(
+    `${backendBase}/api/3d/workspaces/${workspaceId}`,
+    {
+      method: "DELETE",
+      headers,
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to delete workspace: ${response.statusText}`);
@@ -1483,7 +1813,9 @@ export async function deleteWorkspaceApi(workspaceId: string, getToken?: () => P
 // BYOK / Water (user keys + procedural Three.js)
 // ---------------------------------------------------------------------------
 
-async function authHeaders(getToken?: () => Promise<string | null>): Promise<HeadersInit> {
+async function authHeaders(
+  getToken?: () => Promise<string | null>,
+): Promise<HeadersInit> {
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (getToken) {
     const token = await getToken();
@@ -1493,7 +1825,7 @@ async function authHeaders(getToken?: () => Promise<string | null>): Promise<Hea
 }
 
 export async function fetchUserApiKeys(
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{
   keys: UserApiKeyMeta[];
   sharedKeys: UserApiKeyMeta[];
@@ -1506,7 +1838,9 @@ export async function fetchUserApiKeys(
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error || "Failed to load API keys");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to load API keys",
+    );
   }
   const body = (await res.json()) as {
     keys: UserApiKeyMeta[];
@@ -1525,7 +1859,7 @@ export async function fetchUserApiKeys(
 export async function saveUserApiKey(
   provider: string,
   apiKey: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<UserApiKeyMeta> {
   const res = await fetch(`${backendBase}/api/user/api-keys/${provider}`, {
     method: "PUT",
@@ -1534,29 +1868,36 @@ export async function saveUserApiKey(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to save API key");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to save API key",
+    );
   }
   return (body as { key: UserApiKeyMeta }).key;
 }
 
 export async function verifyUserApiKey(
   provider: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{ ok: boolean; status: string; error: string | null }> {
-  const res = await fetch(`${backendBase}/api/user/api-keys/${provider}/verify`, {
-    method: "POST",
-    headers: await authHeaders(getToken),
-  });
+  const res = await fetch(
+    `${backendBase}/api/user/api-keys/${provider}/verify`,
+    {
+      method: "POST",
+      headers: await authHeaders(getToken),
+    },
+  );
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Verification failed");
+    throw new Error(
+      (body as { error?: string }).error || "Verification failed",
+    );
   }
   return body as { ok: boolean; status: string; error: string | null };
 }
 
 export async function deleteUserApiKey(
   provider: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<void> {
   const res = await fetch(`${backendBase}/api/user/api-keys/${provider}`, {
     method: "DELETE",
@@ -1564,7 +1905,9 @@ export async function deleteUserApiKey(
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error || "Failed to remove key");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to remove key",
+    );
   }
 }
 
@@ -1574,7 +1917,7 @@ export async function saveUserModelPrefs(
     defaultCodeModel?: string | null;
     enabledCodeModels?: string[] | null;
   },
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<UserModelPrefs> {
   const res = await fetch(`${backendBase}/api/user/model-prefs`, {
     method: "PATCH",
@@ -1583,7 +1926,9 @@ export async function saveUserModelPrefs(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to save model preference");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to save model preference",
+    );
   }
   return (body as { prefs: UserModelPrefs }).prefs;
 }
@@ -1596,7 +1941,7 @@ export type OpenRouterFreeModelRow = {
 };
 
 export async function fetchWaterModels(
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{ groups: WaterModelGroup[]; syncedAt: string }> {
   const res = await fetch(`${backendBase}/api/user/models`, {
     headers: await authHeaders(getToken),
@@ -1604,23 +1949,36 @@ export async function fetchWaterModels(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to load Water models");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to load Water models",
+    );
   }
   return body as { groups: WaterModelGroup[]; syncedAt: string };
 }
 
 export async function fetchOpenRouterFreeModels(
-  getToken?: () => Promise<string | null>
-): Promise<{ models: OpenRouterFreeModelRow[]; syncedAt: string; note?: string }> {
+  getToken?: () => Promise<string | null>,
+): Promise<{
+  models: OpenRouterFreeModelRow[];
+  syncedAt: string;
+  note?: string;
+}> {
   const res = await fetch(`${backendBase}/api/user/openrouter/free-models`, {
     headers: await authHeaders(getToken),
     cache: "no-store",
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to sync OpenRouter free models");
+    throw new Error(
+      (body as { error?: string }).error ||
+        "Failed to sync OpenRouter free models",
+    );
   }
-  return body as { models: OpenRouterFreeModelRow[]; syncedAt: string; note?: string };
+  return body as {
+    models: OpenRouterFreeModelRow[];
+    syncedAt: string;
+    note?: string;
+  };
 }
 
 export type CursorModelRow = {
@@ -1631,7 +1989,7 @@ export type CursorModelRow = {
 
 /** Live Cursor Cloud Agents models (requires a saved Cursor key). */
 export async function fetchCursorModels(
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{ models: CursorModelRow[]; syncedAt: string; note?: string }> {
   const res = await fetch(`${backendBase}/api/user/cursor/models`, {
     headers: await authHeaders(getToken),
@@ -1639,13 +1997,15 @@ export async function fetchCursorModels(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to sync Cursor models");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to sync Cursor models",
+    );
   }
   return body as { models: CursorModelRow[]; syncedAt: string; note?: string };
 }
 
 export async function fetchOpenRouterKeyStatus(
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{
   label: string | null;
   limit: number | null;
@@ -1658,7 +2018,10 @@ export async function fetchOpenRouterKeyStatus(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to load OpenRouter key status");
+    throw new Error(
+      (body as { error?: string }).error ||
+        "Failed to load OpenRouter key status",
+    );
   }
   return (body as { status: any }).status;
 }
@@ -1692,7 +2055,10 @@ export async function submitWater(params: {
       workspaceId: params.workspaceId || undefined,
       parentJobId: params.parentJobId || undefined,
       qualityTier: params.qualityTier || undefined,
-      skillId: params.skillId && params.skillId !== "auto" ? params.skillId : undefined,
+      skillId:
+        params.skillId && params.skillId !== "auto"
+          ? params.skillId
+          : undefined,
       factoryCode: params.factoryCode || undefined,
     }),
   });
@@ -1701,19 +2067,20 @@ export async function submitWater(params: {
     throw new Error(
       (body as { message?: string; error?: string }).message ||
         (body as { error?: string }).error ||
-        "Water failed"
+        "Water failed",
     );
   }
   return {
     job_id: (body as { jobId?: string }).jobId || "",
-    mode: (body as { mode?: "text_to_code" | "image_to_code" }).mode || "text_to_code",
+    mode:
+      (body as { mode?: "text_to_code" | "image_to_code" }).mode ||
+      "text_to_code",
   };
 }
 
-
 export async function fetchWaterJob(
   jobId: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{
   id: string;
   status: BackendJobStatus;
@@ -1738,7 +2105,9 @@ export async function fetchWaterJob(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to load Water job");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to load Water job",
+    );
   }
   const job = (body as { job: any }).job;
   return {
@@ -1776,7 +2145,7 @@ export type WaterUsageRow = {
 /** List Water jobs with LLM token usage for the current user. */
 export async function fetchWaterUsage(
   getToken?: () => Promise<string | null>,
-  limit = 100
+  limit = 100,
 ): Promise<WaterUsageRow[]> {
   const res = await fetch(`${backendBase}/api/water/usage?limit=${limit}`, {
     headers: await authHeaders(getToken),
@@ -1784,17 +2153,18 @@ export async function fetchWaterUsage(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to load Water usage");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to load Water usage",
+    );
   }
   return ((body as { jobs?: WaterUsageRow[] }).jobs || []) as WaterUsageRow[];
 }
-
 
 /** Persist a canvas screenshot as the Water library thumbnail. */
 export async function saveWaterThumbnail(
   jobId: string,
   dataUrl: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<string> {
   const res = await fetch(`${backendBase}/api/water/jobs/${jobId}/thumbnail`, {
     method: "POST",
@@ -1803,7 +2173,9 @@ export async function saveWaterThumbnail(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to save thumbnail");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to save thumbnail",
+    );
   }
   return (body as { previewImageUrl?: string }).previewImageUrl || dataUrl;
 }
@@ -1811,7 +2183,7 @@ export async function saveWaterThumbnail(
 export async function saveWaterFactory(
   jobId: string,
   factoryCode: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{
   factoryCode: string;
   visual: WaterVisualEvidence;
@@ -1826,7 +2198,7 @@ export async function saveWaterFactory(
     throw new Error(
       (body as { message?: string; error?: string }).message ||
         (body as { error?: string }).error ||
-        "Failed to save factory"
+        "Failed to save factory",
     );
   }
   return body as {
@@ -1871,7 +2243,7 @@ export async function sendWaterChat(params: {
 
 export async function fetchWaterMessages(
   jobId: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<WaterChatMessage[]> {
   const res = await fetch(`${backendBase}/api/water/jobs/${jobId}/messages`, {
     headers: await authHeaders(getToken),
@@ -1879,14 +2251,23 @@ export async function fetchWaterMessages(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return [];
-  return ((body as { messages?: Array<{ id: string; role: string; content: string; created_at: string }> }).messages || []).map(
-    (m) => ({
-      id: m.id,
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: m.content,
-      createdAt: m.created_at,
-    })
-  );
+  return (
+    (
+      body as {
+        messages?: Array<{
+          id: string;
+          role: string;
+          content: string;
+          created_at: string;
+        }>;
+      }
+    ).messages || []
+  ).map((m) => ({
+    id: m.id,
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: m.content,
+    createdAt: m.created_at,
+  }));
 }
 
 export async function patchWaterScene(params: {
@@ -1900,23 +2281,28 @@ export async function patchWaterScene(params: {
   material?: WaterMaterialPatch;
   getToken?: () => Promise<string | null>;
 }): Promise<WaterSceneBundle | null> {
-  const res = await fetch(`${backendBase}/api/water/jobs/${params.jobId}/scene`, {
-    method: "PATCH",
-    headers: await authHeaders(params.getToken),
-    body: JSON.stringify({
-      op: params.op,
-      position: params.position,
-      rotation: params.rotation,
-      scale: params.scale,
-      name: params.name,
-      material: params.material,
-    }),
-  });
+  const res = await fetch(
+    `${backendBase}/api/water/jobs/${params.jobId}/scene`,
+    {
+      method: "PATCH",
+      headers: await authHeaders(params.getToken),
+      body: JSON.stringify({
+        op: params.op,
+        position: params.position,
+        rotation: params.rotation,
+        scale: params.scale,
+        name: params.name,
+        material: params.material,
+      }),
+    },
+  );
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to update scene");
+    throw new Error(
+      (body as { error?: string }).error || "Failed to update scene",
+    );
   }
-  return ((body as { scene?: WaterSceneBundle }).scene || null);
+  return (body as { scene?: WaterSceneBundle }).scene || null;
 }
 
 export type DeveloperApiKeyMeta = {
@@ -1957,7 +2343,7 @@ export type DeveloperApiKeyDetails = {
 };
 
 export async function fetchDeveloperApiKeys(
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<DeveloperApiKeyMeta[]> {
   const res = await fetch(`${backendBase}/api/user/developer-keys`, {
     headers: await authHeaders(getToken),
@@ -1965,14 +2351,17 @@ export async function fetchDeveloperApiKeys(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to fetch developer API keys");
+    throw new Error(
+      (body as { error?: string }).error ||
+        "Failed to fetch developer API keys",
+    );
   }
   return (body.keys || []) as DeveloperApiKeyMeta[];
 }
 
 export async function fetchDeveloperKeyDetails(
   keyId: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<DeveloperApiKeyDetails> {
   const res = await fetch(`${backendBase}/api/user/developer-keys/${keyId}`, {
     headers: await authHeaders(getToken),
@@ -1980,14 +2369,17 @@ export async function fetchDeveloperKeyDetails(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to fetch developer API key details");
+    throw new Error(
+      (body as { error?: string }).error ||
+        "Failed to fetch developer API key details",
+    );
   }
   return (body as { details: DeveloperApiKeyDetails }).details;
 }
 
 export async function createDeveloperApiKey(
   name: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<{ apiKey: string; meta: DeveloperApiKeyMeta }> {
   const res = await fetch(`${backendBase}/api/user/developer-keys`, {
     method: "POST",
@@ -1996,14 +2388,17 @@ export async function createDeveloperApiKey(
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error || "Failed to create developer API key");
+    throw new Error(
+      (body as { error?: string }).error ||
+        "Failed to create developer API key",
+    );
   }
   return body as { apiKey: string; meta: DeveloperApiKeyMeta };
 }
 
 export async function revokeDeveloperApiKey(
   keyId: string,
-  getToken?: () => Promise<string | null>
+  getToken?: () => Promise<string | null>,
 ): Promise<void> {
   const res = await fetch(`${backendBase}/api/user/developer-keys/${keyId}`, {
     method: "DELETE",
@@ -2011,7 +2406,9 @@ export async function revokeDeveloperApiKey(
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error || "Failed to revoke developer API key");
+    throw new Error(
+      (body as { error?: string }).error ||
+        "Failed to revoke developer API key",
+    );
   }
 }
-

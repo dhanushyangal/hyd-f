@@ -9,6 +9,7 @@ import {
   createWorkspaceApi,
   deleteWorkspaceApi,
   updateWorkspaceNameApi,
+  getProxiedImageUrl,
   type Workspace,
 } from "../../../lib/api";
 import { setCurrentWorkspaceId, cn } from "../../../lib/utils";
@@ -45,6 +46,7 @@ export default function StudioPage() {
   const [deleteConfirmWorkspace, setDeleteConfirmWorkspace] = useState<Workspace | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [failedImageIds, setFailedImageIds] = useState<Record<string, boolean>>({});
   /** True while applying a landing-page hero prompt (create workspace → open it). */
   const [heroBootstrapping, setHeroBootstrapping] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -329,14 +331,17 @@ export default function StudioPage() {
                   className="w-full text-left outline-none"
                 >
                   <div className="relative aspect-[4/3] rounded-[20px] overflow-hidden bg-gradient-to-b from-neutral-100 to-neutral-50 border border-neutral-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.1)] transition-all duration-300 ease-out group-hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.18)] group-hover:-translate-y-0.5">
-                    {ws.firstJobPreviewImageUrl ? (
+                    {ws.firstJobPreviewImageUrl && !failedImageIds[ws.id] ? (
                       <img
-                        src={ws.firstJobPreviewImageUrl}
+                        src={getProxiedImageUrl(ws.firstJobPreviewImageUrl) || ws.firstJobPreviewImageUrl}
                         alt=""
                         width={320}
                         height={240}
                         loading="lazy"
                         decoding="async"
+                        onError={() => {
+                          setFailedImageIds((prev) => ({ ...prev, [ws.id]: true }));
+                        }}
                         className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
                         sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
                       />

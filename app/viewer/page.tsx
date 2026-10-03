@@ -95,46 +95,78 @@ function ViewerContent() {
   }, [job]);
 
   useEffect(() => {
-    if (!jobId) return;
-    let active = true;
-    let consecutiveFailures = 0;
+    if (!jobId) {
+      return;
+    }
+    const state = {
+      active: true,
+      consecutiveFailures: 0,
+      pollStartTime: Date.now(),
+    };
     const MAX_FAILURES = 3;
+    const MAX_POLL_MS = 16 * 60 * 1000; // 16 minutes timeout cap (allows 12+ min generations when GPU restart occurs)
 
     const fetchAndSchedule = async () => {
+      if (!state.active) {
+        return;
+      }
+      if (Date.now() - state.pollStartTime > MAX_POLL_MS) {
+        try {
+          await cancelJob(jobId, async () => (await getToken()) ?? null);
+        } catch {
+          // ignore
+        }
+        setJob({
+          job_id: jobId,
+          status: "failed",
+          progress: 0,
+          message: "Generation timed out. Credits have been automatically refunded.",
+          error: "Generation timed out. Your credits have been automatically refunded.",
+          creditsRefunded: true,
+        });
+        setError("Generation timed out. Your credits have been automatically refunded.");
+        return;
+      }
+
       try {
         const data = await fetchStatus(jobId, async () => (await getToken()) ?? null);
-        if (!active) return;
-        consecutiveFailures = 0; // Reset on success
+        if (!state.active) {
+          return;
+        }
+        state.consecutiveFailures = 0; // Reset on success
         setJob(data);
         if (data.status === "pending" || data.status === "processing") {
           setTimeout(fetchAndSchedule, POLL_INTERVAL);
         }
       } catch (err: any) {
-        if (!active) return;
-        consecutiveFailures++;
+        if (!state.active) {
+          return;
+        }
+        state.consecutiveFailures += 1;
         
         // Check if it's a GPU offline or network error
-        const isNetworkError = err.name === "TypeError" && 
-                              (err.message?.includes("fetch") || 
-                               err.message?.includes("Failed to fetch") ||
-                               err.message?.includes("NetworkError") ||
-                               err.message?.includes("GPU is currently offline"));
+        const isNetworkError =
+          err.name === "TypeError" &&
+          (err.message?.includes("fetch") ||
+            err.message?.includes("Failed to fetch") ||
+            err.message?.includes("NetworkError") ||
+            err.message?.includes("GPU is currently offline"));
         
         // Stop polling if API is offline or too many failures
-        if (isNetworkError || consecutiveFailures >= MAX_FAILURES) {
+        if (isNetworkError || state.consecutiveFailures >= MAX_FAILURES) {
           setError(err.message || "Failed to fetch status. API appears to be offline.");
           return; // Stop polling
         }
         
         setError(err.message || "Failed to fetch status");
         // Retry with exponential backoff, but stop after max failures
-        setTimeout(fetchAndSchedule, POLL_INTERVAL * 2 * consecutiveFailures);
+        setTimeout(fetchAndSchedule, POLL_INTERVAL * 2 * state.consecutiveFailures);
       }
     };
 
     fetchAndSchedule();
     return () => {
-      active = false;
+      state.active = false;
     };
   }, [jobId, getToken]);
 
@@ -209,7 +241,7 @@ function ViewerContent() {
 
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
-          <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           {error}
@@ -217,33 +249,49 @@ function ViewerContent() {
       )}
 
       {job && job.status === "failed" && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
               <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
             <div>
-              <div className="font-semibold text-black">Generation Failed</div>
+              <div className="font-semibold text-neutral-900">Generation Failed</div>
               <div className="text-sm text-red-700">{job.error || "An error occurred during generation"}</div>
             </div>
+          </div>
+          <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/90 p-3 text-xs text-emerald-900">
+            <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-[10px] font-bold">
+              ✓
+            </div>
+            <p className="font-medium leading-relaxed">
+              Credits have been automatically refunded to your balance.
+            </p>
           </div>
         </div>
       )}
 
       {job && job.status === "cancelled" && (
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6">
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
               <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
             <div>
-              <div className="font-semibold text-black">Job Cancelled</div>
+              <div className="font-semibold text-neutral-900">Job Cancelled</div>
               <div className="text-sm text-gray-600">{job.error || "This job was cancelled"}</div>
             </div>
+          </div>
+          <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/90 p-3 text-xs text-emerald-900">
+            <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-[10px] font-bold">
+              ✓
+            </div>
+            <p className="font-medium leading-relaxed">
+              Credits have been automatically refunded to your balance.
+            </p>
           </div>
         </div>
       )}

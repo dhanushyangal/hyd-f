@@ -37,15 +37,26 @@ export const IMAGE_ASPECT_OPTIONS: { id: ImageAspect; label: string }[] = [
 ];
 
 export const IMAGE_CREDITS: Record<ImageOperation, Record<ImageQuality, number>> = {
-  "text-to-image": { low: 2, high: 5 },
-  edit: { low: 3, high: 6 },
+  "text-to-image": { low: 15, high: 20 },
+  edit: { low: 15, high: 20 },
 };
 
-/** Image-to-3D on the GPU VM. */
-export const IMAGE_TO_3D_CREDITS = 10;
+export type Model3DResolution = "standard" | "ultra1k";
+
+export const MODEL_3D_CREDITS: Record<Model3DResolution, number> = {
+  standard: 30,
+  ultra1k: 40,
+};
+
+/** Image-to-3D on the GPU VM (standard resolution default). */
+export const IMAGE_TO_3D_CREDITS = 30;
 
 export function imageCredits(op: ImageOperation, quality: ImageQuality): number {
   return IMAGE_CREDITS[op][quality];
+}
+
+export function model3DCredits(resolution: Model3DResolution): number {
+  return MODEL_3D_CREDITS[resolution] ?? 30;
 }
 
 /** Short tier description shown next to the quality toggle. */

@@ -526,10 +526,70 @@
           controls.update();
           renderer.render(scene, camera);
 
+          function computeModelStats(obj) {
+            let vertices = 0;
+            let faces = 0;
+            let meshCount = 0;
+            let boundaryEdges = 0;
+            let nonManifoldEdges = 0;
+            let totalEdgesChecked = 0;
+
+            obj.traverse((child) => {
+              if (!child.isMesh || !child.geometry) return;
+              meshCount++;
+              const pos = child.geometry.attributes?.position;
+              if (!pos) return;
+              vertices += pos.count;
+              const index = child.geometry.index;
+              const triCount = index ? Math.floor(index.count / 3) : Math.floor(pos.count / 3);
+              faces += triCount;
+
+              if (triCount > 0 && triCount <= 100000) {
+                const edgeMap = new Map();
+                const getIdx = (vOffset) => {
+                  if (index) return String(index.getX(vOffset));
+                  const x = Math.round(pos.getX(vOffset) * 1000);
+                  const y = Math.round(pos.getY(vOffset) * 1000);
+                  const z = Math.round(pos.getZ(vOffset) * 1000);
+                  return `${x},${y},${z}`;
+                };
+                for (let t = 0; t < triCount; t++) {
+                  const i0 = getIdx(t * 3);
+                  const i1 = getIdx(t * 3 + 1);
+                  const i2 = getIdx(t * 3 + 2);
+                  const addEdge = (a, b) => {
+                    const key = a < b ? `${a}_${b}` : `${b}_${a}`;
+                    edgeMap.set(key, (edgeMap.get(key) || 0) + 1);
+                  };
+                  addEdge(i0, i1);
+                  addEdge(i1, i2);
+                  addEdge(i2, i0);
+                }
+                edgeMap.forEach((count) => {
+                  totalEdgesChecked++;
+                  if (count === 1) boundaryEdges++;
+                  else if (count > 2) nonManifoldEdges++;
+                });
+              }
+            });
+
+            const isWatertight = faces > 0 && totalEdgesChecked > 0 && boundaryEdges === 0 && nonManifoldEdges === 0;
+            return {
+              vertices,
+              faces,
+              topology: isWatertight ? "Watertight Triangles" : "Triangles",
+              isWatertight,
+              meshCount,
+            };
+          }
+
+          const modelStats = computeModelStats(root);
+
           parent.postMessage({
             type: "code-sculpt-ready",
             meshNames: Object.keys(authored),
             parts: authored,
+            stats: modelStats,
           }, "*");
 
           // One stable frame later → thumbnail for library cards

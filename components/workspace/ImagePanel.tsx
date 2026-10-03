@@ -98,16 +98,11 @@ export function ImagePanel({
     >
       {/* Top Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-neutral-200/80 bg-white px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-pink-100 text-pink-700">
-            <ImageIcon className="h-4 w-4" />
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-semibold text-neutral-900">Image Studio</span>
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[13px] font-semibold text-neutral-900">Image Studio</span>
-            </div>
-            <p className="text-[11px] text-neutral-400">Generate reference concepts</p>
-          </div>
+          <p className="text-[11px] text-neutral-400">Generate reference concepts</p>
         </div>
 
         {/* Mode Switcher: Text vs Edit */}
@@ -118,7 +113,7 @@ export function ImagePanel({
             className={cn(
               "rounded-md px-2.5 py-1 font-medium transition-colors",
               !isEditMode
-                ? "bg-white text-neutral-900 shadow-sm"
+                ? "bg-neutral-900 text-white font-semibold shadow-xs"
                 : "text-neutral-500 hover:text-neutral-800"
             )}
           >
@@ -132,7 +127,7 @@ export function ImagePanel({
             className={cn(
               "rounded-md px-2.5 py-1 font-medium transition-colors",
               isEditMode
-                ? "bg-white text-neutral-900 shadow-sm"
+                ? "bg-neutral-900 text-white font-semibold shadow-xs"
                 : "text-neutral-500 hover:text-neutral-800",
               !editAvailable && "opacity-40 cursor-not-allowed"
             )}
@@ -144,31 +139,6 @@ export function ImagePanel({
 
       {/* Main Form */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4 p-4">
-        {/* Settings row */}
-        <div className="rounded-2xl border border-neutral-200/80 bg-white p-3 shadow-xs space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-              Provider & Settings
-            </span>
-            <PromptHistoryDropdown
-              promptHistory={promptHistory}
-              onSelectHistory={onSelectHistory}
-              onClearHistory={onClearHistory}
-              open={historyOpen}
-              onOpenChange={setHistoryOpen}
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <ImageOptionsDropdown
-              imageOptions={imageOptions}
-              onImageOptionsChange={onImageOptionsChange}
-              imageProviders={imageProviders}
-              isEditMode={isEditMode}
-            />
-          </div>
-        </div>
-
         {/* Reference Image (in Edit Mode) */}
         {isEditMode && (
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-3.5 shadow-xs">
@@ -177,7 +147,7 @@ export function ImagePanel({
                 <ImageIcon className="h-3.5 w-3.5 text-neutral-400" />
                 <span>Base Image to Edit</span>
               </span>
-              <span className="text-[11px] text-red-500 font-medium">Required</span>
+              <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">Required</span>
             </div>
 
             <ChatRefTile
@@ -206,9 +176,18 @@ export function ImagePanel({
               <Sparkles className="h-3.5 w-3.5 text-neutral-400" />
               <span>{isEditMode ? "Edit instructions" : "Prompt"}</span>
             </label>
-            <span className="text-[11px] tabular-nums text-neutral-400">
-              {prompt.length}/{MAX_PROMPT}
-            </span>
+            <div className="flex items-center gap-2">
+              <PromptHistoryDropdown
+                promptHistory={promptHistory}
+                onSelectHistory={onSelectHistory}
+                onClearHistory={onClearHistory}
+                open={historyOpen}
+                onOpenChange={setHistoryOpen}
+              />
+              <span className="text-[11px] tabular-nums text-neutral-400">
+                {prompt.length}/{MAX_PROMPT}
+              </span>
+            </div>
           </div>
 
           <textarea
@@ -236,6 +215,24 @@ export function ImagePanel({
           />
         </div>
 
+        {/* Settings row / selection box */}
+        <div className="rounded-2xl border border-neutral-200/80 bg-white p-3 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+              Provider & Settings
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ImageOptionsDropdown
+              imageOptions={imageOptions}
+              onImageOptionsChange={onImageOptionsChange}
+              imageProviders={imageProviders}
+              isEditMode={isEditMode}
+            />
+          </div>
+        </div>
+
         {/* 3D Handoff Banner */}
         {onSwitchToModel && (
           <div
@@ -244,7 +241,7 @@ export function ImagePanel({
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-100 text-neutral-700">
                   <Wand2 className="h-3.5 w-3.5" />
                 </div>
                 <div>
@@ -264,7 +261,13 @@ export function ImagePanel({
         generating={generating}
         onGenerate={onGenerate}
         label={isEditMode ? "Edit Image" : "Generate Image"}
-        timeEstimate="~10–20s"
+        timeEstimate={
+          isEditMode
+            ? "~20–30s"
+            : imageOptions.quality === "high"
+              ? "~30–60s"
+              : "~10–20s"
+        }
         creditCost={cost}
         disabledReason={
           isEditMode && !image

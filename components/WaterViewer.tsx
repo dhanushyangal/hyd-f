@@ -28,6 +28,8 @@ import {
   type ViewerLook,
 } from "@/lib/viewer/look";
 import { SELECTION_HIGHLIGHT } from "@/lib/viewer/highlight";
+import { ModelStatsOverlay } from "@/components/workspace/ModelStatsOverlay";
+import type { ModelMeshStats } from "@/lib/viewer/meshStats";
 
 type Props = {
   factoryCode: string | null;
@@ -163,6 +165,7 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
   const [booting, setBooting] = useState(true);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [modelStats, setModelStats] = useState<ModelMeshStats | null>(null);
   const lastThumbKey = useRef<string | null>(null);
 
   useEffect(() => {
@@ -197,6 +200,9 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
         setError(null);
         setModelReady(true);
         onPartsRef.current?.(sanitizePartMaterials(data.parts));
+        if (data.stats) {
+          setModelStats(data.stats as ModelMeshStats);
+        }
       }
       if (data.type === "water-select") {
         onPickRef.current?.(data.name ? String(data.name) : null);
@@ -260,6 +266,7 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
     setError(null);
     setExportError(null);
     setModelReady(false);
+    setModelStats(null);
     lastThumbKey.current = null;
     if (factoryCode) setBooting(true);
   }, [factoryCode]);
@@ -473,6 +480,9 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
         <div className="absolute bottom-3 left-3 right-3 z-10 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           {exportError}
         </div>
+      )}
+      {modelReady && modelStats && (
+        <ModelStatsOverlay stats={modelStats} corner="bottom-left" />
       )}
     </div>
   );

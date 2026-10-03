@@ -11,8 +11,9 @@ import {
   Sliders,
   Upload,
 } from "lucide-react";
-import type { BackendJob } from "@/lib/api";
+import { type BackendJob, unwrapProxiedImageUrl } from "@/lib/api";
 import type { PartMaterial, ViewerLook } from "@/lib/viewer/look";
+import type { ModelMeshStats } from "@/lib/viewer/meshStats";
 import { AssetInspector } from "./AssetInspector";
 import { displayImageUrl } from "./composer-parts";
 import type { WorkspaceSection } from "./WorkspaceRail";
@@ -41,6 +42,7 @@ type Props = {
   partMaterial?: PartMaterial | null;
   onPartMaterial?: (patch: Partial<PartMaterial>) => void;
   onUploadFile?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  modelStats?: ModelMeshStats | null;
   className?: string;
 };
 
@@ -66,6 +68,7 @@ export function GalleryPanel({
   partMaterial,
   onPartMaterial,
   onUploadFile,
+  modelStats,
   className,
 }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,6 +92,12 @@ export function GalleryPanel({
         return assets3D
           .filter((job) => !isWaterJobFn(job))
           .map((job) => ({ job, type: "3d" as const }));
+      }
+      if (effectiveFilter === "edit") {
+        return [
+          ...assets3D.map((job) => ({ job, type: "3d" as const })),
+          ...images.map((job) => ({ job, type: "image" as const })),
+        ];
       }
       if (effectiveFilter === "3d") {
         return assets3D.map((job) => ({ job, type: "3d" as const }));
@@ -206,6 +215,7 @@ export function GalleryPanel({
             onLookChange={onLookChange}
             partMaterial={partMaterial}
             onPartMaterial={onPartMaterial}
+            modelStats={modelStats}
           />
         </div>
       ) : (
@@ -226,7 +236,7 @@ export function GalleryPanel({
               </div>
 
               {onUploadFile && (
-                <label className="flex h-8 items-center gap-1.5 cursor-pointer rounded-xl bg-emerald-50 px-2.5 text-[12px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors shrink-0">
+                <label className="flex h-8 items-center gap-1.5 cursor-pointer rounded-xl bg-neutral-900 px-2.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors shrink-0">
                   <Upload className="h-3.5 w-3.5" />
                   <span>Upload</span>
                   <input
@@ -349,8 +359,18 @@ export function GalleryPanel({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={displayImageUrl(previewUrl)}
-                          alt={job.prompt || "Asset"}
+                          alt={job.prompt ? (job.prompt.length > 50 ? `${job.prompt.slice(0, 50)}...` : job.prompt) : (type === "3d" ? "3D Model" : "Image")}
                           className="h-full w-full object-cover pointer-events-none"
+                          onError={(e) => {
+                            const currentTarget = e.currentTarget;
+                            const currentSrc = currentTarget.src;
+                            const unproxied = unwrapProxiedImageUrl(previewUrl);
+                            if (unproxied && unproxied !== currentSrc && !currentSrc.endsWith(unproxied)) {
+                              currentTarget.src = unproxied;
+                            } else {
+                              currentTarget.style.display = "none";
+                            }
+                          }}
                         />
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center p-2 text-center text-neutral-400">

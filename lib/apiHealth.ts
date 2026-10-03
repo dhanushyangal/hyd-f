@@ -31,7 +31,10 @@ const DEFAULT_FEATURES: GpuFeatures = {
   edit_image: true,
 };
 
-const DEFAULT_PROVIDERS: ImageProviderAvailability = { openai: true, gemini: true };
+const DEFAULT_PROVIDERS: ImageProviderAvailability = {
+  openai: true,
+  gemini: true,
+};
 
 /** Backend unreachable: nothing works. */
 const OFFLINE_FEATURES: GpuFeatures = {
@@ -48,7 +51,11 @@ const GPU_API_URL = (
 
 function getBackendBase(): string {
   const url = process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (!url || url === "NEXT_PUBLIC_BACKEND_URL" || url.includes("NEXT_PUBLIC_BACKEND_URL")) {
+  if (
+    !url ||
+    url === "NEXT_PUBLIC_BACKEND_URL" ||
+    url.includes("NEXT_PUBLIC_BACKEND_URL")
+  ) {
     return "https://hydrilla-backend.vercel.app";
   }
   return url.replace(/\/$/, "");
@@ -163,7 +170,9 @@ export function markPrimaryDown(): void {
     status: _state.features.text_to_image ? "degraded" : "down",
     features: { ..._state.features, image_to_3d: false, text_to_3d: false },
   };
-  console.warn("[apiHealth] GPU unavailable at api.hydrilla.co — retrying until recovery");
+  console.warn(
+    "[apiHealth] GPU unavailable at api.hydrilla.co — retrying until recovery",
+  );
   _notify();
   if (typeof window !== "undefined") startRecoveryPolling();
 }
@@ -192,7 +201,9 @@ export function canImageTo3d(): boolean {
   return !!_state.features.image_to_3d;
 }
 
-export function imageProviderAvailable(provider: keyof ImageProviderAvailability): boolean {
+export function imageProviderAvailable(
+  provider: keyof ImageProviderAvailability,
+): boolean {
   return !!_state.providers[provider];
 }
 

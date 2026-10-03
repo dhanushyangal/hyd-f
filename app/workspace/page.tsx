@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { motion } from "motion/react";
@@ -27,7 +28,9 @@ import { WorkspaceRail, type WorkspaceSection } from "../../components/workspace
 import { AgentPanel } from "../../components/workspace/AgentPanel";
 import { ImagePanel } from "../../components/workspace/ImagePanel";
 import { ModelPanel } from "../../components/workspace/ModelPanel";
+import { EditPanel } from "../../components/workspace/EditPanel";
 import { GalleryPanel } from "../../components/workspace/GalleryPanel";
+import { renderGlbSnapshot, renderGlbMultiViewSnapshots } from "../../lib/viewer/renderGlbSnapshot";
 import { MAX_PROMPT } from "../../components/workspace/composer-parts";
 import type { WaterViewerHandle } from "../../components/WaterViewer";
 import { WaterPassRail } from "../../components/water/WaterPassRail";
@@ -42,6 +45,7 @@ import {
   type PartMaterialMap,
   type ViewerLook,
 } from "../../lib/viewer/look";
+import type { ModelMeshStats } from "../../lib/viewer/meshStats";
 import { useKeyedDebounce } from "../../lib/use-keyed-debounce";
 import { usePromptHistory } from "../../lib/prompt-history";
 import { ModeToggle } from "../../components/mode-toggle";
@@ -181,13 +185,16 @@ type CenterView =
   | { type: "generating"; progress: number; message: string }
   | { type: "3d"; glbUrl: string; jobId: string }
   | { type: "code"; factoryCode: string; jobId: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; refunded?: boolean };
 
 /** Show "GPU is unavailable" when both APIs have failed (fetch/network errors). */
-function toUserFacingGpuError(msg: string | undefined): string {
-  if (!msg) return "GPU is unavailable";
-  if (/fetch failed|failed to fetch|networkerror|ECONNREFUSED|External service unavailable|GPU is unavailable/i.test(msg))
-    return "GPU is unavailable";
+function toUserFacingGpuError(msg: string | null | undefined): string {
+  if (!msg) {
+    return "GPU is currently offline or restarting. Your credits have been refunded. Please try again in a few moments.";
+  }
+  if (/fetch failed|failed to fetch|networkerror|ECONNREFUSED|External service unavailable|GPU is unavailable|GPU is currently offline|503|timeout|timed out|GENERATION_TIMEOUT/i.test(msg)) {
+    return "GPU is currently offline or restarting. Your credits have been refunded. Please try again in a few moments.";
+  }
   return msg;
 }
 
@@ -403,6 +410,7 @@ function WorkspacePage() {
   // Loading states
   const [loading, setLoading] = useState(false);
   const [generatingPreview, setGeneratingPreview] = useState(false);
+  const [activeModelStats, setActiveModelStats] = useState<ModelMeshStats | null>(null);
   const isSubmittingImageRef = useRef(false);
   const isSubmitting3DRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -587,6 +595,10 @@ function WorkspacePage() {
   const [activeSection, setActiveSection] = useState<WorkspaceSection>("model");
   const [waterSkill, setWaterSkill] = useState<WaterSkillId>(DEFAULT_WATER_SKILL);
   const [isImageEditMode, setIsImageEditMode] = useState<boolean>(false);
+  const [editPrompt, setEditPrompt] = useState<string>("");
+  const [editResolution, setEditResolution] = useState<"standard" | "ultra1k">("standard");
+  const [modelResolution, setModelResolution] = useState<"standard" | "ultra1k">("standard");
+  const [modelInputMode, setModelInputMode] = useState<"image" | "prompt">("image");
 
   useEffect(() => {
     setClientMounted(true);
@@ -606,10 +618,16 @@ function WorkspacePage() {
       ) as WorkspaceSection | null;
       if (
         savedSection &&
-        (savedSection === "agent" || savedSection === "image" || savedSection === "model")
+        (savedSection === "agent" || savedSection === "image" || savedSection === "model" || savedSection === "edit")
       ) {
         setActiveSection(savedSection);
-        setInputMode(savedSection === "model" ? "image" : "text");
+        if (savedSection === "agent" || savedSection === "image") {
+          setInputMode("text");
+        } else if (savedSection === "edit") {
+          setInputMode("text_1img");
+        } else {
+          setInputMode("image");
+        }
       } else {
         setInputMode("image");
       }
@@ -1021,6 +1039,27 @@ function WorkspacePage() {
     [updateCurrentMode]
   );
 
+  const [multiViewPreviews, setMultiViewPreviews] = useState<string[]>([]);
+  const [isRenderingMultiView, setIsRenderingMultiView] = useState(false);
+  const cachedMultiViewFilesRef = useRef<File[] | null>(null);
+
+  const captureMultiViewSnapshots = useCallback(
+    async (source: File | string) => {
+      setIsRenderingMultiView(true);
+      try {
+        const res = await renderGlbMultiViewSnapshots(source);
+        setMultiViewPreviews(res.views.map((v) => v.dataUrl));
+        cachedMultiViewFilesRef.current = res.views.map((v) => v.file);
+        setImage1(res.composite.dataUrl);
+      } catch (err) {
+        console.warn("Multi-view 4-screenshot capture failed:", err);
+      } finally {
+        setIsRenderingMultiView(false);
+      }
+    },
+    [setImage1]
+  );
+
   // Auto-save workspace name (debounced)
   const handleWorkspaceNameChange = useCallback(
     (newName: string) => {
@@ -1168,9 +1207,13 @@ function WorkspacePage() {
 
   // ──────────── Poll for generating 3D job ────────────
   useEffect(() => {
-    if (!currentGenerating || currentGenerating.status !== "generating") return;
+    if (!currentGenerating || currentGenerating.status !== "generating") {
+      return;
+    }
+    // Pending optimistic IDs are in-flight client placeholders; never poll server with pending- prefix.
     // Water jobs poll via fetchWaterJob in runWater / handle3DClick — never use GPU/GLB status.
     if (
+      currentGenerating.jobId.startsWith("pending-") ||
       isWaterJobId(currentGenerating.jobId) ||
       centerView.type === "code"
     ) {
@@ -1180,28 +1223,33 @@ function WorkspacePage() {
     const failureTracker = { count: 0 };
     const MAX_FAILURES = 20;
 
-    // Hard cap on how long we keep polling a single job. Trellis can take
-    // 10–15 min on hard inputs, so we allow up to 25 min before giving up
-    // on the UI. The backend will eventually mark the job failed itself,
-    // but we don't want the user staring at a forever-spinning preview.
-    const MAX_POLL_MS = 25 * 60 * 1000;
+    // 16-minute timeout cap:
+    // Gives generous time (12-16 minutes) especially when high-res reconstruction or GPU OOM restart occurs.
+    const MAX_POLL_MS = 16 * 60 * 1000;
     const pollStartedAt = Date.now();
 
     const pollStatus = async () => {
-      // Stop polling if we've exceeded the max client-side wait.
+      // Stop polling if we've exceeded the max client-side wait (16 minutes).
       if (Date.now() - pollStartedAt > MAX_POLL_MS) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
+        const timedOutJobId = currentGenerating.jobId;
         setCurrentGenerating(null);
         setLoading(false);
+        try {
+          await cancelJob(timedOutJobId, async () => (await getToken()) ?? null);
+        } catch {
+          // ignore cancel error; backend timeout handles status and refund
+        }
         refreshCredits();
         refreshLibrary();
         setCenterView({
           type: "error",
           message:
-            "3D generation is taking longer than expected. It may still complete in the background — check the library in a few minutes.",
+            "GPU is currently offline or restarting. Your credits have been refunded. Please try again in a few moments.",
+          refunded: true,
         });
         return;
       }
@@ -1210,7 +1258,7 @@ function WorkspacePage() {
         failureTracker.count = 0;
 
         if (status.queue) {
-          const estimatedTotal = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 300;
+          const estimatedTotal = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 480;
           setCurrentGenerating((prev) =>
             prev ? { ...prev, queueInfo: status.queue, estimatedTotalSeconds: estimatedTotal } : null
           );
@@ -1280,7 +1328,7 @@ function WorkspacePage() {
         } else if (status.status === "processing" || status.status === "pending") {
           const startTime = status.created_at || currentGenerating.startTime || Date.now();
           const elapsedSeconds = (Date.now() - startTime) / 1000;
-          const estimatedTotal = currentGenerating.estimatedTotalSeconds || 300;
+          const estimatedTotal = currentGenerating.estimatedTotalSeconds || 480;
           const progress = Math.min(90, Math.max(8, (elapsedSeconds / estimatedTotal) * 90));
           setCenterView((prev) => {
             const followsCurrentJob =
@@ -1347,7 +1395,8 @@ function WorkspacePage() {
             stage: "processing",
             reason: "job_failed",
           });
-          const userFacing = toUserFacingGpuError(status.error || "Generation failed");
+          const rawError = status.error || "Generation failed";
+          const userFacing = toUserFacingGpuError(rawError);
           setCurrentGenerating(null);
           setLoading(false);
           refreshCredits();
@@ -1355,7 +1404,11 @@ function WorkspacePage() {
           void (async () => {
             await waitMobileGpuOfflineMinimum(status.error, userFacing);
             mobileGenStartedAtRef.current = null;
-            setCenterView({ type: "error", message: userFacing });
+            setCenterView({
+              type: "error",
+              message: userFacing,
+              refunded: true,
+            });
           })();
         } else if (status.status === "cancelled") {
           if (progressIntervalRef.current) {
@@ -1370,24 +1423,37 @@ function WorkspacePage() {
           setLoading(false);
           refreshCredits();
           refreshLibrary();
-          setCenterView({ type: "error", message: "Job cancelled" });
+          setCenterView({
+            type: "error",
+            message: "Job cancelled. Your credits have been automatically refunded.",
+            refunded: true,
+          });
         }
-      } catch {
+      } catch (err: unknown) {
         failureTracker.count += 1;
-        if (failureTracker.count >= MAX_FAILURES) {
+        const errMsg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "";
+        const isGpuUnavailable = /GPU is (currently )?offline|GPU is unavailable|503/i.test(errMsg);
+        const maxAllowedFailures = isGpuUnavailable ? 3 : MAX_FAILURES;
+        if (failureTracker.count >= maxAllowedFailures) {
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
             progressIntervalRef.current = null;
           }
           track("3d_generation_failed", {
             stage: "polling",
-            reason: "connection_lost",
+            reason: isGpuUnavailable ? "gpu_unavailable" : "connection_lost",
           });
           setCurrentGenerating(null);
           setLoading(false);
           refreshCredits();
           refreshLibrary();
-          setCenterView({ type: "error", message: "Lost connection to server" });
+          setCenterView({
+            type: "error",
+            message: isGpuUnavailable
+              ? "GPU is currently offline or restarting. Your credits have been automatically refunded."
+              : "Lost connection to server. Any credits used for failed generation have been automatically refunded.",
+            refunded: true,
+          });
         }
       }
     };
@@ -1415,6 +1481,29 @@ function WorkspacePage() {
   }, [mobileGeneratedToast]);
 
   // ──────────── File handling ────────────
+  const processIncomingFile = useCallback(
+    async (file: File) => {
+      const is3DFile =
+        file.name.endsWith(".glb") ||
+        file.name.endsWith(".gltf") ||
+        file.name.endsWith(".obj") ||
+        file.type.startsWith("model/");
+      const isImageFile = file.type.startsWith("image/");
+      if (!is3DFile && !isImageFile) {
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      setImage1(url);
+      setFile1(file);
+      setJobId1(null);
+      if (is3DFile) {
+        setCenterView({ type: "3d", glbUrl: url, jobId: "uploaded-3d-model" });
+        void captureMultiViewSnapshots(file);
+      }
+    },
+    [setImage1, setFile1, setJobId1, setCenterView, captureMultiViewSnapshots]
+  );
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -1425,42 +1514,54 @@ function WorkspacePage() {
       const draggedImageUrl = e.dataTransfer.getData("text/uri-list");
       if (draggedJobId && draggedImageUrl) {
         // Dropped from library — use URL, track parent job ID, clear file
-        setImage1(draggedImageUrl); setFile1(null); setJobId1(draggedJobId);
+        setImage1(draggedImageUrl);
+        setFile1(null);
+        setJobId1(draggedJobId);
+        setMultiViewPreviews([]);
+        cachedMultiViewFilesRef.current = null;
         return;
       }
 
       // Dropped from file system
       const file = e.dataTransfer.files?.[0];
-      if (!file || !file.type.startsWith("image/")) return;
-      const url = URL.createObjectURL(file);
-      setImage1(url); setFile1(file); setJobId1(null);
+      if (!file) {
+        return;
+      }
+      void processIncomingFile(file);
     },
-    [setImage1, setFile1, setJobId1]
+    [setImage1, setFile1, setJobId1, processIncomingFile]
   );
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const file = e.clipboardData.files?.[0];
-      if (!file || !file.type.startsWith("image/")) return;
-      const url = URL.createObjectURL(file);
-      setImage1(url); setFile1(file); setJobId1(null);
+      if (!file) {
+        return;
+      }
+      void processIncomingFile(file);
     },
-    [setImage1, setFile1, setJobId1]
+    [processIncomingFile]
   );
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      setImage1(url); setFile1(file); setJobId1(null);
+      if (!file) {
+        return;
+      }
+      void processIncomingFile(file);
       e.target.value = "";
     },
-    [setImage1, setFile1, setJobId1]
+    [processIncomingFile]
   );
 
   const handleClearImage = useCallback(() => {
-    setImage1(null); setFile1(null); setJobId1(null);
+    setImage1(null);
+    setFile1(null);
+    setJobId1(null);
+    setMultiViewPreviews([]);
+    cachedMultiViewFilesRef.current = null;
+    setIsRenderingMultiView(false);
   }, [setImage1, setFile1, setJobId1]);
 
   // ──────────── Water (bring-your-own model): text → procedural Three.js ────────────
@@ -1768,7 +1869,12 @@ function WorkspacePage() {
   // the client upload path matches /generate page — avoids relying on a separate pre-upload + URL that
   // can be wrong (gateway vs backend, blob quirks, or localhost URLs in dev).
   const start3DFromImage = useCallback(
-    async (imageUrl: string, previewId: string | null, localFile: File | null = null) => {
+    async (
+      imageUrl: string,
+      previewId: string | null,
+      localFile: File | null = null,
+      customPrompt?: string | null
+    ) => {
       if (!hasWorkspaceContext) {
         setForcedWorkspaceModal(true);
         setShowNewWorkspaceModal(true);
@@ -1794,6 +1900,14 @@ function WorkspacePage() {
         return;
       }
 
+      const targetPrompt = (
+        customPrompt !== undefined && customPrompt !== null
+          ? customPrompt
+          : activeSection === "edit"
+          ? editPrompt
+          : prompt
+      )?.trim() || null;
+
       track("image_to_3d_started", {
         model: selectedModel,
         has_local_file: !!localFile,
@@ -1811,6 +1925,7 @@ function WorkspacePage() {
         generateType: "ImageTo3D",
         previewImageUrl: imageUrl,
         imageUrl,
+        prompt: targetPrompt,
         parentJobId: previewId ?? null,
         parentJobIds: previewId ? [previewId] : [],
       });
@@ -1818,7 +1933,7 @@ function WorkspacePage() {
         id: pendingId,
         userId: null,
         status: "WAIT",
-        prompt: prompt.trim() || null,
+        prompt: targetPrompt,
         imageUrl,
         generateType: "ImageTo3D",
         resultGlbUrl: null,
@@ -1832,10 +1947,7 @@ function WorkspacePage() {
         updatedAt: new Date().toISOString(),
       });
 
-      let queueInfo: QueueInfo | null = null;
-      try {
-        queueInfo = await fetchQueueInfo();
-      } catch (err: unknown) {
+      const queueInfo = await fetchQueueInfo().catch(async (err: unknown) => {
         const msg = err && typeof err === "object" && "message" in err ? String((err as { message?: string }).message) : "";
         const userFacing = msg?.includes("GPU is currently offline")
           ? toUserFacingGpuError(msg)
@@ -1845,16 +1957,18 @@ function WorkspacePage() {
         }
         await waitMobileGpuOfflineMinimum(msg, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing });
+        setCenterView({ type: "error", message: userFacing, refunded: true });
         removePendingJob(pendingId);
         setLoading(false);
         track("3d_generation_failed", {
           stage: "queue_info",
           reason: msg?.includes("GPU is currently offline") ? "gpu_offline" : "queue_error",
         });
-        return;
-      }
-      const estimatedTotal = queueInfo?.estimated_total_seconds || 300;
+        return null;
+      });
+      const active3DResolution = activeSection === "edit" ? editResolution : modelResolution;
+      const fallbackEstSec = active3DResolution === "ultra1k" ? 540 : 480;
+      const estimatedTotal = queueInfo?.estimated_total_seconds || fallbackEstSec;
       try {
         const result = await submitImageTo3D(
           localFile ? null : imageUrl,
@@ -1864,7 +1978,9 @@ function WorkspacePage() {
           null,
           workspaceId,
           previewId,
-          selectedModel
+          selectedModel,
+          active3DResolution,
+          targetPrompt
         );
         mobileGenStartedAtRef.current = null;
         setCurrentGenerating({
@@ -1879,7 +1995,7 @@ function WorkspacePage() {
           id: result.job_id,
           userId: null,
           status: "RUN",
-          prompt: prompt.trim() || null,
+          prompt: targetPrompt,
           imageUrl,
           generateType: "ImageTo3D",
           resultGlbUrl: null,
@@ -1906,7 +2022,7 @@ function WorkspacePage() {
         const userFacing = toUserFacingGpuError(msg);
         await waitMobileGpuOfflineMinimum(msg, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing });
+        setCenterView({ type: "error", message: userFacing, refunded: true });
         removePendingJob(pendingId);
         refreshCredits();
         refreshLibrary();
@@ -1915,7 +2031,7 @@ function WorkspacePage() {
         setLoading(false);
       }
     },
-    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, selectedModel, waitMobileGpuOfflineMinimum, addPendingJob, removePendingJob, refreshLibrary, refreshCredits, runWater]
+    [getToken, workspaceId, hasWorkspaceContext, markMobileGenerationStart, selectedModel, waitMobileGpuOfflineMinimum, addPendingJob, removePendingJob, refreshLibrary, refreshCredits, runWater, activeSection, editPrompt, prompt, editResolution, modelResolution]
   );
 
   // ──────────── STEP 1: Generate Image (optionally then 3D) ────────────
@@ -2044,14 +2160,17 @@ function WorkspacePage() {
 
         if (thenGenerate3D) await start3DFromImage(result.image_url, result.preview_id);
       } catch (err: any) {
-        if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
         if (isPaywallError(err?.message)) {
           track("paywall_hit", { source: "text_to_image", action: "generate_image" });
         }
         const userFacing = err?.message || "Failed to generate image";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing });
+        setCenterView({ type: "error", message: userFacing, refunded: true });
         setGeneratingPreview(false);
         removePendingJob(pendingTextImageId);
         refreshCredits();
@@ -2072,21 +2191,19 @@ function WorkspacePage() {
         return;
       }
       setError(null);
-      let imageUrl: string;
-      if (file1) {
-        try {
-          imageUrl = await uploadSourceImageWithFallback(file1, tokenGetter);
-        } catch (err: any) {
-          setError(err?.message || "Failed to upload image");
-          return;
-        }
-      } else {
-        imageUrl = image1!;
+      const uploadedImageUrl = file1
+        ? await uploadSourceImageWithFallback(file1, tokenGetter).catch((err: any) => {
+            setError(err?.message || "Failed to upload image");
+            return null;
+          })
+        : image1!;
+      if (!uploadedImageUrl) {
+        return;
       }
-      setLastPreviewImageUrl(imageUrl);
+      setLastPreviewImageUrl(uploadedImageUrl);
       setLastPreviewId(jobId1);
-      setCenterView({ type: "preview", imageUrl, previewId: jobId1 || undefined });
-      await start3DFromImage(imageUrl, jobId1);
+      setCenterView({ type: "preview", imageUrl: uploadedImageUrl, previewId: jobId1 || undefined });
+      await start3DFromImage(uploadedImageUrl, jobId1);
       return;
     }
 
@@ -2224,32 +2341,33 @@ function WorkspacePage() {
         const editedJob = { id: result.edit_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "EditImage", parentJobId: editParent, parentJobIds: editParentIds, sourceImages: editSrcImages, createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
         loadJobInfo(editedJob);
 
-        if (thenGenerate3D) await start3DFromImage(result.image_url, result.edit_id);
+        if (thenGenerate3D) {
+          await start3DFromImage(result.image_url, result.edit_id);
+        }
       } catch (err: any) {
-        if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
         if (isPaywallError(err?.message)) {
           track("paywall_hit", { source: "image_edit", action: "edit_image" });
         }
         const userFacing = err?.message || "Failed to edit image";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing });
+        setCenterView({ type: "error", message: userFacing, refunded: true });
         setGeneratingPreview(false);
         removePendingJob(pendingEditId);
+        refreshCredits();
+        refreshLibrary();
       }
       return;
     }
   };
 
-  // ──────────── Generate 3D: from current preview, or generate image first then 3D ────────────
+  // ──────────── Generate 3D: from current preview, prompt, or chained edit ────────────
   // Single entry point for "Generate 3D" everywhere (center preview button AND
-  // the bottom "Generate 3D" button when inputMode === "image"). Previously the
-  // bottom button went through `handleGenerateImage()` which clears
-  // `lastPreviewImageUrl/Id` at its start (line ~1059) — that desyncs the
-  // polling effect's `prev.previewId === currentGenerating.jobId` check and
-  // leaves the user staring at a spinner that never updates. Routing both
-  // buttons through this function keeps the working "library click → Generate
-  // 3D Model" flow intact and uses an identical code path for fresh uploads.
+  // the bottom "Generate 3D" button when in Model / Edit studio).
   const handleGenerate3D = async () => {
     setError(null);
     if (loading || generatingPreview || isSubmitting3DRef.current || isSubmittingImageRef.current) {
@@ -2269,52 +2387,334 @@ function WorkspacePage() {
       return;
     }
 
-    // image mode (or text_1img with no prompt): pass disk `File` straight into
-    // `submitImageTo3D` (via start3DFromImage) instead of a separate upload step,
-    // so behavior matches the working /generate flow and the GPU always receives
-    // a URL the worker can fetch (from gateway/backend upload inside submit).
-    if (inputMode === "image" || (inputMode === "text_1img" && !prompt.trim())) {
-      if (!file1 && !image1 && !lastPreviewImageUrl) {
-        setError("Please upload or select an image");
+    const isEditSection = activeSection === "edit";
+    const effectivePrompt = isEditSection
+      ? editPrompt.trim()
+      : prompt.trim();
+    const effectiveResolution = isEditSection ? editResolution : modelResolution;
+    const tokenGetter = async () => {
+      return await getToken();
+    };
+
+    // ── Edit Studio flow: with base image + prompt (Image Edit -> 3D Generation) ──
+    if (isEditSection && (file1 || image1 || lastPreviewImageUrl) && effectivePrompt) {
+      if (effectivePrompt.length < 2) {
+        setError("Edit prompt is too short. Please provide at least 2 characters.");
         return;
       }
-      let parentId: string | null = jobId1 ?? lastPreviewId;
-      let displayUrl: string;
-      let fileForSubmit: File | null = file1;
-      let revokeDisplayUrl: string | null = null;
-      if (file1) {
-        parentId = null;
-        if (image1) {
-          displayUrl = image1;
-        } else {
-          revokeDisplayUrl = URL.createObjectURL(file1);
-          displayUrl = revokeDisplayUrl;
-        }
-      } else if (image1) {
-        displayUrl = image1;
-      } else {
-        displayUrl = lastPreviewImageUrl!;
+
+      isSubmittingImageRef.current = true;
+      track("edit_studio_edit_to_3d_started", {
+        model: selectedModel,
+        resolution: effectiveResolution,
+        provider: imageOptions.provider,
+      });
+      setGeneratingPreview(true);
+      markMobileGenerationStart();
+      setCenterView({ type: "generating", progress: 0, message: "Modifying 3D model..." });
+
+      const pendingEditId = addPendingJob({
+        generateType: "EditImage",
+        prompt: effectivePrompt,
+        previewImageUrl: image1 ?? lastPreviewImageUrl ?? null,
+        imageUrl: image1 ?? lastPreviewImageUrl ?? null,
+        parentJobId: jobId1 ?? lastPreviewId ?? currentParentJobId ?? null,
+        parentJobIds: jobId1 ? [jobId1] : (lastPreviewId ? [lastPreviewId] : []),
+      });
+
+      const estimatedTime = imageOptions.quality === "high" ? 60 : 30;
+      const startTime = Date.now();
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
       }
+      progressIntervalRef.current = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const progress = Math.min(90, (elapsed / estimatedTime) * 95);
+        setCenterView({ type: "generating", progress, message: "Applying 3D model modifications..." });
+      }, 200);
+
       try {
-        setLastPreviewImageUrl(displayUrl);
-        setLastPreviewId(parentId);
-        setCenterView({ type: "preview", imageUrl: displayUrl, previewId: parentId || undefined });
-        await start3DFromImage(displayUrl, parentId, fileForSubmit);
+        const is3DModelFile = Boolean(
+          file1 && (
+            file1.name.toLowerCase().endsWith(".glb") ||
+            file1.name.toLowerCase().endsWith(".gltf") ||
+            file1.name.toLowerCase().endsWith(".obj") ||
+            file1.type.startsWith("model/")
+          )
+        );
+
+        const is3DUrl = (url: string | null | undefined): boolean => {
+          if (!url) {
+            return false;
+          }
+          const clean = url.split("?")[0].toLowerCase();
+          return clean.endsWith(".glb") || clean.endsWith(".gltf") || clean.endsWith(".obj") || clean.includes("/glb/");
+        };
+
+        const target3DSource: File | string | null = (is3DModelFile && file1)
+          ? file1
+          : (selected3DJob?.resultGlbUrl || (image1 && is3DUrl(image1) ? image1 : null));
+
+        const multiViewResult = await (async () => {
+          if (!target3DSource) {
+            return null;
+          }
+          try {
+            return await renderGlbMultiViewSnapshots(target3DSource);
+          } catch (renderErr) {
+            console.warn("Multi-view 4-screenshot capture failed; attempting single snapshot fallback:", renderErr);
+            return null;
+          }
+        })();
+
+        const multiViewFiles = multiViewResult ? multiViewResult.views.map((v) => v.file) : [];
+        const fallbackSingleFile = await (async () => {
+          if (multiViewFiles.length > 0) {
+            return null;
+          }
+          if (is3DModelFile && file1) {
+            try {
+              const snapshot = await renderGlbSnapshot(file1);
+              setImage1(snapshot.dataUrl);
+              return snapshot.file;
+            } catch (singleErr) {
+              console.warn("Single snapshot failed:", singleErr);
+              return null;
+            }
+          }
+          return file1;
+        })();
+
+        const primarySnapshotFile = multiViewResult
+          ? multiViewResult.composite.file
+          : fallbackSingleFile;
+
+        const filesToSend = multiViewResult
+          ? [...multiViewFiles, multiViewResult.composite.file]
+          : (fallbackSingleFile ? [fallbackSingleFile] : []);
+
+        const srcUrl = primarySnapshotFile
+          ? await uploadSourceImageWithFallback(primarySnapshotFile, tokenGetter)
+          : (image1 ?? lastPreviewImageUrl ?? null);
+        const editSrcImages = srcUrl ? [srcUrl] : [];
+
+        const result = await editImage(
+          effectivePrompt,
+          filesToSend.length > 0 ? filesToSend : primarySnapshotFile,
+          filesToSend.length > 0 || primarySnapshotFile ? null : (image1 ?? lastPreviewImageUrl),
+          tokenGetter,
+          {
+            workspaceId,
+            parentJobId: jobId1 || lastPreviewId || currentParentJobId || null,
+            parentJobIds: jobId1 ? [jobId1] : (lastPreviewId ? [lastPreviewId] : []),
+            sourceImages: editSrcImages,
+          },
+          imageOptions
+        );
+
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+
+        const editParent = jobId1 || lastPreviewId || currentParentJobId;
+        const editParentIds = editParent ? [editParent] : [];
+
+        setLastPreviewImageUrl(result.image_url);
+        setLastPreviewId(result.edit_id);
+        setCurrentParentJobId(result.edit_id);
+        setLeftLibraryTab("images");
+        setCenterView({ type: "preview", imageUrl: result.image_url, previewId: result.edit_id });
+        setGeneratingPreview(false);
+        mobileGenStartedAtRef.current = null;
+
+        try {
+          await registerJobWithPreview(
+            result.edit_id,
+            result.image_url,
+            isEditSection ? editPrompt.trim() : effectivePrompt,
+            tokenGetter,
+            null,
+            "EditImage",
+            workspaceId,
+            editParent,
+            editParentIds,
+            editSrcImages
+          );
+        } catch {
+          /* non-critical */
+        }
+        removePendingJob(pendingEditId);
+        refreshLibrary();
+        refreshCredits();
+
+        // Chain immediately into 3D model generation
+        await start3DFromImage(result.image_url, result.edit_id, null, isEditSection ? editPrompt.trim() : null);
+      } catch (err: any) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        if (isPaywallError(err?.message)) {
+          track("paywall_hit", { source: "edit_studio", action: "edit_image" });
+        }
+        const userFacing = err?.message || "Failed to modify 3D model";
+        await waitMobileGpuOfflineMinimum(err.message, userFacing);
+        mobileGenStartedAtRef.current = null;
+        setCenterView({ type: "error", message: userFacing, refunded: true });
+        setGeneratingPreview(false);
+        removePendingJob(pendingEditId);
+        refreshCredits();
+        refreshLibrary();
       } finally {
-        if (revokeDisplayUrl) URL.revokeObjectURL(revokeDisplayUrl);
+        isSubmittingImageRef.current = false;
       }
       return;
     }
 
-    // We already have a generated preview in the center → reuse its URL.
-    if (lastPreviewImageUrl) {
-      await start3DFromImage(lastPreviewImageUrl, lastPreviewId);
+    // ── Prompt to 3D Generation flow: (Model Studio in prompt mode, or Edit Studio with prompt only) ──
+    const isModelSection = activeSection === "model";
+    const isPromptTo3DFlow =
+      (isModelSection && modelInputMode === "prompt" && Boolean(effectivePrompt)) ||
+      (isEditSection && Boolean(effectivePrompt) && !file1 && !image1 && !lastPreviewImageUrl);
+
+    if (isPromptTo3DFlow) {
+      if (effectivePrompt.length < 2) {
+        setError("Prompt is too short. Please provide at least 2 characters.");
+        return;
+      }
+      if (effectivePrompt.length > MAX_PROMPT) {
+        setError(`Prompt exceeds maximum supported length of ${MAX_PROMPT} characters.`);
+        return;
+      }
+
+      isSubmittingImageRef.current = true;
+      track(isModelSection ? "model_studio_text_to_3d_started" : "edit_studio_text_to_3d_started", {
+        model: selectedModel,
+        resolution: effectiveResolution,
+        provider: imageOptions.provider,
+      });
+      setGeneratingPreview(true);
+      markMobileGenerationStart();
+      setCenterView({ type: "generating", progress: 0, message: "Synthesizing concept art from prompt..." });
+
+      const pendingTextImageId = addPendingJob({
+        generateType: "TextToImage",
+        prompt: effectivePrompt,
+      });
+
+      const estimatedTime = imageOptions.quality === "high" ? 60 : 25;
+      const startTime = Date.now();
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      progressIntervalRef.current = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const progress = Math.min(90, (elapsed / estimatedTime) * 95);
+        setCenterView({ type: "generating", progress, message: "Synthesizing concept art from prompt..." });
+      }, 200);
+
+      try {
+        const result = await generatePreviewImage(effectivePrompt, tokenGetter, { workspaceId }, imageOptions);
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+
+        setLastPreviewImageUrl(result.image_url);
+        setLastPreviewId(result.preview_id);
+        setCurrentParentJobId(result.preview_id);
+        
+        // Directly transition into 3D generation without showing 2D preview image
+        setCenterView({
+          type: "generating",
+          progress: 10,
+          message: "Starting 3D model generation...",
+        });
+        setGeneratingPreview(false);
+        mobileGenStartedAtRef.current = null;
+
+        try {
+          await registerJobWithPreview(
+            result.preview_id,
+            result.image_url,
+            effectivePrompt,
+            tokenGetter,
+            null,
+            null,
+            workspaceId,
+            null
+          );
+        } catch {
+          /* non-critical */
+        }
+        removePendingJob(pendingTextImageId);
+        refreshLibrary();
+        refreshCredits();
+
+        // Chain immediately into 3D model generation
+        await start3DFromImage(result.image_url, result.preview_id);
+      } catch (err: any) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        if (isPaywallError(err?.message)) {
+          track("paywall_hit", { source: isModelSection ? "model_studio" : "edit_studio", action: "generate_image" });
+        }
+        const userFacing = err?.message || "Failed to generate concept from prompt";
+        await waitMobileGpuOfflineMinimum(err.message, userFacing);
+        mobileGenStartedAtRef.current = null;
+        setCenterView({ type: "error", message: userFacing, refunded: true });
+        setGeneratingPreview(false);
+        removePendingJob(pendingTextImageId);
+        refreshCredits();
+        refreshLibrary();
+      } finally {
+        isSubmittingImageRef.current = false;
+      }
       return;
     }
 
-    // No image and no preview: generate image first (using current text mode),
-    // then chain straight into 3D. (Hydrilla cloud / Trilles only — Water returns earlier.)
-    await handleGenerateImage(true);
+    // ── Direct Image-to-3D: Model Studio flow with image file / reference image ──
+    if (!file1 && !image1 && !lastPreviewImageUrl) {
+      setError(
+        isEditSection
+          ? "Please enter a prompt or upload an image"
+          : (modelInputMode === "prompt"
+            ? "Please enter a prompt to generate 3D"
+            : "Please upload or select an image")
+      );
+      return;
+    }
+
+    const parentId = file1 ? null : (jobId1 ?? lastPreviewId);
+    const revokeState: { url: string | null } = { url: null };
+    const resolveDisplayUrl = (): string => {
+      if (file1) {
+        if (image1) {
+          return image1;
+        }
+        revokeState.url = URL.createObjectURL(file1);
+        return revokeState.url;
+      }
+      if (image1) {
+        return image1;
+      }
+      return lastPreviewImageUrl!;
+    };
+    const displayUrl = resolveDisplayUrl();
+
+    try {
+      setLastPreviewImageUrl(displayUrl);
+      setLastPreviewId(parentId);
+      setCenterView({ type: "preview", imageUrl: displayUrl, previewId: parentId || undefined });
+      await start3DFromImage(displayUrl, parentId, file1);
+    } finally {
+      if (revokeState.url) {
+        URL.revokeObjectURL(revokeState.url);
+      }
+    }
   };
 
   // ──────────── Generation Info helpers ────────────
@@ -2340,10 +2740,89 @@ function WorkspacePage() {
     }
   }, [getToken, isWaterJobFn]);
 
+  const handleSelect3DModelForEdit = useCallback(
+    (job: BackendJob) => {
+      const thumb = job.previewImageUrl || job.imageUrl;
+      if (thumb) {
+        setImage1(thumb);
+        setLastPreviewImageUrl(thumb);
+      }
+      setFile1(null);
+      setJobId1(job.id);
+      setLastPreviewId(job.id);
+      setCurrentParentJobId(job.id);
+      if (job.resultGlbUrl) {
+        const proxyGlb = getProxyGlbUrl(job.id);
+        setCenterView({ type: "3d", glbUrl: proxyGlb, jobId: job.id });
+        void captureMultiViewSnapshots(proxyGlb);
+      } else if (thumb) {
+        setCenterView({ type: "preview", imageUrl: thumb, previewId: job.id });
+        setMultiViewPreviews([]);
+        cachedMultiViewFilesRef.current = null;
+      }
+      loadJobInfo(job);
+    },
+    [setImage1, setFile1, setJobId1, setLastPreviewId, setLastPreviewImageUrl, setCurrentParentJobId, loadJobInfo, captureMultiViewSnapshots]
+  );
+
+  const handleSelectWorkspaceImage = useCallback(
+    (job: BackendJob) => {
+      const img = job.previewImageUrl || job.imageUrl;
+      if (!img) {
+        return;
+      }
+      setImage1(img);
+      setLastPreviewImageUrl(img);
+      setFile1(null);
+      setJobId1(job.id);
+      setLastPreviewId(job.id);
+      setCurrentParentJobId(job.id);
+      setMultiViewPreviews([]);
+      cachedMultiViewFilesRef.current = null;
+      setIsRenderingMultiView(false);
+      setCenterView({ type: "preview", imageUrl: img, previewId: job.id });
+      loadJobInfo(job);
+    },
+    [setImage1, setFile1, setJobId1, setLastPreviewId, setLastPreviewImageUrl, setCurrentParentJobId, loadJobInfo]
+  );
+
+  const selected3DJob = useMemo(() => {
+    if (jobId1) {
+      return library3DAssets.find((j) => {
+        return j.id === jobId1;
+      }) ?? null;
+    }
+    return null;
+  }, [jobId1, library3DAssets]);
+
   // ──────────── Library click handlers ────────────
   const handleImageClick = (job: BackendJob) => {
+    if (job.status === "FAIL") {
+      setLeftLibraryTab("images");
+      refreshCredits();
+      setCenterView({
+        type: "error",
+        message: toUserFacingGpuError(job.errorMessage),
+        refunded: true,
+      });
+      loadJobInfo(job);
+      return;
+    }
+
+    if (job.id.startsWith("pending-")) {
+      setCenterView({
+        type: "generating",
+        progress: 10,
+        message: job.generateType === "EditImage" ? "Editing base image..." : "Generating concept art...",
+      });
+      loadJobInfo(job);
+      return;
+    }
+
     const imageUrl = job.previewImageUrl || job.imageUrl;
-    if (!imageUrl) return;
+    if (!imageUrl) {
+      return;
+    }
 
     // If this job is queued/running for 3D generation, restore generating state in center.
     if ((job.status === "RUN" || job.status === "WAIT") && !job.resultGlbUrl && is3DGenerationType(job.generateType)) {
@@ -2352,7 +2831,7 @@ function WorkspacePage() {
         jobId: job.id,
         status: "generating",
         progress: 0,
-        estimatedTotalSeconds: 300,
+        estimatedTotalSeconds: 480,
         startTime: Number.isFinite(Date.parse(job.createdAt)) ? Date.parse(job.createdAt) : Date.now(),
       });
       setCenterView({
@@ -2580,13 +3059,24 @@ function WorkspacePage() {
       return;
     }
 
+    if (job.id.startsWith("pending-")) {
+      setLeftLibraryTab("3d");
+      setCenterView({
+        type: "generating",
+        progress: 10,
+        message: "Generating 3D model...",
+      });
+      loadJobInfo(job);
+      return;
+    }
+
     if ((job.status === "RUN" || job.status === "WAIT") && !job.resultGlbUrl) {
       setLeftLibraryTab("3d");
       setCurrentGenerating({
         jobId: job.id,
         status: "generating",
         progress: 0,
-        estimatedTotalSeconds: 300,
+        estimatedTotalSeconds: 480,
         startTime: Number.isFinite(Date.parse(job.createdAt)) ? Date.parse(job.createdAt) : Date.now(),
       });
       setCenterView({
@@ -2599,6 +3089,18 @@ function WorkspacePage() {
         setLastPreviewId(job.id);
         setCurrentParentJobId(job.id);
       }
+      loadJobInfo(job);
+      return;
+    }
+
+    if (job.status === "FAIL") {
+      setLeftLibraryTab("3d");
+      refreshCredits();
+      setCenterView({
+        type: "error",
+        message: toUserFacingGpuError(job.errorMessage),
+        refunded: true,
+      });
       loadJobInfo(job);
       return;
     }
@@ -2698,6 +3200,8 @@ function WorkspacePage() {
         setInputMode("text");
       } else if (section === "image") {
         setInputMode(isImageEditMode ? "text_1img" : "text");
+      } else if (section === "edit") {
+        setInputMode("text_1img");
       } else {
         setInputMode("image");
       }
@@ -2850,27 +3354,32 @@ function WorkspacePage() {
       <header className="lg:hidden flex items-center justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2.5 border-b border-neutral-200 bg-white shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <Link
-            href="/app/studio"
-            className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
-            aria-label="Back to Studio"
+            href="/"
+            className="flex items-center gap-1.5 hover:opacity-80 transition-opacity shrink-0"
+            aria-label="Hydrilla"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            <div className="relative w-6 h-6 shrink-0 logo-spin-hover">
+              <Image src="/hyd01.png" alt="Hydrilla" fill className="object-contain" priority sizes="24px" />
+            </div>
+            <span className="font-dm-sans text-xs font-semibold tracking-tight text-neutral-900 hidden sm:inline">
+              Hydrilla
+            </span>
           </Link>
-          <div className="min-w-0 hidden sm:block">
-            <p className="text-[12px] font-semibold tracking-tight text-neutral-900 truncate" title={workspaceName.trim() ? workspaceName : "Workspace"}>
+          <div className="min-w-0 hidden sm:block pl-1.5 border-l border-neutral-200">
+            <p className="text-[12px] font-medium tracking-tight text-neutral-500 truncate" title={workspaceName.trim() ? workspaceName : "Workspace"}>
               {workspaceName.trim() ? workspaceName : "Workspace"}
             </p>
           </div>
         </div>
 
-        {/* 3 Section switcher pills for mobile */}
+        {/* 4 Section switcher pills for mobile */}
         <div className="flex items-center rounded-full bg-neutral-100 p-0.5 text-[11px] border border-neutral-200/80">
           <button
             type="button"
             onClick={() => handleSelectSection("agent")}
             className={cn(
               "rounded-full px-2.5 py-1 font-medium transition-colors",
-              activeSection === "agent" ? "bg-white text-sky-700 font-semibold shadow-xs" : "text-neutral-500"
+              activeSection === "agent" ? "bg-neutral-900 text-white font-semibold shadow-xs" : "text-neutral-500 hover:text-neutral-900"
             )}
           >
             Agent
@@ -2880,7 +3389,7 @@ function WorkspacePage() {
             onClick={() => handleSelectSection("image")}
             className={cn(
               "rounded-full px-2.5 py-1 font-medium transition-colors",
-              activeSection === "image" ? "bg-white text-pink-700 font-semibold shadow-xs" : "text-neutral-500"
+              activeSection === "image" ? "bg-neutral-900 text-white font-semibold shadow-xs" : "text-neutral-500 hover:text-neutral-900"
             )}
           >
             Image
@@ -2890,10 +3399,20 @@ function WorkspacePage() {
             onClick={() => handleSelectSection("model")}
             className={cn(
               "rounded-full px-2.5 py-1 font-medium transition-colors",
-              activeSection === "model" ? "bg-white text-emerald-700 font-semibold shadow-xs" : "text-neutral-500"
+              activeSection === "model" ? "bg-neutral-900 text-white font-semibold shadow-xs" : "text-neutral-500 hover:text-neutral-900"
             )}
           >
             Model
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectSection("edit")}
+            className={cn(
+              "rounded-full px-2.5 py-1 font-medium transition-colors",
+              activeSection === "edit" ? "bg-neutral-900 text-white font-semibold shadow-xs" : "text-neutral-500 hover:text-neutral-900"
+            )}
+          >
+            Edit
           </button>
         </div>
 
@@ -3067,7 +3586,16 @@ function WorkspacePage() {
 
           {activeSection === "model" && (
             <ModelPanel
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              promptHistory={promptHistory.entries}
+              onSelectHistory={(item) => setPrompt(item)}
+              onClearHistory={promptHistory.clear}
+              inputMode={modelInputMode}
+              onInputModeChange={setModelInputMode}
               image={image1}
+              libraryImages={libraryImages}
+              onSelectImage={handleSelectWorkspaceImage}
               isDragging={isDragging}
               onImageDrop={handleDrop}
               onImagePaste={handlePaste}
@@ -3081,10 +3609,55 @@ function WorkspacePage() {
               enabledWaterIds={enabledWaterIds}
               providerKeyOk={providerKeyOk}
               onSelectModel={handleSelectModel}
+              resolution={modelResolution}
+              onResolutionChange={setModelResolution}
               onGenerate={handleGenerate3D}
               generating={isGenerating}
               disabled={isGenerating}
               onSwitchToImage={() => handleSelectSection("image")}
+              onSwitchToEdit={() => handleSelectSection("edit")}
+            />
+          )}
+
+          {activeSection === "edit" && (
+            <EditPanel
+              prompt={editPrompt}
+              onPromptChange={setEditPrompt}
+              image={image1}
+              file={file1}
+              jobId={jobId1}
+              selected3DJob={selected3DJob}
+              library3DAssets={library3DAssets}
+              libraryImages={libraryImages}
+              onSelect3DModel={handleSelect3DModelForEdit}
+              onSelectImage={handleSelectWorkspaceImage}
+              isDragging={isDragging}
+              onImageDrop={handleDrop}
+              onImagePaste={handlePaste}
+              onImageFileSelect={handleFileSelect}
+              onImageClear={handleClearImage}
+              multiViewPreviews={multiViewPreviews}
+              isRenderingMultiView={isRenderingMultiView}
+              onDragOver={() => {
+                setIsDragging(true);
+              }}
+              onDragLeave={() => {
+                setIsDragging(false);
+              }}
+              selectedModel={selectedModel}
+              selectedLabel={selectedCatalog?.label ?? selectedModel}
+              waterPickerModels={waterPickerModels}
+              enabledWaterIds={enabledWaterIds}
+              providerKeyOk={providerKeyOk}
+              onSelectModel={handleSelectModel}
+              resolution={editResolution}
+              onResolutionChange={setEditResolution}
+              onGenerate={handleGenerate3D}
+              generating={isGenerating}
+              disabled={isGenerating}
+              onSwitchToModel={() => {
+                handleSelectSection("model");
+              }}
             />
           )}
 
@@ -3338,11 +3911,16 @@ function WorkspacePage() {
                           setLoading(false);
                           refreshCredits();
                           refreshLibrary();
-                          setCenterView({ type: "error", message: "Job cancelled" });
+                          setCenterView({
+                            type: "error",
+                            message: "Job cancelled. Your credits have been automatically refunded.",
+                            refunded: true,
+                          });
                         } catch (e: any) {
                           setCenterView({
                             type: "error",
                             message: toUserFacingGpuError(e?.message || "Failed to cancel"),
+                            refunded: true,
                           });
                         }
                       }}
@@ -3446,6 +4024,7 @@ function WorkspacePage() {
                   onParts={handleViewerParts}
                   selectedPart={selectedPart}
                   onPick={setSelectedPart}
+                  onModelStats={setActiveModelStats}
                 />
                 </div>
               </div>
@@ -3454,27 +4033,44 @@ function WorkspacePage() {
 
           {centerView.type === "error" && (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-full max-w-sm rounded-[28px] border border-red-100 bg-white px-8 py-10 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.12)]">
+              <div className="w-full max-w-md rounded-[28px] border border-neutral-200/80 bg-white px-8 py-9 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.12)]">
                 <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
                   <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
-                <p className="text-sm text-red-600 mb-5">{centerView.message}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    if (lastPreviewImageUrl && lastPreviewId) {
-                      setCenterView({ type: "preview", imageUrl: lastPreviewImageUrl, previewId: lastPreviewId });
-                    } else {
+                <h3 className="text-base font-semibold text-neutral-900 mb-1.5">
+                  Generation Unsuccessful
+                </h3>
+                <p className="text-xs text-neutral-600 mb-4 leading-relaxed max-w-sm mx-auto">
+                  {toUserFacingGpuError(centerView.message)}
+                </p>
+
+                {/* Prominent Automatic Refund Banner */}
+                <div className="mb-6 flex items-start gap-3 rounded-2xl border border-neutral-200/90 bg-neutral-50/90 p-3.5 text-left text-xs text-neutral-900 shadow-xs">
+                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white text-[11px] font-bold">
+                    ✓
+                  </div>
+                  <div>
+                    <p className="font-semibold text-neutral-950">Credits Automatically Refunded</p>
+                    <p className="mt-0.5 text-neutral-600 leading-normal">
+                      We didn&apos;t charge your balance for this generation. Your credits are intact so you can retry right away.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
                       setCenterView({ type: "empty" });
-                    }
-                  }}
-                  className="h-10 px-5 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors"
-                >
-                  Try Again
-                </button>
+                    }}
+                    className="h-10 px-6 text-sm font-medium bg-neutral-900 text-white rounded-full hover:bg-neutral-800 transition-colors shadow-xs active:scale-[0.98]"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -3529,6 +4125,7 @@ function WorkspacePage() {
           partMaterial={selectedPartMaterial}
           onPartMaterial={handlePartMaterial}
           onUploadFile={handleFileSelect}
+          modelStats={activeModelStats}
           className={cn(
             "max-lg:hidden",
             !rightPanelOpen && "hidden"
