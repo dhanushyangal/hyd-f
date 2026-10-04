@@ -131,6 +131,10 @@ import {
   type QualityTier,
   type WaterSkillId,
 } from "../../lib/waterSkills";
+import {
+  requestNotificationPermission,
+  notifyGenerationComplete,
+} from "../../lib/browserNotifications";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const WATER_POLL_INTERVAL_MS = 2_000;
@@ -1373,6 +1377,11 @@ function WorkspacePage() {
           refreshLibrary();
           refreshCredits();
 
+          notifyGenerationComplete({
+            type: "3d",
+            prompt: selectedJobInfo?.prompt || prompt || null,
+          });
+
           // Update generation info panel for the completed 3D job
           const completed3DJob: BackendJob = {
             id: currentGenerating.jobId,
@@ -1573,6 +1582,8 @@ function WorkspacePage() {
       parentId?: string | null;
       promptOverride?: string | null;
     } = {}) => {
+      void requestNotificationPermission();
+
       if (!hasWorkspaceContext) {
         setForcedWorkspaceModal(true);
         setShowNewWorkspaceModal(true);
@@ -1733,6 +1744,10 @@ function WorkspacePage() {
                       }
                     : prev
                 );
+                notifyGenerationComplete({
+                  type: "3d",
+                  prompt: job.prompt || options.promptOverride || prompt || null,
+                });
                 setLibrary3DAssets((prev) =>
                   applyCodeThumbs(
                     prev.map((j) =>
@@ -1875,6 +1890,8 @@ function WorkspacePage() {
       localFile: File | null = null,
       customPrompt?: string | null
     ) => {
+      void requestNotificationPermission();
+
       if (!hasWorkspaceContext) {
         setForcedWorkspaceModal(true);
         setShowNewWorkspaceModal(true);
@@ -2039,6 +2056,7 @@ function WorkspacePage() {
     if (isSubmittingImageRef.current || loading || generatingPreview) {
       return;
     }
+    void requestNotificationPermission();
     setError(null);
 
     // Architectural guard: no caller can accidentally send a bring-your-own
@@ -2158,7 +2176,14 @@ function WorkspacePage() {
         const newJob = { id: result.preview_id, previewImageUrl: result.image_url, prompt: prompt.trim(), status: "DONE" as const, generateType: "TextToImage", createdAt: new Date().toISOString(), userId: null, imageUrl: null, resultGlbUrl: null, errorMessage: null, updatedAt: new Date().toISOString() } satisfies BackendJob;
         loadJobInfo(newJob);
 
-        if (thenGenerate3D) await start3DFromImage(result.image_url, result.preview_id);
+        if (thenGenerate3D) {
+          await start3DFromImage(result.image_url, result.preview_id);
+        } else {
+          notifyGenerationComplete({
+            type: "image",
+            prompt: prompt.trim(),
+          });
+        }
       } catch (err: any) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
@@ -2343,6 +2368,11 @@ function WorkspacePage() {
 
         if (thenGenerate3D) {
           await start3DFromImage(result.image_url, result.edit_id);
+        } else {
+          notifyGenerationComplete({
+            type: "image",
+            prompt: prompt.trim(),
+          });
         }
       } catch (err: any) {
         if (progressIntervalRef.current) {
@@ -2888,6 +2918,8 @@ function WorkspacePage() {
   };
 
   const handle3DClick = (job: BackendJob) => {
+    void requestNotificationPermission();
+
     // Prefer Water path for wt_/cs_ even if list payload omitted engine fields.
     if (isWaterJobFn(job) || isWaterJobId(job.id)) {
       setLeftLibraryTab("3d");
@@ -2952,6 +2984,10 @@ function WorkspacePage() {
                       : j
                   )
                 );
+                notifyGenerationComplete({
+                  type: "3d",
+                  prompt: job.prompt || null,
+                });
                 return;
               }
               if (cs.status === "FAIL") {
