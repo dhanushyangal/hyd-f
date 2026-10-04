@@ -37,8 +37,8 @@ export const IMAGE_ASPECT_OPTIONS: { id: ImageAspect; label: string }[] = [
 ];
 
 export const IMAGE_CREDITS: Record<ImageOperation, Record<ImageQuality, number>> = {
-  "text-to-image": { low: 15, high: 20 },
-  edit: { low: 15, high: 20 },
+  "text-to-image": { low: 15, high: 30 },
+  edit: { low: 15, high: 30 },
 };
 
 export type Model3DResolution = "standard" | "ultra1k";
