@@ -9,7 +9,6 @@ import {
   PanelRightClose,
   Search,
   Sliders,
-  Upload,
 } from "lucide-react";
 import { type BackendJob, unwrapProxiedImageUrl } from "@/lib/api";
 import type { PartMaterial, ViewerLook } from "@/lib/viewer/look";
@@ -44,6 +43,18 @@ type Props = {
   onUploadFile?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   modelStats?: ModelMeshStats | null;
   className?: string;
+};
+
+const getJobTimestamp = (job: BackendJob): number => {
+  const raw = job.createdAt || job.updatedAt;
+  if (!raw) {
+    return 0;
+  }
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return parsed;
 };
 
 export function GalleryPanel({
@@ -88,25 +99,26 @@ export function GalleryPanel({
           .filter((job) => isWaterJobFn(job))
           .map((job) => ({ job, type: "3d" as const }));
       }
-      if (effectiveFilter === "model") {
-        return assets3D
-          .filter((job) => !isWaterJobFn(job))
-          .map((job) => ({ job, type: "3d" as const }));
-      }
-      if (effectiveFilter === "edit") {
-        return [
+      if (effectiveFilter === "model" || effectiveFilter === "edit") {
+        const mixedItems = [
           ...assets3D.map((job) => ({ job, type: "3d" as const })),
           ...images.map((job) => ({ job, type: "image" as const })),
         ];
+        return mixedItems.sort((a, b) => {
+          return getJobTimestamp(b.job) - getJobTimestamp(a.job);
+        });
       }
       if (effectiveFilter === "3d") {
         return assets3D.map((job) => ({ job, type: "3d" as const }));
       }
       // "all"
-      return [
+      const allItems = [
         ...assets3D.map((job) => ({ job, type: "3d" as const })),
         ...images.map((job) => ({ job, type: "image" as const })),
       ];
+      return allItems.sort((a, b) => {
+        return getJobTimestamp(b.job) - getJobTimestamp(a.job);
+      });
     })();
 
     const query = searchQuery.trim().toLowerCase();
@@ -124,10 +136,18 @@ export function GalleryPanel({
   const hasInspector = inspectorKind === "3d" || inspectorKind === "code";
 
   useEffect(() => {
-    if (hasInspector && inspectorAssetKey) {
-      setViewTab("inspector");
+    if (!hasInspector) {
+      setViewTab("gallery");
+      return;
     }
-  }, [hasInspector, inspectorAssetKey]);
+    // Only auto-switch to inspector for Agent (procedural code) models with editable parts.
+    // For regular 3D models (GLB), keep the panel in generations mode.
+    if (inspectorKind === "code" && inspectorAssetKey) {
+      setViewTab("inspector");
+    } else if (inspectorKind === "3d") {
+      setViewTab("gallery");
+    }
+  }, [hasInspector, inspectorKind, inspectorAssetKey]);
 
   if (!isOpen) {
     return null;
@@ -221,45 +241,31 @@ export function GalleryPanel({
       ) : (
         /* ViewTab === "gallery" */
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          {/* Search & Upload Bar */}
+          {/* Search Bar */}
           <div className="space-y-2 border-b border-neutral-100 p-3">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search my generation"
-                  className="h-8 w-full rounded-xl border border-neutral-200 bg-neutral-50/80 pl-8 pr-2.5 text-[12px] text-neutral-800 outline-none transition-colors focus:border-neutral-300 focus:bg-white"
-                />
-              </div>
-
-              {onUploadFile && (
-                <label className="flex h-8 items-center gap-1.5 cursor-pointer rounded-xl bg-neutral-900 px-2.5 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors shrink-0">
-                  <Upload className="h-3.5 w-3.5" />
-                  <span>Upload</span>
-                  <input
-                    type="file"
-                    accept=".png,.jpg,.jpeg,.webp"
-                    className="hidden"
-                    onChange={onUploadFile}
-                  />
-                </label>
-              )}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search my generation"
+                className="h-8 w-full rounded-xl border border-neutral-200 bg-neutral-50/80 pl-8 pr-2.5 text-[12px] text-neutral-800 outline-none transition-colors focus:border-neutral-300 focus:bg-white"
+              />
             </div>
 
             {/* Quick Filter chips */}
-            <div className="flex items-center gap-1 text-[11px]">
+            <div className="flex w-full items-center gap-1 text-[11px]">
               <button
                 type="button"
                 onClick={() => setGalleryFilter("auto")}
                 className={cn(
-                  "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                  "flex-[1.35] min-w-0 truncate rounded-full px-1.5 py-1 text-center font-medium transition-colors",
                   galleryFilter === "auto"
                     ? "bg-neutral-900 text-white"
                     : "text-neutral-500 hover:bg-neutral-100"
                 )}
+                title={`Current (${activeSection})`}
               >
                 Current ({activeSection})
               </button>
@@ -267,7 +273,7 @@ export function GalleryPanel({
                 type="button"
                 onClick={() => setGalleryFilter("all")}
                 className={cn(
-                  "rounded-full px-2 py-0.5 font-medium transition-colors",
+                  "flex-1 min-w-0 rounded-full px-1.5 py-1 text-center font-medium transition-colors",
                   galleryFilter === "all"
                     ? "bg-neutral-900 text-white"
                     : "text-neutral-500 hover:bg-neutral-100"
@@ -279,7 +285,7 @@ export function GalleryPanel({
                 type="button"
                 onClick={() => setGalleryFilter("3d")}
                 className={cn(
-                  "rounded-full px-2 py-0.5 font-medium transition-colors",
+                  "flex-1 min-w-0 rounded-full px-1.5 py-1 text-center font-medium transition-colors",
                   galleryFilter === "3d"
                     ? "bg-neutral-900 text-white"
                     : "text-neutral-500 hover:bg-neutral-100"
@@ -291,7 +297,7 @@ export function GalleryPanel({
                 type="button"
                 onClick={() => setGalleryFilter("images")}
                 className={cn(
-                  "rounded-full px-2 py-0.5 font-medium transition-colors",
+                  "flex-1 min-w-0 rounded-full px-1.5 py-1 text-center font-medium transition-colors",
                   galleryFilter === "images"
                     ? "bg-neutral-900 text-white"
                     : "text-neutral-500 hover:bg-neutral-100"
@@ -353,13 +359,12 @@ export function GalleryPanel({
                       className={cn(
                         "group relative aspect-square w-full rounded-xl overflow-hidden border border-neutral-200/80 bg-neutral-100 text-left transition-all duration-150 hover:border-neutral-400 hover:shadow-xs active:scale-[0.98]"
                       )}
-                      title={job.prompt || (type === "3d" ? "3D Model" : "Image")}
                     >
                       {previewUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={displayImageUrl(previewUrl)}
-                          alt={job.prompt ? (job.prompt.length > 50 ? `${job.prompt.slice(0, 50)}...` : job.prompt) : (type === "3d" ? "3D Model" : "Image")}
+                          alt={type === "3d" ? "3D Model" : "Image"}
                           className="h-full w-full object-cover pointer-events-none"
                           onError={(e) => {
                             const currentTarget = e.currentTarget;
@@ -380,7 +385,7 @@ export function GalleryPanel({
                             <ImageIcon className="h-6 w-6 text-neutral-300" />
                           )}
                           <span className="text-[10px] truncate max-w-full mt-1 font-medium text-neutral-500">
-                            {job.prompt || "Generated asset"}
+                            {type === "3d" ? "3D Model" : "Image"}
                           </span>
                         </div>
                       )}
