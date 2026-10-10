@@ -1227,13 +1227,13 @@ function WorkspacePage() {
     const failureTracker = { count: 0 };
     const MAX_FAILURES = 20;
 
-    // 16-minute timeout cap:
-    // Gives generous time (12-16 minutes) especially when high-res reconstruction or GPU OOM restart occurs.
-    const MAX_POLL_MS = 16 * 60 * 1000;
+    // 30-minute timeout cap:
+    // Gives generous time (20-30 minutes) especially for high-res reconstruction or GPU queue wait.
+    const MAX_POLL_MS = 30 * 60 * 1000;
     const pollStartedAt = Date.now();
 
     const pollStatus = async () => {
-      // Stop polling if we've exceeded the max client-side wait (16 minutes).
+      // Stop polling if we've exceeded the max client-side wait (30 minutes).
       if (Date.now() - pollStartedAt > MAX_POLL_MS) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
@@ -1262,7 +1262,7 @@ function WorkspacePage() {
         failureTracker.count = 0;
 
         if (status.queue) {
-          const estimatedTotal = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 480;
+          const estimatedTotal = status.queue.estimated_total_seconds || currentGenerating.estimatedTotalSeconds || 840;
           setCurrentGenerating((prev) =>
             prev ? { ...prev, queueInfo: status.queue, estimatedTotalSeconds: estimatedTotal } : null
           );
@@ -1332,7 +1332,7 @@ function WorkspacePage() {
         } else if (status.status === "processing" || status.status === "pending") {
           const startTime = status.created_at || currentGenerating.startTime || Date.now();
           const elapsedSeconds = (Date.now() - startTime) / 1000;
-          const estimatedTotal = currentGenerating.estimatedTotalSeconds || 480;
+          const estimatedTotal = currentGenerating.estimatedTotalSeconds || 840;
           const progress = Math.min(90, Math.max(8, (elapsedSeconds / estimatedTotal) * 90));
           setCenterView((prev) => {
             const followsCurrentJob =
@@ -1984,7 +1984,7 @@ function WorkspacePage() {
         return null;
       });
       const active3DResolution = activeSection === "edit" ? editResolution : modelResolution;
-      const fallbackEstSec = active3DResolution === "ultra1k" ? 540 : 480;
+      const fallbackEstSec = active3DResolution === "ultra1k" ? 900 : 840;
       const estimatedTotal = queueInfo?.estimated_total_seconds || fallbackEstSec;
       try {
         const result = await submitImageTo3D(
@@ -2861,7 +2861,7 @@ function WorkspacePage() {
         jobId: job.id,
         status: "generating",
         progress: 0,
-        estimatedTotalSeconds: 480,
+        estimatedTotalSeconds: 840,
         startTime: Number.isFinite(Date.parse(job.createdAt)) ? Date.parse(job.createdAt) : Date.now(),
       });
       setCenterView({
@@ -3112,7 +3112,7 @@ function WorkspacePage() {
         jobId: job.id,
         status: "generating",
         progress: 0,
-        estimatedTotalSeconds: 480,
+        estimatedTotalSeconds: 840,
         startTime: Number.isFinite(Date.parse(job.createdAt)) ? Date.parse(job.createdAt) : Date.now(),
       });
       setCenterView({

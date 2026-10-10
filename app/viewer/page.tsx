@@ -40,7 +40,7 @@ function ViewerContent() {
       modelProgressIntervalRef.current === null
     ) {
       // Get estimated duration from queue info or use default
-      const estimatedTotalSeconds = job.queue?.estimated_total_seconds || 150; // Default 2m 30s
+      const estimatedTotalSeconds = job.queue?.estimated_total_seconds || 840; // Default ~14m for Pixal3D
       const modelDuration = estimatedTotalSeconds * 1000; // Convert to milliseconds
       const updateInterval = 500; // Update every 500ms
       const progressStep = (100 / modelDuration) * updateInterval;
@@ -133,7 +133,7 @@ function ViewerContent() {
       pollStartTime: Date.now(),
     };
     const MAX_FAILURES = 3;
-    const MAX_POLL_MS = 16 * 60 * 1000; // 16 minutes timeout cap (allows 12+ min generations when GPU restart occurs)
+    const MAX_POLL_MS = 30 * 60 * 1000; // 30 minutes timeout cap (allows 20+ min generations when GPU restart occurs)
 
     const fetchAndSchedule = async () => {
       if (!state.active) {
