@@ -40,7 +40,7 @@ const FAQSection = dynamic(() => import("@/components/sections/FAQSection"), {
 
 function MissionSection() {
   return (
-    <section className="relative w-full bg-gradient-to-b from-white to-neutral-100 py-20 sm:py-24 md:py-32 px-4 sm:px-6 md:px-8">
+    <section className="relative w-full bg-gradient-to-b from-white to-neutral-100 px-4 pt-6 pb-16 sm:px-6 sm:pt-8 sm:pb-20 md:px-8 md:pt-14 md:pb-24">
       <div className="max-w-6xl mx-auto">
         <BlurReveal
           as="p"

@@ -33,7 +33,7 @@ export default function SecurityPage() {
         <ProseHeading>Assets</ProseHeading>
         <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
           Generated meshes and maps are stored for your account so you can
-          preview, iterate, and export. Creator and Studio keep generated
+          preview, iterate, and export. Starter and Pro keep generated
           assets and exports private to your account or workspace, as stated
           on Pricing. We do not sell customer assets as a dataset.
         </p>

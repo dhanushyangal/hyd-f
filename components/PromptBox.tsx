@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Image as ImageIcon, ChevronDown, X, Camera, ArrowUp } from "lucide-react";
+import { Image as ImageIcon, ChevronDown, X, Camera, ArrowUp, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
@@ -223,156 +223,52 @@ export function PromptBox({
 
   if (isHero) {
     return (
-      <motion.div
-        className="relative mx-auto w-full max-w-[min(92vw,760px)]"
-        initial={false}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, ease: "easeInOut" }}
+      <form
+        className="relative w-full"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!disabled && canSubmit) onSubmit?.();
+        }}
       >
-        <AnimatePresence>
-          {images.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute -top-[108px] left-3 z-50 flex items-center pointer-events-none sm:left-4"
-            >
-              <div className="flex -space-x-8 pointer-events-auto">
-                {images.map((img, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ rotate: -6, x: 0 }}
-                    whileHover={{ rotate: 0, y: -4, zIndex: 100, scale: 1.04 }}
-                    style={{ zIndex: 40 - i }}
-                    className="relative group/img"
-                  >
-                    <div
-                      className="h-[96px] w-[72px] cursor-pointer overflow-hidden rounded-[18px] border border-white/50 bg-white shadow-[0_12px_28px_-12px_rgba(0,0,0,0.35)]"
-                      onClick={() => removeImage(i)}
-                    >
-                      <img src={img} alt="Reference" className="h-full w-full object-cover" />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeImage(i)}
-                      className="absolute -right-1.5 -top-1.5 z-50 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-950 text-white opacity-0 shadow-lg transition-all group-hover/img:opacity-100 hover:scale-110"
-                      aria-label="Remove image"
-                    >
-                      <X size={11} strokeWidth={3} />
-                    </button>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         <div
           className={cn(
-            "relative w-full overflow-hidden rounded-[28px] sm:rounded-[32px]",
-            "border border-white/45 bg-white/55 backdrop-blur-2xl",
-            "shadow-[0_16px_48px_-18px_rgba(0,0,0,0.22),inset_0_1px_0_0_rgba(255,255,255,0.65)]",
-            "transition-[box-shadow,border-color,background-color] duration-300",
-            "focus-within:border-white/70 focus-within:bg-white/65",
-            "focus-within:shadow-[0_20px_56px_-18px_rgba(0,0,0,0.28),inset_0_1px_0_0_rgba(255,255,255,0.75)]"
+            "flex h-14 items-center gap-2 rounded-full bg-white py-1.5 pl-5 pr-1.5 sm:h-16 sm:pl-6",
+            "shadow-[0_10px_40px_#010e2414]",
+            "transition-shadow duration-150 ease-out",
+            "focus-within:ring-2 focus-within:ring-[#000c1f]/20"
           )}
-          style={{ fontFamily: FONT }}
         >
-          <div className="flex flex-col gap-3 px-4 pb-3.5 pt-4 sm:gap-3.5 sm:px-5 sm:pb-4 sm:pt-5">
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={disabled}
-              placeholder={placeholder}
-              rows={1}
-              className={cn(
-                "prompt-box-textarea w-full resize-none border-0 bg-transparent p-0",
-                "min-h-[28px] sm:min-h-[34px] max-h-[160px]",
-                "text-[16px] leading-[1.35] tracking-[-0.02em] text-neutral-950",
-                "placeholder:text-neutral-500/90 sm:text-[18px] sm:leading-[1.35]",
-                "outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 focus:shadow-none",
-                "disabled:cursor-not-allowed disabled:opacity-50"
-              )}
-              style={{
-                fontFamily: FONT,
-                whiteSpace: "pre-wrap",
-                overflowWrap: "break-word",
-              }}
-              autoFocus={false}
-              aria-label="Describe what you want to generate"
-            />
-
-            <div className="flex items-center justify-end gap-3">
-              {onImageUpload ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (disabled) return;
-                    if (value.trim() && !images.length) {
-                      onChange("");
-                      return;
-                    }
-                    if (!images.length && !value.trim()) {
-                      fileInputRef.current?.click();
-                    }
-                  }}
-                  disabled={disabled}
-                  className={cn(
-                    "mr-auto inline-flex h-9 w-9 items-center justify-center rounded-full",
-                    "border border-neutral-950/10 bg-white/55 text-neutral-700",
-                    "transition-colors hover:bg-white hover:text-neutral-950",
-                    "disabled:cursor-not-allowed disabled:opacity-40"
-                  )}
-                  title={
-                    images.length > 0
-                      ? "Image already uploaded"
-                      : value.trim()
-                        ? "Clear text to upload an image"
-                        : "Upload reference image"
-                  }
-                  aria-label="Upload reference image"
-                >
-                  <ImageIcon size={17} strokeWidth={1.75} />
-                </button>
-              ) : null}
-
-              <motion.button
-                type="button"
-                whileHover={canSubmit ? { scale: 1.03 } : {}}
-                whileTap={canSubmit ? { scale: 0.97 } : {}}
-                transition={{ duration: 0.18 }}
-                onClick={onSubmit}
-                disabled={disabled || !canSubmit}
-                className={cn(
-                  "inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 sm:h-11 sm:px-5",
-                  "text-[13px] font-semibold tracking-[-0.01em] sm:text-[14px]",
-                  "transition-colors disabled:cursor-not-allowed",
-                  canSubmit
-                    ? "bg-neutral-950 text-white shadow-[0_8px_24px_-10px_rgba(0,0,0,0.55)] hover:bg-neutral-800"
-                    : "bg-neutral-950/15 text-neutral-400"
-                )}
-                style={{ fontFamily: FONT_DISPLAY }}
-                title="Create"
-                aria-label="Create"
-              >
-                Create
-                <ArrowUp size={15} strokeWidth={2.4} className="opacity-90" />
-              </motion.button>
-            </div>
-          </div>
+          <input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
+            placeholder={placeholder}
+            aria-label="Describe what you want to generate"
+            className={cn(
+              "min-w-0 flex-1 border-0 bg-transparent p-0 outline-none",
+              "text-base leading-none tracking-[-0.01em] text-[#000c1f] sm:text-[1.3125rem]",
+              "placeholder:text-[#000c1f]/45",
+              "disabled:cursor-not-allowed disabled:opacity-50"
+            )}
+            style={{ fontFamily: FONT }}
+          />
+          <button
+            type="submit"
+            disabled={disabled || !canSubmit}
+            aria-label="Create"
+            className={cn(
+              "inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full",
+              "bg-[#002664] text-white",
+              "transition-transform duration-150 ease-out motion-reduce:transition-none",
+              "hover:bg-[#00163b] active:scale-[0.98]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#002664] focus-visible:ring-offset-2",
+              "disabled:cursor-not-allowed disabled:bg-[#000c1f]/15 disabled:text-[#000c1f]/45 disabled:active:scale-100"
+            )}
+          >
+            <ArrowRight size={18} strokeWidth={2.25} />
+          </button>
         </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
-          aria-label="Upload image file"
-        />
-      </motion.div>
+      </form>
     );
   }
 

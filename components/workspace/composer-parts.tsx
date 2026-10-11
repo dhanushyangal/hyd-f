@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Box,
   Check,
   ChevronDown,
   Clock,
@@ -29,7 +30,6 @@ import {
 } from "@/lib/waterSkills";
 import { getProxiedImageUrl } from "@/lib/api";
 import type { PromptHistoryEntry } from "@/lib/prompt-history";
-import { StudioOrb } from "@/components/workspace/StudioOrb";
 import { cn } from "@/lib/utils";
 import type { ImageProviderAvailability } from "@/lib/apiHealth";
 import {
@@ -65,83 +65,67 @@ export const ICON_BUTTON = cn(
 export const CHEVRON =
   "h-3.5 w-3.5 text-neutral-400 transition-transform duration-150 ease-out group-data-[state=open]:rotate-180";
 
+/** Input slot in the composer: empty opens a picker; filled shows a thumbnail with remove. */
 export function ChatRefTile({
   label,
-  image,
-  inputId,
-  isDragging,
-  onDrop,
-  onPaste,
-  onFileSelect,
+  preview,
+  kind = "image",
+  filled,
+  onPick,
   onClear,
-  onDragOver,
-  onDragLeave,
   className,
 }: {
   label: string;
-  image: string | null;
-  inputId: string;
-  isDragging: boolean;
-  onDrop: (e: React.DragEvent) => void;
-  onPaste: (e: React.ClipboardEvent) => void;
-  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  /** Thumbnail; null shows the kind icon (e.g. a 3D file still rendering). */
+  preview: string | null;
+  kind?: "image" | "model";
+  filled: boolean;
+  onPick: () => void;
   onClear: () => void;
-  onDragOver: () => void;
-  onDragLeave: () => void;
   className?: string;
 }) {
+  const Icon = kind === "model" ? Box : ImageIcon;
+  if (!filled) {
+    return (
+      <button
+        type="button"
+        onClick={onPick}
+        className={cn(
+          "flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500 hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-900",
+          EASE,
+          FOCUS,
+          className
+        )}
+      >
+        <Icon className="h-4 w-4" strokeWidth={1.85} />
+        <span className="text-[11px] font-medium leading-none">{label}</span>
+      </button>
+    );
+  }
   return (
     <div
-      className={cn(
-        "relative flex h-[88px] w-full shrink-0 flex-col items-center justify-center overflow-hidden rounded-[14px] border",
-        isDragging
-          ? "border-neutral-400 bg-neutral-200"
-          : "border-neutral-200/80 bg-neutral-100",
-        className
-      )}
-      onDrop={onDrop}
-      onDragOver={(e) => {
-        e.preventDefault();
-        onDragOver();
-      }}
-      onDragLeave={onDragLeave}
-      onPaste={onPaste}
+      className={cn("relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100", className)}
+      title={label}
     >
-      <input
-        type="file"
-        accept=".png,.jpg,.jpeg,.webp"
-        className="hidden"
-        id={inputId}
-        onChange={onFileSelect}
-      />
-      {image ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={displayImageUrl(image)}
-            alt={label}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <button
-            type="button"
-            onClick={onClear}
-            className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white active:scale-[0.97]"
-            aria-label={`Remove ${label}`}
-          >
-            <X className="h-3 w-3" strokeWidth={2.4} />
-          </button>
-        </>
+      {preview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={displayImageUrl(preview)} alt={label} className="h-full w-full object-cover" />
       ) : (
-        <label
-          htmlFor={inputId}
-          className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1 px-1.5 text-center"
-        >
-          <ImageIcon className="h-4 w-4 text-neutral-500" strokeWidth={1.75} />
-          <span className="text-[11px] font-medium leading-tight text-neutral-500">
-            {label}
-          </span>
-        </label>
+        <div className="flex h-full w-full items-center justify-center text-neutral-400">
+          <Icon className="h-5 w-5" strokeWidth={1.75} />
+        </div>
       )}
+      {kind === "model" ? (
+        <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1 text-[10px] font-semibold leading-4 text-white">3D</span>
+      ) : null}
+      <button
+        type="button"
+        onClick={onClear}
+        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black"
+        aria-label={`Remove ${label}`}
+      >
+        <X className="h-3 w-3" strokeWidth={2.4} />
+      </button>
     </div>
   );
 }
@@ -426,71 +410,5 @@ export function ImageOptionsDropdown({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-export function PanelGenerateFooter({
-  canSubmit,
-  generating,
-  onGenerate,
-  label,
-  timeEstimate,
-  creditCost,
-  disabledReason,
-}: {
-  canSubmit: boolean;
-  generating: boolean;
-  onGenerate: () => void;
-  label: string;
-  timeEstimate?: string;
-  creditCost?: number | string;
-  disabledReason?: string;
-}) {
-  return (
-    <div className="shrink-0 border-t border-neutral-200/80 bg-white/95 p-3.5 backdrop-blur-md">
-      {(timeEstimate || creditCost !== undefined) && (
-        <div className="mb-2.5 flex items-center justify-between px-1 text-[12px] text-neutral-500">
-          {timeEstimate ? (
-            <span className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-neutral-400" />
-              <span>{timeEstimate}</span>
-            </span>
-          ) : (
-            <span />
-          )}
-          {creditCost !== undefined ? (
-            <span className="flex items-center gap-1 font-medium text-neutral-700">
-              <span className="tabular-nums">{creditCost}</span> credits
-            </span>
-          ) : null}
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={!canSubmit || generating}
-        title={!canSubmit && disabledReason ? disabledReason : label}
-        className={cn(
-          "flex h-11 w-full items-center justify-center gap-2 rounded-xl font-medium text-[14px] shadow-sm",
-          EASE,
-          FOCUS,
-          canSubmit && !generating
-            ? "bg-neutral-900 text-white hover:bg-neutral-800 active:scale-[0.99] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.2)]"
-            : "cursor-not-allowed bg-neutral-100 text-neutral-400"
-        )}
-      >
-        {generating ? (
-          <>
-            <StudioOrb state="working" size={20} theme="dark" />
-            <span>Generating…</span>
-          </>
-        ) : (
-          <>
-            <Wand2 className="h-4 w-4" />
-            <span>{label}</span>
-          </>
-        )}
-      </button>
-    </div>
   );
 }

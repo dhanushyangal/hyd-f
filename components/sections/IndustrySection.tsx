@@ -2,8 +2,10 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "motion/react";
+import Link from "next/link";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
+import { DISPLAY_FONT as DISPLAY, SANS_FONT as SANS } from "@/lib/glyphic";
 
 const CLOUDINARY_LANDING_BASE =
   "https://res.cloudinary.com/dqizbxc9e/image/upload";
@@ -112,137 +114,209 @@ const INDUSTRIES = [
 
 type IndustryId = (typeof INDUSTRIES)[number]["id"];
 
-/* ─────────────────── gradient overlay ──────────── */
-function CardGradient({ active }: { active: boolean }) {
+/* ─────────────────────────── tokens (same palette as How it works) ─────────────────────────── */
+const INK = "#000c1f";
+const INK_SECONDARY = "rgba(0, 12, 31, 0.65)";
+const INK_TERTIARY = "rgba(0, 12, 31, 0.45)";
+const HAIRLINE = "rgba(0, 12, 31, 0.1)";
+const SURFACE = "#f7f7f7";
+/** Soft brand-blue light rising from the bottom of the active tile. Blue only. */
+const BLUE_GLOW = [
+  "radial-gradient(ellipse 95% 62% at 50% 118%, rgba(0, 102, 197, 0.34) 0%, rgba(113, 225, 255, 0.24) 42%, transparent 72%)",
+].join(", ");
+
+const EASE_OUT_QUINT: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+type Industry = (typeof INDUSTRIES)[number];
+
+/* ─────────────────────────── pieces ─────────────────────────── */
+function ArrowIcon() {
   return (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        inset: 0,
-        pointerEvents: "none",
-        borderRadius: "inherit",
-        zIndex: 0,
-        opacity: active ? 1 : 0,
-        transition: "opacity 0.35s cubic-bezier(0.215,0.61,0.355,1)",
-        background: [
-          "radial-gradient(ellipse 95% 65% at 50% 120%, rgba(102,190,255,0.65) 0%, rgba(113,225,255,0.35) 40%, transparent 68%)",
-          "radial-gradient(ellipse 60% 45% at 20% 120%, rgba(162,97,245,0.22) 0%, transparent 55%)",
-          "radial-gradient(ellipse 50% 35% at 80% 115%, rgba(71,209,177,0.18) 0%, transparent 60%)",
-        ].join(", "),
-      }}
-    />
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path
+        d="M2.5 7h9M8 3.5 11.5 7 8 10.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
-/* ─────────────────────────── component ─────────────────────── */
+/** Outlined CTA — fills with ink on hover. Colours live in classes so hover states can override them. */
+function CtaLink({ label, href, block = false }: { label: string; href: string; block?: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={`group inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[rgba(0,12,31,0.2)] bg-white px-5 text-sm font-medium text-[#000c1f] no-underline outline-none transition-[transform,background-color,color,border-color] duration-200 ease-out hover:border-[#000c1f] hover:bg-[#000c1f] hover:text-white focus-visible:ring-2 focus-visible:ring-[#000c1f] focus-visible:ring-offset-2 active:scale-[0.98] ${
+        block ? "w-full" : "self-start"
+      }`}
+      style={{ fontFamily: SANS, letterSpacing: "-0.01em" }}
+    >
+      {label}
+      <span className="transition-transform duration-200 ease-out group-hover:translate-x-0.5">
+        <ArrowIcon />
+      </span>
+    </Link>
+  );
+}
+
+function Features({ items }: { items: Industry["features"] }) {
+  return (
+    <ul className="m-0 flex list-none flex-col p-0">
+      {items.map((f, i) => (
+        <li
+          key={f.title}
+          className="flex flex-col gap-2 py-6 first:pt-0 last:pb-0"
+          style={i > 0 ? { borderTop: `1px solid ${HAIRLINE}` } : undefined}
+        >
+          <h4
+            className="m-0 text-lg font-medium"
+            style={{ fontFamily: SANS, color: INK, letterSpacing: "-0.02em", lineHeight: 1.3 }}
+          >
+            {f.title}
+          </h4>
+          <p
+            className="m-0 text-base"
+            style={{
+              fontFamily: SANS,
+              color: INK_SECONDARY,
+              letterSpacing: "-0.015em",
+              lineHeight: 1.55,
+            }}
+          >
+            {f.body}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const panelHeadingStyle: React.CSSProperties = {
+  margin: 0,
+  fontFamily: DISPLAY,
+  fontWeight: 400,
+  color: INK,
+  fontSize: "clamp(1.625rem, 1.35rem + 1vw, 2.25rem)",
+  lineHeight: 1.12,
+  letterSpacing: "-0.03em",
+  textWrap: "balance",
+};
+
+/* ─────────────────────────── section ─────────────────────────── */
 export default function IndustrySection() {
-  const [activeId, setActiveId] = useState<IndustryId>("game");
-  const [mobileOpenId, setMobileOpenId] = useState<IndustryId | null>(null);
-  const activeItem = INDUSTRIES.find((i) => i.id === activeId) ?? INDUSTRIES[0];
+  const reduceMotion = useReducedMotion();
+  const [activeId, setActiveId] = useState<IndustryId>(INDUSTRIES[0].id);
+  const [mobileOpenId, setMobileOpenId] = useState<IndustryId | null>(INDUSTRIES[0].id);
+  const active = INDUSTRIES.find((i) => i.id === activeId) ?? INDUSTRIES[0];
+
+  const onTabKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const idx = INDUSTRIES.findIndex((i) => i.id === activeId);
+    const next =
+      (idx + (e.key === "ArrowRight" ? 1 : -1) + INDUSTRIES.length) % INDUSTRIES.length;
+    setActiveId(INDUSTRIES[next].id);
+    requestAnimationFrame(() => {
+      document.getElementById(`industry-tab-${INDUSTRIES[next].id}`)?.focus();
+    });
+  };
+
+  const swap = reduceMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 12 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -8 },
+        transition: { duration: 0.3, ease: EASE_OUT_QUINT },
+      };
 
   return (
     <section
+      aria-labelledby="industry-heading"
+      className="w-full bg-white"
       style={{
-        position: "relative",
-        width: "100%",
-        backgroundColor: "#ffffff",
-        padding: "4.5rem 1.5rem 5rem",
-        boxSizing: "border-box",
+        padding: "clamp(4.5rem, 3rem + 6vw, 9rem) 0",
         WebkitFontSmoothing: "antialiased",
-        textRendering: "optimizeLegibility",
       }}
-      className="max-sm:px-4 max-sm:py-12"
     >
       <div
+        className="mx-auto flex flex-col"
         style={{
-          maxWidth: "72rem",
-          margin: "0 auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.75rem",
+          width: "min(100% - 2rem, 87rem)",
+          gap: "clamp(2.5rem, 2rem + 3vw, 4.5rem)",
         }}
       >
-        {/* Heading — scroll blur → sharp reveal */}
-        <BlurReveal
-          as="h2"
-          style={{
-            margin: 0,
-            textAlign: "center",
-            fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-            fontSize: "clamp(1.875rem, 4vw, 3rem)",
-            fontWeight: 700,
-            color: "#111",
-            letterSpacing: "-0.035em",
-            lineHeight: 1.15,
-          }}
-        >
-          Built to{" "}
-          <em style={{ fontStyle: "italic", fontWeight: 700, letterSpacing: "-0.04em" }}>
-            power
-          </em>
-          <br />
-          creators like you
-        </BlurReveal>
+        {/* Header */}
+        <header className="flex flex-col items-center gap-4 px-2 text-center">
+          <p
+            className="m-0 text-xs font-medium uppercase"
+            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: SANS }}
+          >
+            Industries
+          </p>
+          <BlurReveal
+            as="h2"
+            id="industry-heading"
+            style={{
+              margin: 0,
+              fontFamily: DISPLAY,
+              fontWeight: 400,
+              color: INK,
+              fontSize: "clamp(2.25rem, 1.7rem + 2.4vw, 3.75rem)",
+              letterSpacing: "-0.035em",
+              lineHeight: 1.05,
+              textWrap: "balance",
+            }}
+          >
+            Built to power creators like you
+          </BlurReveal>
+        </header>
 
-        {/* ── MOBILE accordion ── */}
+        {/* ───────── Mobile: accordion ───────── */}
         <div className="flex flex-col gap-3 md:hidden">
-          {INDUSTRIES.map((item) => {
+          {INDUSTRIES.map((item, i) => {
             const isOpen = mobileOpenId === item.id;
             return (
               <div
                 key={item.id}
+                className="overflow-hidden rounded-[1.5rem] bg-white transition-[border-color,box-shadow] duration-300"
                 style={{
-                  borderRadius: "1rem",
-                  border: `1px solid ${isOpen ? "rgba(17,17,17,0.12)" : "rgba(17,17,17,0.08)"}`,
-                  backgroundColor: "#ffffff",
-                  overflow: "hidden",
-                  transition: "border-color 0.2s, background-color 0.2s",
-                  boxShadow: isOpen ? "0 1px 2px rgba(17,17,17,0.04)" : "none",
+                  border: `1px solid ${isOpen ? "rgba(0, 12, 31, 0.22)" : "rgba(0, 12, 31, 0.08)"}`,
+                  boxShadow: isOpen ? "0 10px 40px rgba(1, 14, 36, 0.08)" : "none",
                 }}
               >
-                {/* Accordion header */}
                 <button
                   type="button"
+                  aria-expanded={isOpen}
+                  aria-controls={`industry-body-${item.id}`}
                   onClick={() => setMobileOpenId(isOpen ? null : item.id)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "1rem 1.125rem",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
+                  className="flex w-full items-center gap-4 bg-transparent px-5 py-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#000c1f]"
+                  style={{ WebkitTapHighlightColor: "transparent" }}
                 >
                   <span
+                    aria-hidden
+                    className="w-7 shrink-0 text-lg"
                     style={{
-                      fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-                      fontSize: "1rem",
-                      fontWeight: 600,
-                      color: "#111",
-                      letterSpacing: "-0.02em",
-                      lineHeight: 1.3,
-                      textAlign: "left",
+                      fontFamily: DISPLAY,
+                      color: isOpen ? INK : INK_TERTIARY,
+                      transition: "color 0.25s",
                     }}
+                  >
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span
+                    className="min-w-0 flex-1 text-[1.0625rem] font-medium"
+                    style={{ fontFamily: SANS, color: INK, letterSpacing: "-0.02em", lineHeight: 1.3 }}
                   >
                     {item.title}
                   </span>
                   <span
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      borderRadius: "50%",
-                      backgroundColor: isOpen ? "#111" : "rgba(17,17,17,0.07)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      transition: "background-color 0.2s",
-                      marginLeft: "0.75rem",
-                    }}
+                    aria-hidden
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-200"
+                    style={{ backgroundColor: isOpen ? INK : "rgba(0, 12, 31, 0.06)" }}
                   >
                     <svg
                       width="12"
@@ -250,104 +324,46 @@ export default function IndustrySection() {
                       viewBox="0 0 12 12"
                       fill="none"
                       style={{
-                        color: isOpen ? "#fff" : "#111",
+                        color: isOpen ? "#fff" : INK,
                         transform: isOpen ? "rotate(45deg)" : "rotate(0deg)",
-                        transition: "transform 0.2s ease",
+                        transition: "transform 0.25s cubic-bezier(0.22,1,0.36,1)",
                       }}
                     >
-                      <path
-                        d="M6 1v10M1 6h10"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                      />
+                      <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
                     </svg>
                   </span>
                 </button>
 
-                {/* Accordion body */}
                 <AnimatePresence initial={false}>
                   {isOpen && (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
+                      id={`industry-body-${item.id}`}
+                      initial={reduceMotion ? false : { height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] as const }}
+                      exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                      transition={{ duration: 0.32, ease: EASE_OUT_QUINT }}
                       style={{ overflow: "hidden" }}
                     >
-                      <div style={{ padding: "0 1.125rem 1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-                        {/* Image */}
+                      <div className="flex flex-col gap-6 px-5 pb-6">
                         <div
-                          style={{
-                            position: "relative",
-                            width: "100%",
-                            borderRadius: "0.75rem",
-                            overflow: "hidden",
-                            backgroundColor: "#f5f5f5",
-                            aspectRatio: "4/3",
-                          }}
+                          className="relative w-full overflow-hidden rounded-[1.25rem]"
+                          style={{ aspectRatio: "4 / 3", backgroundColor: SURFACE }}
                         >
                           <Image
                             src={item.mobileImage}
                             alt={item.title}
                             fill
-                            style={{ objectFit: "cover", objectPosition: "center" }}
-                            sizes="100vw"
+                            unoptimized
                             loading="lazy"
                             decoding="async"
-                            unoptimized
+                            sizes="100vw"
+                            className="object-cover object-center"
                           />
-                          <CardGradient active={true} />
                         </div>
 
-                        {/* Heading */}
-                        <h3
-                          style={{
-                            margin: 0,
-                            fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-                            fontSize: "1.125rem",
-                            fontWeight: 700,
-                            color: "#111",
-                            letterSpacing: "-0.025em",
-                            lineHeight: 1.25,
-                          }}
-                        >
-                          {item.leftHeading}
-                        </h3>
-
-                        {/* Feature bullets */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-                          {item.features.map((f, fi) => (
-                            <div key={f.title}>
-                              {fi > 0 && <div style={{ borderTop: "1px solid rgba(17,17,17,0.07)", marginBottom: "0.875rem" }} />}
-                              <h4
-                                style={{
-                                  margin: "0 0 0.3rem",
-                                  fontFamily: "'DM Sans', sans-serif",
-                                  fontSize: "0.9375rem",
-                                  fontWeight: 600,
-                                  color: "#111",
-                                  letterSpacing: "-0.015em",
-                                }}
-                              >
-                                {f.title}
-                              </h4>
-                              <p
-                                style={{
-                                  margin: 0,
-                                  fontFamily: "'DM Sans', sans-serif",
-                                  fontSize: "0.875rem",
-                                  color: "#666",
-                                  lineHeight: 1.65,
-                                }}
-                              >
-                                {f.body}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-
-                        <CtaLink label={item.ctaLabel} href={item.ctaHref} />
+                        <h3 style={panelHeadingStyle}>{item.leftHeading}</h3>
+                        <Features items={item.features} />
+                        <CtaLink label={item.ctaLabel} href={item.ctaHref} block />
                       </div>
                     </motion.div>
                   )}
@@ -357,253 +373,100 @@ export default function IndustrySection() {
           })}
         </div>
 
-        {/* ── DESKTOP tab card ── */}
-        <div className="hidden md:block">
-
-        {/* Main card */}
+        {/* ───────── Desktop: tile row → panel ───────── */}
         <div
+          className="relative mx-auto hidden w-full max-w-[72rem] overflow-hidden rounded-[2rem] bg-white md:block"
           style={{
-            borderRadius: "1rem",
-            border: "1px solid rgba(17,17,17,0.08)",
-            backgroundColor: "#ffffff",
-            boxShadow: "0 1px 2px rgba(17,17,17,0.04), 0 8px 24px -12px rgba(17,17,17,0.08)",
-            overflow: "hidden",
+            border: "1px solid rgba(0, 12, 31, 0.08)",
+            boxShadow: "0 10px 40px rgba(1, 14, 36, 0.06)",
           }}
         >
-          {/* Industry tabs row */}
-          <div style={{ display: "flex", gap: "0.5rem", padding: "0.625rem", alignItems: "stretch" }}>
+          <div
+            role="tablist"
+            aria-label="Industries"
+            onKeyDown={onTabKeyDown}
+            className="grid grid-cols-5 gap-3 p-3"
+          >
             {INDUSTRIES.map((item) => {
-              const isActive = item.id === activeId;
+              const on = item.id === activeId;
               return (
                 <button
                   key={item.id}
                   type="button"
+                  role="tab"
+                  id={`industry-tab-${item.id}`}
+                  aria-selected={on}
+                  aria-controls="industry-panel"
+                  tabIndex={on ? 0 : -1}
                   onClick={() => setActiveId(item.id)}
-                  aria-pressed={isActive ? "true" : "false"}
+                  className="group relative flex min-w-0 cursor-pointer flex-col items-center gap-4 overflow-hidden rounded-2xl px-4 pb-5 pt-4 outline-none transition-[background-color,border-color] duration-200 ease-out hover:border-[rgba(0,12,31,0.22)] focus-visible:ring-2 focus-visible:ring-[#000c1f] focus-visible:ring-offset-2"
                   style={{
-                    flex: 1,
-                    minWidth: 0,
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    borderRadius: "0.5rem",
-                    outline: "none",
+                    backgroundColor: "#ffffff",
+                    border: `1px solid ${on ? "rgba(0, 12, 31, 0.24)" : "rgba(0, 12, 31, 0.08)"}`,
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  <div
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 transition-opacity duration-500 ease-out"
+                    style={{ background: BLUE_GLOW, opacity: on ? 1 : 0 }}
+                  />
+                  <span
+                    className="relative block w-full truncate text-center text-[0.9375rem] font-medium transition-colors duration-200"
                     style={{
-                      position: "relative",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      width: "100%",
-                      height: "100%",
-                      overflow: "hidden",
-                      borderRadius: "0.5rem",
-                      border: `1px solid ${isActive ? "rgba(17,17,17,0.12)" : "rgba(17,17,17,0.06)"}`,
-                      backgroundColor: isActive ? "#ffffff" : "#fafafa",
-                      padding: "0.75rem 0.375rem 1.25rem",
-                      boxShadow: isActive
-                        ? "0 1px 2px rgba(17,17,17,0.04), 0 6px 16px -8px rgba(17,17,17,0.1)"
-                        : "none",
-                      transition: "background-color 0.25s cubic-bezier(0.215,0.61,0.355,1), border-color 0.25s, box-shadow 0.25s",
+                      fontFamily: SANS,
+                      letterSpacing: "-0.015em",
+                      color: on ? INK : INK_TERTIARY,
                     }}
+                    title={item.title}
                   >
-                    <span
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "center",
-                        fontFamily: "'DM Sans', sans-serif",
-                        fontSize: "0.6875rem",
-                        fontWeight: isActive ? 600 : 400,
-                        color: isActive ? "#111" : "rgba(17,17,17,0.42)",
-                        letterSpacing: "-0.01em",
-                        lineHeight: 1.4,
-                        marginBottom: "0.625rem",
-                        position: "relative",
-                        zIndex: 10,
-                        transition: "color 0.25s cubic-bezier(0.215,0.61,0.355,1), font-weight 0.25s",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        paddingInline: "0.25rem",
-                      }}
-                      title={item.title}
-                    >
-                      {item.title}
-                    </span>
-
-                    <div
-                      style={{
-                        position: "relative",
-                        zIndex: 10,
-                        flexShrink: 0,
-                        margin: "0 auto",
-                        overflow: "hidden",
-                        borderRadius: "0.25rem",
-                        height: "14.5rem",
-                        width: "min(100%, calc(14.5rem * 161.19 / 226))",
-                        aspectRatio: "161.19 / 226",
-                      }}
-                    >
-                      <Image
-                        src={item.image}
-                        alt={item.title}
-                        fill
-                        style={{
-                          objectFit: "cover",
-                          objectPosition: "center",
-                          opacity: isActive ? 1 : 0.28,
-                          transition: "opacity 0.3s cubic-bezier(0.215,0.61,0.355,1)",
-                        }}
-                        sizes="(max-width: 640px) 22vw, (max-width: 1024px) 18vw, 161px"
-                        loading={isActive ? "eager" : "lazy"}
-                        decoding="async"
-                        fetchPriority={isActive ? "high" : "low"}
-                        unoptimized
-                      />
-                    </div>
-
-                    <CardGradient active={isActive} />
-                  </div>
+                    {item.title}
+                  </span>
+                  {/* multiply: the sketch's white ground melts into the tile, like a printed illustration */}
+                  <span className="relative block aspect-[161/226] w-full overflow-hidden">
+                    <Image
+                      src={item.image}
+                      alt=""
+                      fill
+                      unoptimized
+                      loading="lazy"
+                      decoding="async"
+                      sizes="(max-width: 1100px) 16vw, 190px"
+                      className="object-cover object-center mix-blend-multiply transition-opacity duration-300 ease-out"
+                      style={{ opacity: on ? 1 : 0.7 }}
+                    />
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          {/* Animated bottom content */}
-          <div style={{ borderTop: "1px solid rgba(17,17,17,0.06)", minHeight: "12rem", overflow: "hidden" }}>
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeId}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.28, ease: [0.215, 0.61, 0.355, 1] as const }}
-                style={{
-                  display: "flex",
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  gap: "3.5rem",
-                  padding: "2.5rem 2.75rem 2.75rem",
-                }}
-              >
-                {/* Left */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1.25rem",
-                    flexShrink: 0,
-                    maxWidth: "42%",
-                    minWidth: "min(260px, 40%)",
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-                      fontSize: "clamp(1.375rem, 2.4vw, 1.875rem)",
-                      fontWeight: 700,
-                      color: "#111",
-                      letterSpacing: "-0.03em",
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {activeItem.leftHeading}
-                  </h3>
-                  <CtaLink label={activeItem.ctaLabel} href={activeItem.ctaHref} />
-                </div>
+          <div aria-hidden className="mx-3" style={{ height: 1, backgroundColor: HAIRLINE }} />
 
-                {/* Right – feature bullets */}
-                <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                  {activeItem.features.map((f, i) => (
-                    <div key={f.title}>
-                      {i > 0 && (
-                        <div style={{ borderTop: "1px solid rgba(17,17,17,0.07)", margin: "1.25rem 0" }} />
-                      )}
-                      <h4
-                        style={{
-                          margin: "0 0 0.375rem",
-                          fontFamily: "'DM Sans', sans-serif",
-                          fontSize: "1.0625rem",
-                          fontWeight: 600,
-                          color: "#111",
-                          letterSpacing: "-0.02em",
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        {f.title}
-                      </h4>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontFamily: "'DM Sans', sans-serif",
-                          fontSize: "0.9375rem",
-                          fontWeight: 400,
-                          color: "#666",
-                          letterSpacing: "-0.01em",
-                          lineHeight: 1.7,
-                        }}
-                      >
-                        {f.body}
-                      </p>
-                    </div>
-                  ))}
+          <div
+            id="industry-panel"
+            role="tabpanel"
+            aria-labelledby={`industry-tab-${active.id}`}
+            className="px-8 pb-14 pt-12 lg:px-16"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={active.id}
+                {...swap}
+                className="grid grid-cols-12 items-start gap-x-10"
+              >
+                <div className="col-span-5 flex flex-col items-start gap-7">
+                  <h3 style={panelHeadingStyle}>{active.leftHeading}</h3>
+                  <CtaLink label={active.ctaLabel} href={active.ctaHref} />
+                </div>
+                <div className="col-span-6 col-start-7 lg:col-span-5 lg:col-start-8">
+                  <Features items={active.features} />
                 </div>
               </motion.div>
             </AnimatePresence>
           </div>
         </div>
-
-        </div> {/* end hidden md:block desktop wrapper */}
       </div>
     </section>
-  );
-}
-
-/* ── CTA link ── */
-function CtaLink({ label, href }: { label: string; href: string }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <a
-      href={href}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "0.35rem",
-        alignSelf: "flex-start",
-        padding: "0.5625rem 1.125rem",
-        borderRadius: "0.625rem",
-        border: `1px solid ${hovered ? "rgba(17,17,17,0.18)" : "rgba(17,17,17,0.10)"}`,
-        backgroundColor: hovered ? "rgba(17,17,17,0.04)" : "transparent",
-        fontFamily: "'DM Sans', sans-serif",
-        fontSize: "0.8125rem",
-        fontWeight: 500,
-        color: "#111",
-        letterSpacing: "-0.01em",
-        textDecoration: "none",
-        transition: "background-color 0.18s, border-color 0.18s",
-        whiteSpace: "nowrap",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden style={{ flexShrink: 0 }}>
-        <path
-          d="M2.5 6.5h8M8 4L10.5 6.5 8 9"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </a>
   );
 }

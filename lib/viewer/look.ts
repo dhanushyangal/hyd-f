@@ -5,8 +5,9 @@
 
 export type ViewerEnvLighting = "studio" | "outdoor" | "neutral";
 export type ViewerMaterialType = "standard" | "matcap" | "toon" | "lambert" | "normal";
-export type ViewerMaterialRoughness = "smooth" | "medium" | "rough";
 export type ViewerCameraMode = "perspective" | "isometric";
+/** One-shot camera moves requested from the inspector. */
+export type ViewerCameraView = "front" | "side" | "top" | "reset";
 
 export type ViewerLook = {
   lighting: ViewerEnvLighting;
@@ -17,11 +18,19 @@ export type ViewerLook = {
   shadow: boolean;
   autoRotate: boolean;
   materialType: ViewerMaterialType;
-  materialRoughness: ViewerMaterialRoughness;
+  /** Model-wide PBR overrides; null keeps each mesh's authored value. */
+  roughness: number | null;
+  metalness: number | null;
+  /** Environment reflection strength (envMapIntensity). */
+  reflections: number;
+  clearcoat: number;
   wireframe: boolean;
   cameraMode: ViewerCameraMode;
-  distortion: number;
+  /** Vertical field of view in degrees (perspective only). */
+  fov: number;
 };
+
+export const FOV_RANGE = { min: 20, max: 80 } as const;
 
 export type LightRig = { ambient: number; hemi: number; key: number; fill: number; rim: number };
 
@@ -34,8 +43,6 @@ const LIGHTING_PRESETS: Record<
   outdoor: { rig: { ambient: 0.7, hemi: 0.6, key: 1.4, fill: 0.4, rim: 0.3 }, lightIntensity: 1.4, brightness: 1.25 },
 };
 
-const ROUGHNESS: Record<ViewerMaterialRoughness, number> = { smooth: 0.2, medium: 0.5, rough: 0.9 };
-
 export const DEFAULT_VIEWER_LOOK: ViewerLook = {
   lighting: "studio",
   lightIntensity: LIGHTING_PRESETS.studio.lightIntensity,
@@ -45,10 +52,20 @@ export const DEFAULT_VIEWER_LOOK: ViewerLook = {
   shadow: true,
   autoRotate: false,
   materialType: "standard",
-  materialRoughness: "medium",
+  roughness: null,
+  metalness: null,
+  reflections: 1,
+  clearcoat: 0,
   wireframe: false,
   cameraMode: "perspective",
-  distortion: 0.28,
+  fov: 40,
+};
+
+export const DEFAULT_PBR: Pick<ViewerLook, "roughness" | "metalness" | "reflections" | "clearcoat"> = {
+  roughness: DEFAULT_VIEWER_LOOK.roughness,
+  metalness: DEFAULT_VIEWER_LOOK.metalness,
+  reflections: DEFAULT_VIEWER_LOOK.reflections,
+  clearcoat: DEFAULT_VIEWER_LOOK.clearcoat,
 };
 
 /** Switching preset resets intensity/exposure to that preset unless the patch sets them. */
@@ -72,10 +89,12 @@ export type ResolvedViewerLook = {
   lights: LightRig;
   camera: { ortho: boolean; fov: number; frustum: number };
   materialType: ViewerMaterialType;
-  roughness: number;
+  pbr: { roughness: number | null; metalness: number | null; reflections: number; clearcoat: number };
 };
 
 export const VIEWER_BACKGROUND = "#ffffff";
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 export function resolveViewerLook(look: ViewerLook): ResolvedViewerLook {
   const scale = Math.max(0.3, Math.min(2, look.lightIntensity));
@@ -96,11 +115,16 @@ export function resolveViewerLook(look: ViewerLook): ResolvedViewerLook {
     },
     camera: {
       ortho: look.cameraMode === "isometric",
-      fov: 32 + Math.min(1, Math.max(0, look.distortion)) * 48,
+      fov: Math.min(FOV_RANGE.max, Math.max(FOV_RANGE.min, look.fov)),
       frustum: 2.2,
     },
     materialType: look.materialType,
-    roughness: ROUGHNESS[look.materialRoughness],
+    pbr: {
+      roughness: look.roughness == null ? null : clamp01(look.roughness),
+      metalness: look.metalness == null ? null : clamp01(look.metalness),
+      reflections: Math.min(3, Math.max(0, look.reflections)),
+      clearcoat: clamp01(look.clearcoat),
+    },
   };
 }
 
@@ -109,8 +133,6 @@ export type PartMaterial = { color: string; roughness: number; metalness: number
 export type PartMaterialMap = Record<string, PartMaterial>;
 
 export const DEFAULT_PART_MATERIAL: PartMaterial = { color: "#888888", roughness: 0.5, metalness: 0 };
-
-const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 function encodeSrgb(linear: number) {
   const c = clamp01(linear);

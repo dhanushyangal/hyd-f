@@ -23,7 +23,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { checkoutHref, formatUsd, PRICING } from "@/lib/pricing";
+import { checkoutHref, formatUsd, normalizePlanId, planDisplayLabel, PRICING } from "@/lib/pricing";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 
@@ -73,22 +73,22 @@ const PLANS = [
     href: "/generate",
   },
   {
-    id: "creator",
-    name: PRICING.creator.label,
-    price: formatUsd(PRICING.creator.monthly),
-    credits: PRICING.creator.creditsLabel,
-    tagline: "More volume and quality for creators.",
-    cta: "Choose Creator",
-    href: checkoutHref("creator"),
+    id: "starter",
+    name: PRICING.starter.label,
+    price: formatUsd(PRICING.starter.monthly),
+    credits: PRICING.starter.creditsLabel,
+    tagline: "More volume and quality for independent work.",
+    cta: "Choose Starter",
+    href: checkoutHref("starter"),
   },
   {
-    id: "studio",
-    name: PRICING.studio.label,
-    price: formatUsd(PRICING.studio.monthly),
-    credits: PRICING.studio.creditsLabel,
+    id: "pro",
+    name: PRICING.pro.label,
+    price: formatUsd(PRICING.pro.monthly),
+    credits: PRICING.pro.creditsLabel,
     tagline: "Collaboration and scale for teams.",
-    cta: "Choose Studio",
-    href: checkoutHref("studio"),
+    cta: "Choose Pro",
+    href: checkoutHref("pro"),
   },
 ] as const;
 
@@ -204,10 +204,8 @@ export default function UsagePage() {
       : Math.max(0, credits.total - credits.used)
     : 0;
   const resetStr = formatResetDate(credits?.resetAt);
-  const currentPlanId = (credits?.plan ?? "free").toLowerCase();
-  const planLabel = credits?.plan
-    ? credits.plan.charAt(0).toUpperCase() + credits.plan.slice(1)
-    : "Free";
+  const currentPlanId = normalizePlanId(credits?.plan);
+  const planLabel = planDisplayLabel(credits?.plan);
 
   const now = Date.now();
   const rangeMs = { "1d": 86400000, "7d": 86400000 * 7, "30d": 86400000 * 30 }[range];

@@ -62,31 +62,31 @@ export const NAV_PRIMARY: NavGroup[] = [
       {
         heading: "Generate",
         items: [
-          { label: "Text to 3D", href: "/docs#text-to-3d", icon: "text" },
-          { label: "Image to 3D", href: "/docs#image-to-3d", icon: "image" },
-          { label: "BlueFox 3D", href: "/bluefox3d", icon: "bluefox" },
+          { label: "Text to 3D", href: "/docs#text-to-3d", icon: "text", description: "Turn a sentence into a production mesh." },
+          { label: "Image to 3D", href: "/docs#image-to-3d", icon: "image", description: "Start from a photo or concept render." },
+          { label: "BlueFox 3D", href: "/bluefox3d", icon: "bluefox", description: "The model behind Hydrilla generation." },
         ],
       },
       {
         heading: "Pipeline",
         items: [
-          { label: "Features", href: "/features", icon: "features" },
-          { label: "Preview", href: "/docs#preview", icon: "preview" },
-          { label: "Exports", href: "/docs#export", icon: "export" },
+          { label: "Features", href: "/features", icon: "features", description: "What the studio pipeline includes." },
+          { label: "Preview", href: "/docs#preview", icon: "preview", description: "Inspect materials before you export." },
+          { label: "Exports", href: "/docs#export", icon: "export", description: "GLB, FBX, OBJ, and USDZ." },
         ],
       },
       {
         heading: "Build",
         items: [
-          { label: "API", href: "/api", icon: "api" },
-          { label: "Rigging", href: "/rigging", icon: "rigging" },
+          { label: "API", href: "/api", icon: "api", description: "Generate from your own product." },
+          { label: "Rigging", href: "/rigging", icon: "rigging", description: "Pose characters for animation." },
         ],
       },
       {
         heading: "Scale",
         items: [
-          { label: "Enterprise", href: "/enterprise", icon: "enterprise" },
-          { label: "Security", href: "/security", icon: "security" },
+          { label: "Enterprise", href: "/enterprise", icon: "enterprise", description: "Seats, controls, and team support." },
+          { label: "Security", href: "/security", icon: "security", description: "How customer data is handled." },
         ],
       },
     ],
@@ -104,25 +104,25 @@ export const NAV_PRIMARY: NavGroup[] = [
       {
         heading: "Industries",
         items: [
-          { label: "Game development", href: "/usecase/gamedev", icon: "game" },
-          { label: "Film & animation", href: "/usecase/filmproduction", icon: "film" },
-          { label: "Architecture", href: "/usecase/architecture", icon: "architecture" },
-          { label: "AR / VR & XR", href: "/usecase/arvr", icon: "arvr" },
+          { label: "Game development", href: "/usecase/gamedev", icon: "game", description: "Props and characters for real-time engines." },
+          { label: "Film & animation", href: "/usecase/filmproduction", icon: "film", description: "Assets for shots, previs, and lookdev." },
+          { label: "Architecture", href: "/usecase/architecture", icon: "architecture", description: "Spatial models for presentations." },
+          { label: "AR / VR & XR", href: "/usecase/arvr", icon: "arvr", description: "Lightweight meshes for immersive apps." },
         ],
       },
       {
         heading: "Visualization",
         items: [
-          { label: "Product visualization", href: "/usecase/productdesign", icon: "product" },
-          { label: "All solutions", href: "/usecase", icon: "features" },
+          { label: "Product visualization", href: "/usecase/productdesign", icon: "product", description: "Catalog-ready product models." },
+          { label: "All solutions", href: "/usecase", icon: "features", description: "Every industry workflow in one place." },
         ],
       },
       {
         heading: "Teams",
         items: [
-          { label: "Studios", href: "/enterprise", icon: "studio" },
-          { label: "Enterprise", href: "/enterprise", icon: "enterprise" },
-          { label: "Startup", href: "/pricing", icon: "startup" },
+          { label: "Studios", href: "/enterprise", icon: "studio", description: "Pipelines built for production teams." },
+          { label: "Enterprise", href: "/enterprise", icon: "enterprise", description: "Shared workspaces and admin controls." },
+          { label: "Startup", href: "/pricing", icon: "startup", description: "Start generating without a studio setup." },
         ],
       },
     ],
@@ -140,19 +140,19 @@ export const NAV_PRIMARY: NavGroup[] = [
       {
         heading: "Learn",
         items: [
-          { label: "Documentation", href: "/docs", icon: "docs" },
-          { label: "FAQ", href: "/faq", icon: "faq" },
-          { label: "Blog", href: "/blog", icon: "blog" },
-          { label: "Changelog", href: "/changelog", icon: "changelog" },
+          { label: "Documentation", href: "/docs", icon: "docs", description: "Guides from the first prompt to export." },
+          { label: "FAQ", href: "/faq", icon: "faq", description: "Answers before you book a call." },
+          { label: "Blog", href: "/blog", icon: "blog", description: "Notes on the product and the craft." },
+          { label: "Changelog", href: "/changelog", icon: "changelog", description: "What shipped recently." },
         ],
       },
       {
         heading: "Compare",
         items: [
-          { label: "Hydrilla vs Meshy", href: "/compare/hydrilla-vs-meshy", icon: "compare" },
-          { label: "Hydrilla vs Tripo", href: "/compare/hydrilla-vs-tripo", icon: "compare" },
-          { label: "Hydrilla vs Luma", href: "/compare/hydrilla-vs-luma", icon: "compare" },
-          { label: "Best AI 3D generators", href: "/compare/best-ai-3d-generators", icon: "features" },
+          { label: "Hydrilla vs Meshy", href: "/compare/hydrilla-vs-meshy", icon: "compare", description: "How the pipelines differ." },
+          { label: "Hydrilla vs Tripo", href: "/compare/hydrilla-vs-tripo", icon: "compare", description: "Output, controls, and exports." },
+          { label: "Hydrilla vs Luma", href: "/compare/hydrilla-vs-luma", icon: "compare", description: "Generation quality, side by side." },
+          { label: "Best AI 3D generators", href: "/compare/best-ai-3d-generators", icon: "features", description: "A short field guide." },
         ],
       },
     ],
@@ -170,24 +170,24 @@ export const NAV_PRIMARY: NavGroup[] = [
       {
         heading: "Hydrilla",
         items: [
-          { label: "About", href: "/about", icon: "about" },
-          { label: "Team", href: "/team", icon: "team" },
-          { label: "Careers", href: "/careers", icon: "careers" },
-          { label: "Contact", href: "/contact", icon: "contact" },
+          { label: "About", href: "/about", icon: "about", description: "Why Hydrilla exists." },
+          { label: "Team", href: "/team", icon: "team", description: "The people building BlueFox." },
+          { label: "Careers", href: "/careers", icon: "careers", description: "Open roles at the lab." },
+          { label: "Contact", href: "/contact", icon: "contact", description: "Talk with the team." },
         ],
       },
       {
         heading: "Lab",
         items: [
-          { label: "Research", href: "/research", icon: "research" },
-          { label: "BlueFox 3D", href: "/bluefox3d", icon: "bluefox" },
+          { label: "Research", href: "/research", icon: "research", description: "Hawan Research Labs." },
+          { label: "BlueFox 3D", href: "/bluefox3d", icon: "bluefox", description: "The model behind the product." },
         ],
       },
       {
         heading: "Trust",
         items: [
-          { label: "Security", href: "/security", icon: "security" },
-          { label: "Brand", href: "/brand", icon: "brand" },
+          { label: "Security", href: "/security", icon: "security", description: "Trust, access, and data handling." },
+          { label: "Brand", href: "/brand", icon: "brand", description: "Marks, color, and usage." },
         ],
       },
     ],

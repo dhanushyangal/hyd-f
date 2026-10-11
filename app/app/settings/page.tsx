@@ -35,6 +35,7 @@ import {
 } from "@/lib/api";
 import { FALLBACK_CONNECTORS } from "@/lib/connectors";
 import { migrateCodeModelId, type ApiKeyProvider, type ModelId } from "@/lib/models";
+import { planDisplayLabel } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = useState<UserModelPrefs | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [section, setSection] = useState<"models" | "billing">("models");
 
   const load = async () => {
     if (!isSignedIn) return;
@@ -82,9 +84,34 @@ export default function SettingsPage() {
           <h1 className="mt-1.5 text-[28px] sm:text-[32px] font-semibold text-neutral-900 tracking-[-0.03em]">
             Settings
           </h1>
-          <p className="mt-2 text-sm text-neutral-500">Keys and models for Water.</p>
+          <p className="mt-2 text-sm text-neutral-500">
+            {section === "billing" ? "Plan and payments for this account." : "Keys and models for Water."}
+          </p>
         </header>
 
+        <div className="inline-flex rounded-full border border-neutral-200 bg-white p-1">
+          {([
+            ["models", "Models"],
+            ["billing", "Billing"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSection(id)}
+              className={cn(
+                "h-9 rounded-full px-4 text-sm font-medium transition-colors",
+                section === id ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-900"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {section === "billing" ? (
+          <BillingSection />
+        ) : (
+          <>
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 flex items-start gap-2">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -150,7 +177,218 @@ export default function SettingsPage() {
             <LimitsCard />
           </>
         )}
+        </>
+        )}
       </div>
+    </div>
+  );
+}
+
+const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app").replace(/\/+$/, "");
+
+type BillingPayment = {
+  id: string;
+  createdAt: string;
+  amount: number;
+  currency: string;
+  status: string;
+  plan: string | null;
+  paymentId: string;
+};
+
+function receiptPlan(plan: string | null): string {
+  if (plan === "starter") return "Starter";
+  if (plan === "pro") return "Pro";
+  if (plan === "creator") return "Creator";
+  if (plan === "studio") return "Studio";
+  return "Subscription";
+}
+
+function receiptStatus(status: string): string {
+  if (status === "succeeded") return "Paid";
+  if (status === "failed") return "Failed";
+  if (status === "refunded") return "Refunded";
+  return status;
+}
+
+function formatCharge(amount: number, currency: string): string {
+  const code = (currency || "USD").toUpperCase();
+  const major = amount / 100;
+  try {
+    return new Intl.NumberFormat("en", { style: "currency", currency: code }).format(major);
+  } catch {
+    return `${major.toFixed(2)} ${code}`;
+  }
+}
+
+function BillingSection() {
+  const { getToken, isSignedIn } = useAuth();
+  const [plan, setPlan] = useState<string | null>(null);
+  const [renewsAt, setRenewsAt] = useState<string | null>(null);
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
+  const [accessUntil, setAccessUntil] = useState<string | null>(null);
+  const [payments, setPayments] = useState<BillingPayment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  const load = async () => {
+    if (!isSignedIn) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/api/payments/billing`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Failed to load billing");
+      setPlan(body.plan ?? null);
+      setRenewsAt(body.renewsAt ?? null);
+      setCancelAtPeriodEnd(Boolean(body.cancelAtPeriodEnd));
+      setAccessUntil(body.accessUntil ?? null);
+      setPayments(Array.isArray(body.payments) ? body.payments : []);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load billing");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [isSignedIn]);
+
+  const renewLabel = renewsAt
+    ? new Date(renewsAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : null;
+  const accessLabel = accessUntil
+    ? new Date(accessUntil).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : renewLabel;
+
+  const cancelRenewal = async () => {
+    if (!plan || cancelAtPeriodEnd || cancelling) return;
+    const until = accessLabel ? ` You keep ${planDisplayLabel(plan)} until ${accessLabel}.` : "";
+    if (!window.confirm(`Cancel renewal?${until} It will not charge again after that.`)) return;
+    setCancelling(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/api/payments/cancel`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Failed to cancel renewal");
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to cancel renewal");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="px-5 pt-5 pb-0">
+          <h2 className="text-[15px] font-semibold tracking-tight text-neutral-900">Current plan</h2>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 pt-3">
+          {loading ? (
+            <p className="text-sm text-neutral-500">Loading…</p>
+          ) : (
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[22px] font-semibold tracking-tight text-neutral-900">
+                  {planDisplayLabel(plan)}
+                </p>
+                <p className="mt-1 text-sm text-neutral-500">
+                  {plan && cancelAtPeriodEnd
+                    ? `Cancels ${accessLabel || "at the end of this period"}. You keep this plan until then.`
+                    : plan && renewLabel
+                      ? `Renews ${renewLabel}`
+                      : "Free includes 100 credits a month."}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <Link
+                  href="/app/pricing"
+                  className="text-sm font-medium text-neutral-900 underline underline-offset-2"
+                >
+                  {plan ? "Change plan" : "See plans"}
+                </Link>
+                {plan && !cancelAtPeriodEnd && (
+                  <button
+                    type="button"
+                    onClick={() => void cancelRenewal()}
+                    disabled={cancelling}
+                    className="text-sm font-medium text-neutral-500 underline underline-offset-2 hover:text-neutral-900 disabled:opacity-50"
+                  >
+                    {cancelling ? "Cancelling…" : "Cancel renewal"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="px-5 pt-5 pb-0">
+          <h2 className="text-[15px] font-semibold tracking-tight text-neutral-900">Payment history</h2>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 pt-3">
+          {error && (
+            <p className="text-sm text-red-700">{error}</p>
+          )}
+          {loading ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-neutral-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading payments…
+            </div>
+          ) : payments.length === 0 ? (
+            <p className="py-6 text-sm text-neutral-500">No payments on this account yet.</p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-neutral-200">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Date</th>
+                    <th className="px-3 py-2 font-semibold">Plan</th>
+                    <th className="px-3 py-2 font-semibold">Amount</th>
+                    <th className="px-3 py-2 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                  {payments.map((payment) => (
+                    <tr key={payment.id}>
+                      <td className="px-3 py-2.5">
+                        {new Date(payment.createdAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-neutral-900">{receiptPlan(payment.plan)}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{formatCharge(payment.amount, payment.currency)}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={cn(payment.status === "failed" ? "text-red-700" : "text-neutral-700")}>
+                          {receiptStatus(payment.status)}
+                        </span>
+                        <p className="mt-0.5 text-[11px] text-neutral-400">{payment.paymentId}</p>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

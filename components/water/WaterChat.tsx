@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchWaterMessages, sendWaterChat, type WaterChatMessage } from "@/lib/api";
+import { StudioOrb } from "@/components/workspace/StudioOrb";
 
 export type WaterThreadJob = {
   id: string;
@@ -10,40 +12,25 @@ export type WaterThreadJob = {
   createdAt: string;
 };
 
-type ThreadMessage = WaterChatMessage & { generation?: boolean };
+export type ThreadMessage = WaterChatMessage & { generation?: boolean };
 
-type Props = {
+type ThreadOptions = {
+  /** Null pauses the thread (nothing loads, `send` is a no-op). */
   jobId: string | null;
   /** Jobs in this model's refine chain, oldest first. Defaults to just `jobId`. */
   threadJobs?: WaterThreadJob[];
   modelId: string;
   getToken: () => Promise<string | null>;
-  disabled?: boolean;
-  className?: string;
-  onClose?: () => void;
-  docked?: boolean;
   onRefine?: (prompt: string) => void;
   onScene?: (scene: unknown) => void;
 };
 
-export function WaterChat({
-  jobId,
-  threadJobs,
-  modelId,
-  getToken,
-  disabled,
-  className,
-  onClose,
-  docked,
-  onRefine,
-  onScene,
-}: Props) {
+/** Follow-up conversation for a Water build: loads the chain's history and sends refinements. */
+export function useWaterThread({ jobId, threadJobs, modelId, getToken, onRefine, onScene }: ThreadOptions) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
-  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+  const latest = useRef({ getToken, onRefine, onScene, modelId, jobId });
+  latest.current = { getToken, onRefine, onScene, modelId, jobId };
 
   const thread: WaterThreadJob[] =
     threadJobs && threadJobs.length > 0
@@ -51,55 +38,38 @@ export function WaterChat({
       : jobId
         ? [{ id: jobId, prompt: null, createdAt: "" }]
         : [];
-  const threadKey = thread.map((j) => `${j.id}:${j.prompt ?? ""}`).join("|");
+  const threadKey = jobId ? thread.map((j) => `${j.id}:${j.prompt ?? ""}`).join("|") : "";
   const threadRef = useRef(thread);
   threadRef.current = thread;
 
   useEffect(() => {
-    const jobs = threadRef.current;
+    const jobs = threadKey ? threadRef.current : [];
     if (jobs.length === 0) {
       setMessages([]);
       return;
     }
     const state = { cancelled: false };
-    const tokenGetter = () => getTokenRef.current();
-    void Promise.all(
-      jobs.map((job) => fetchWaterMessages(job.id, tokenGetter).catch(() => []))
-    ).then((perJob) => {
-      if (state.cancelled) {
-        return;
-      }
-      const merged = jobs.flatMap((job, i): ThreadMessage[] => {
-        const intro: ThreadMessage[] = job.prompt?.trim()
-          ? [
-              {
-                id: `gen-${job.id}`,
-                role: "user",
-                content: job.prompt.trim(),
-                createdAt: job.createdAt,
-                generation: true,
-              },
-            ]
-          : [];
-        return [...intro, ...(perJob[i] ?? [])];
-      });
-      setMessages(merged);
+    const tokenGetter = () => latest.current.getToken();
+    void Promise.all(jobs.map((job) => fetchWaterMessages(job.id, tokenGetter).catch(() => []))).then((perJob) => {
+      if (state.cancelled) return;
+      setMessages(
+        jobs.flatMap((job, i): ThreadMessage[] => {
+          const intro: ThreadMessage[] = job.prompt?.trim()
+            ? [{ id: `gen-${job.id}`, role: "user", content: job.prompt.trim(), createdAt: job.createdAt, generation: true }]
+            : [];
+          return [...intro, ...(perJob[i] ?? [])];
+        })
+      );
     });
     return () => {
       state.cancelled = true;
     };
   }, [threadKey]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
-
-  const send = async () => {
-    const text = draft.trim();
-    if (!jobId || !text || busy || disabled) {
-      return;
-    }
-    setDraft("");
+  const send = useCallback(async (raw: string) => {
+    const text = raw.trim();
+    const { jobId: target, modelId: model } = latest.current;
+    if (!target || !text) return;
     setMessages((prev) => [
       ...prev,
       { id: `local-${Date.now()}`, role: "user", content: text, createdAt: new Date().toISOString() },
@@ -107,26 +77,17 @@ export function WaterChat({
     setBusy(true);
     try {
       const result = await sendWaterChat({
-        jobId,
+        jobId: target,
         message: text,
-        modelId,
-        getToken: () => getTokenRef.current(),
+        modelId: model,
+        getToken: () => latest.current.getToken(),
       });
       setMessages((prev) => [
         ...prev,
-        {
-          id: `asst-${Date.now()}`,
-          role: "assistant",
-          content: result.reply,
-          createdAt: new Date().toISOString(),
-        },
+        { id: `asst-${Date.now()}`, role: "assistant", content: result.reply, createdAt: new Date().toISOString() },
       ]);
-      if (result.scene) {
-        onScene?.(result.scene);
-      }
-      if (result.kind === "refine" && result.refinePrompt) {
-        onRefine?.(result.refinePrompt);
-      }
+      if (result.scene) latest.current.onScene?.(result.scene);
+      if (result.kind === "refine" && result.refinePrompt) latest.current.onRefine?.(result.refinePrompt);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -140,79 +101,62 @@ export function WaterChat({
     } finally {
       setBusy(false);
     }
-  };
+  }, []);
+
+  return { messages, busy, send };
+}
+
+/** Collapsed by default: one line with the latest reply, so the viewer stays visible. */
+export function WaterThreadPeek({ messages, busy }: { messages: ThreadMessage[]; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const last = messages[messages.length - 1];
+
+  useEffect(() => {
+    if (open) bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [open, messages.length]);
+
+  if (messages.length === 0 && !busy) return null;
 
   return (
-    <div
-      className={cn(
-        "flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_18px_60px_-24px_rgba(0,0,0,0.28)]",
-        className
-      )}
-    >
-      <div className={cn("flex items-center justify-between border-b border-neutral-200/70 px-3 py-2", docked && "hidden")}>
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 transition-[background-color,color,transform] duration-150 hover:bg-neutral-100 hover:text-neutral-800 active:scale-[0.97]"
-            aria-label="Close follow up"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex h-10 w-full items-center gap-2.5 px-4 text-left text-[13px] text-neutral-500 transition-colors hover:text-neutral-900"
+      >
+        {busy ? (
+          <StudioOrb state="working" size={20} />
+        ) : (
+          <MessageSquare className="h-3.5 w-3.5 shrink-0 text-neutral-400" strokeWidth={2} />
         )}
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
-        {!jobId && !docked && (
-          <p className="text-[12px] text-neutral-500 leading-5">Generate first, then type a follow-up here.</p>
-        )}
-        {jobId && messages.length === 0 && (
-          <p className="text-[12px] text-neutral-500 leading-5">No messages yet. Describe a change below.</p>
-        )}
-        {messages.map((m) =>
-          m.generation ? (
-            <div key={m.id} className="rounded-xl border border-sky-100 bg-sky-50/70 px-2.5 py-2 text-[12px] leading-5 text-sky-900">
-              <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wider text-sky-600">
-                Build
-              </span>
-              {m.content}
-            </div>
-          ) : (
+        <span className="min-w-0 flex-1 truncate">
+          {busy ? "Thinking…" : last ? last.content : ""}
+        </span>
+        <span className="shrink-0 tabular-nums text-[12px] text-neutral-400">{messages.length}</span>
+        <ChevronDown
+          className={cn("h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform duration-150", open && "rotate-180")}
+          strokeWidth={2}
+        />
+      </button>
+      {open ? (
+        <div className="max-h-[min(240px,30vh)] space-y-1.5 overflow-y-auto px-4 pb-3" role="log" aria-label="Refine history">
+          {messages.map((m) => (
             <div
               key={m.id}
               className={cn(
-                "rounded-xl px-2.5 py-2 text-[12px] leading-5",
-                m.role === "user" ? "bg-neutral-900 text-white" : "bg-neutral-50 text-neutral-800 border border-neutral-200"
+                "w-fit max-w-[85%] rounded-2xl px-3 py-1.5 text-[13px] leading-5",
+                m.role === "user" ? "ml-auto bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-800",
+                m.generation && "bg-sky-50 text-sky-900"
               )}
             >
               {m.content}
             </div>
-          )
-        )}
-        <div ref={bottomRef} />
-      </div>
-      <form
-        className="p-2 border-t border-neutral-200/70"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send();
-        }}
-      >
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-          placeholder="Describe a change…"
-          disabled={!jobId || busy || disabled}
-          className="w-full min-h-[72px] resize-none rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[12px] outline-none transition-[border-color,background-color] duration-150 focus:border-neutral-400 focus:bg-white disabled:opacity-50"
-        />
-      </form>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      ) : null}
     </div>
   );
 }

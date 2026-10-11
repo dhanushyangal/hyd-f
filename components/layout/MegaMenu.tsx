@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { NavFeatured, NavGroup } from "@/lib/nav";
+import { NAVBAR } from "@/lib/nav-chrome";
 import { NavIcon } from "./NavIcons";
 
 const DISPLAY =
@@ -59,15 +60,46 @@ function FeaturedVisual({ visual }: { visual: NavFeatured["visual"] }) {
 function FeaturedCard({
   featured,
   onNavigate,
+  variant = "v1",
 }: {
   featured: NavFeatured;
   onNavigate?: () => void;
+  variant?: "v1" | "v2";
 }) {
+  if (variant === "v2") {
+    return (
+      <Link
+        href={featured.href}
+        onClick={onNavigate}
+        className="group hidden w-[248px] shrink-0 flex-col justify-between rounded-xl bg-[linear-gradient(165deg,#000c1f_0%,#002664_62%,#1a4d9e_100%)] p-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141414]/30 focus-visible:ring-offset-2 xl:flex"
+      >
+        <FeaturedVisual visual={featured.visual} />
+        <div className="mt-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75">
+            {featured.eyebrow}
+          </p>
+          <p
+            className="mt-2 text-pretty text-[15px] font-semibold leading-snug tracking-[-0.02em]"
+            style={{ fontFamily: DISPLAY }}
+          >
+            {featured.title}
+          </p>
+          <span className="mt-4 inline-flex items-center gap-1 text-[13px] font-medium text-white/85 transition-transform duration-300 group-hover:translate-x-0.5">
+            Explore
+            <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <Link
       href={featured.href}
       onClick={onNavigate}
-      className="group relative hidden min-h-55 w-60 shrink-0 flex-col justify-between overflow-hidden rounded-[22px] bg-[linear-gradient(160deg,#0F3F3A_0%,#16756C_52%,#1FA89A_100%)] p-5 text-white xl:flex xl:w-[280px]"
+      className="group relative hidden min-h-55 w-60 shrink-0 flex-col justify-between overflow-hidden rounded-[22px] bg-[linear-gradient(165deg,#000c1f_0%,#002664_62%,#1a4d9e_100%)] p-5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] xl:flex xl:w-[280px]"
     >
       <FeaturedVisual visual={featured.visual} />
       <div>
@@ -80,12 +112,18 @@ function FeaturedCard({
         >
           {featured.title}
         </p>
+        <span className="mt-4 inline-flex items-center gap-1 text-[13px] font-medium text-white/80 transition-transform duration-300 group-hover:translate-x-0.5">
+          Explore
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </div>
     </Link>
   );
 }
 
-export function MegaMenu({
+function MegaMenuV2({
   group,
   onNavigate,
 }: {
@@ -96,15 +134,110 @@ export function MegaMenu({
 
   return (
     <div
-      className="overflow-hidden rounded-[28px] border border-black/[0.06] bg-white shadow-[0_28px_80px_-32px_rgba(0,0,0,0.42)]"
+      className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white/96 shadow-[0_24px_70px_-28px_rgba(3,3,2,0.32)] backdrop-blur-xl"
       role="region"
       aria-label={`${group.label} menu`}
     >
-      <div className="flex items-stretch gap-6 p-6 md:gap-8 md:px-8 md:py-7">
-        <div className="flex min-w-0 flex-1 justify-between gap-6 md:gap-8">
+      <div className="flex items-center justify-between gap-4 border-b border-black/[0.06] px-5 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4b5568]">
+          {group.label}
+        </p>
+        <Link
+          href={group.href}
+          onClick={onNavigate}
+          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[13px] font-medium tracking-[-0.01em] text-[#141414] transition-colors hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141414]/25"
+          style={{ fontFamily: DISPLAY }}
+        >
+          Overview
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link>
+      </div>
+
+      <div className="flex items-stretch gap-3 p-3">
+        <div
+          className="grid min-w-0 flex-1"
+          style={{
+            gridTemplateColumns: `repeat(${group.columns.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {group.columns.map((column) => (
+            <section
+              key={column.heading}
+              className="min-w-0 border-l border-black/[0.06] px-3 py-2 first:border-l-0 first:pl-2"
+            >
+              <div className="mb-2 flex items-center gap-3 px-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4b5568]">
+                  {column.heading}
+                </p>
+                <span aria-hidden className="h-px min-w-4 flex-1 bg-black/[0.08]" />
+              </div>
+              <ul className="space-y-0.5">
+                {column.items.map((item) => (
+                  <li key={`${column.heading}-${item.href}-${item.label}`}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      className="group flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2.5 transition-colors duration-200 hover:bg-[#f4f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141414]/25"
+                    >
+                      {item.icon ? (
+                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f3f5f7] ring-1 ring-black/[0.05]">
+                          <NavIcon name={item.icon} className="h-5 w-5" />
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 pt-0.5">
+                        <span
+                          className="block text-[14px] font-medium leading-5 tracking-[-0.015em] text-[#121212]"
+                          style={{ fontFamily: DISPLAY }}
+                        >
+                          {item.label}
+                        </span>
+                        {item.description ? (
+                          <span className="mt-0.5 block text-pretty text-[13px] leading-[1.45] text-[#3e4c5e]">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        {group.featured ? (
+          <FeaturedCard featured={group.featured} onNavigate={onNavigate} variant="v2" />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function MegaMenu({
+  group,
+  onNavigate,
+}: {
+  group: NavGroup;
+  onNavigate?: () => void;
+}) {
+  if (NAVBAR === "compact") {
+    return <MegaMenuV2 group={group} onNavigate={onNavigate} />;
+  }
+
+  if (!group.columns?.length) return null;
+
+  return (
+    <div
+      className="overflow-hidden rounded-[28px] border border-[#000c1f]/8 bg-white/95 shadow-[0_24px_70px_-28px_rgba(0,12,31,0.38)] backdrop-blur-xl"
+      role="region"
+      aria-label={`${group.label} menu`}
+    >
+      <div className="flex items-stretch gap-6 p-5 md:gap-7 md:px-7 md:py-6">
+        <div className="flex min-w-0 flex-1 justify-between gap-5 md:gap-6">
           {group.columns.map((column) => (
             <div key={column.heading} className="min-w-0 flex-1">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#000c1f]/40">
                 {column.heading}
               </p>
               <ul className="space-y-0.5">
@@ -113,11 +246,26 @@ export function MegaMenu({
                     <Link
                       href={item.href}
                       onClick={onNavigate}
-                      className="flex items-center gap-3 rounded-xl px-1.5 py-2 text-[14px] font-medium tracking-[-0.018em] text-neutral-900 transition-colors hover:bg-neutral-50"
-                      style={{ fontFamily: DISPLAY }}
+                      className="group flex items-start gap-3 rounded-2xl px-2 py-2 transition-colors duration-200 hover:bg-[#f1f5fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#000c1f]/20"
                     >
-                      {item.icon ? <NavIcon name={item.icon} /> : null}
-                      <span>{item.label}</span>
+                      {item.icon ? (
+                        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f4f7fb] ring-1 ring-[#000c1f]/6 transition-colors duration-200 group-hover:bg-white">
+                          <NavIcon name={item.icon} className="h-6 w-6" />
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 pt-0.5">
+                        <span
+                          className="block text-[14px] font-medium leading-tight tracking-[-0.02em] text-[#000c1f]"
+                          style={{ fontFamily: DISPLAY }}
+                        >
+                          {item.label}
+                        </span>
+                        {item.description ? (
+                          <span className="mt-1 block text-[12.5px] leading-snug text-[#000c1f]/55">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
                     </Link>
                   </li>
                 ))}

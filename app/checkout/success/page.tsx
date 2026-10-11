@@ -65,13 +65,18 @@ function CheckoutSuccessContent() {
           if (paymentId) syncBody.payment_id = paymentId;
           if (subscriptionIdFromUrl) syncBody.subscription_id = subscriptionIdFromUrl;
 
-          await fetch(`${BACKEND_URL}/api/payments/sync`, {
+          const syncRes = await fetch(`${BACKEND_URL}/api/payments/sync`, {
             method: "POST",
             headers: { ...headers, "Content-Type": "application/json" },
             body: JSON.stringify(syncBody),
           });
+          const syncJson = await syncRes.json().catch(() => ({}));
+          if (syncRes.status === 403 || syncJson.granted === false) {
+            setSubscriptionStatus("pending");
+            return;
+          }
         } catch {
-          // ignore sync errors – polling will still pick up once webhook lands
+          // A network error does not grant credits. The status check below only reads this account.
         }
       }
 
@@ -171,9 +176,9 @@ function CheckoutSuccessContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Payment received!</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">We couldn&apos;t confirm this payment</h2>
               <p className="text-sm text-gray-600 mb-6">
-                Your payment was successful. We&apos;re activating your subscription — this can take up to a minute. Please refresh this page shortly.
+                Credits are added only after Dodo confirms the payment for this account. If you just paid, wait a moment and check again.
               </p>
               {(paymentId || subscriptionIdFromUrl) && (
                 <p className="text-xs text-gray-400 mb-4">

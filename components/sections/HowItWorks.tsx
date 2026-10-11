@@ -2,29 +2,37 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { cloudinaryImage } from "@/lib/cloudinary";
-
-const DASHED = "repeating-linear-gradient(90deg, #d0d0d0 0 10px, transparent 10px 20px)";
+import { DISPLAY_FONT as DISPLAY, SANS_FONT as SANS } from "@/lib/glyphic";
 
 /** Explicit WebP + width — avoids Next Image Optimizer timeouts on large f_auto PNGs. */
 const workflowStepImage = (id: string) =>
   cloudinaryImage(`hydrilla-landing/workflow/${id}`, "f_webp,q_auto,c_fit,w_900");
 
-const STEPS = [
+type Step = {
+  id: string;
+  number: string;
+  title: string;
+  body: string;
+  image: string;
+  hoverImage: string | null;
+};
+
+const STEPS: Step[] = [
   {
     id: "describe",
     number: "01",
-    title: "Describe your asset",
+    title: "Describe your asset.",
     body: "Type a prompt or drop a reference image. BlueFox 1 takes either.",
     image: workflowStepImage("describe"),
-    hoverImage: null as string | null,
+    hoverImage: null,
   },
   {
     id: "generate",
     number: "02",
-    title: "Generate with BlueFox 1",
+    title: "Generate with BlueFox 1.",
     body: "BlueFox 1 produces a segmented mesh with PBR maps — base color, metalness, roughness, and normals.",
     image: workflowStepImage("generated-model1"),
     hoverImage: workflowStepImage("generated-model2"),
@@ -32,214 +40,205 @@ const STEPS = [
   {
     id: "refine",
     number: "03",
-    title: "Refine and export",
+    title: "Refine and export.",
     body: "Inspect materials in the browser, then export GLB, FBX, OBJ, or USDZ into your engine or DCC.",
     image: workflowStepImage("refine"),
-    hoverImage: null as string | null,
+    hoverImage: null,
   },
 ];
 
+/* Design tokens (mirrors the reference system) */
+const INK = "#000c1f"; // --color-blue-900
+const INK_SECONDARY = "rgba(0, 12, 31, 0.65)"; // --color-text-secondary
+const INK_TERTIARY = "rgba(0, 12, 31, 0.45)"; // --color-text-tertiary
+const SURFACE = "#f7f7f7"; // --color-grey-50
+const EASE_OUT_QUINT: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+
+function SwapIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden
+      style={{
+        transition: "transform 400ms cubic-bezier(0.22, 1, 0.36, 1)",
+        transform: active ? "rotate(180deg)" : "rotate(0deg)",
+      }}
+    >
+      <path
+        d="M2.5 5.5h9m0 0L9 3m2.5 2.5L9 8M13.5 10.5h-9m0 0L7 8m-2.5 2.5L7 13"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function StepRow({ step }: { step: Step }) {
+  const reduceMotion = useReducedMotion();
+  const [showAlt, setShowAlt] = useState(false);
+  const hasAlt = Boolean(step.hoverImage);
+
+  return (
+    <motion.article
+      initial={reduceMotion ? false : { opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.7, ease: EASE_OUT_QUINT }}
+      className="grid w-full grid-cols-1 items-center gap-8 md:grid-cols-12 md:gap-x-4 md:gap-y-0"
+    >
+      {/* Media card — square, large radius, soft surface */}
+      <div className="flex min-w-0 justify-center md:col-span-5 md:col-start-2 lg:col-span-4 lg:col-start-3">
+        <div
+          onPointerEnter={(e) => {
+            if (hasAlt && e.pointerType === "mouse") setShowAlt(true);
+          }}
+          onPointerLeave={(e) => {
+            if (hasAlt && e.pointerType === "mouse") setShowAlt(false);
+          }}
+          className="relative aspect-square w-full max-w-[34rem] overflow-hidden rounded-[2rem] md:rounded-[2.5rem]"
+          style={{ backgroundColor: SURFACE }}
+        >
+          <Image
+            src={step.image}
+            alt={step.title.replace(/\.$/, "")}
+            fill
+            unoptimized
+            loading="lazy"
+            decoding="async"
+            sizes="(max-width: 768px) 100vw, 40vw"
+            className="object-contain object-center p-5 transition-opacity duration-500 ease-out md:p-6"
+            style={{ opacity: showAlt ? 0 : 1 }}
+          />
+          {step.hoverImage && (
+            <Image
+              src={step.hoverImage}
+              alt=""
+              aria-hidden
+              fill
+              unoptimized
+              loading="lazy"
+              decoding="async"
+              sizes="(max-width: 768px) 100vw, 40vw"
+              className="object-contain object-center p-5 transition-opacity duration-500 ease-out md:p-6"
+              style={{ opacity: showAlt ? 1 : 0 }}
+            />
+          )}
+
+          {hasAlt && (
+            <button
+              type="button"
+              onClick={() => setShowAlt((v) => !v)}
+              aria-pressed={showAlt}
+              aria-label={showAlt ? "Show first result" : "Show second result"}
+              className="absolute bottom-4 right-4 inline-flex h-11 w-11 items-center justify-center rounded-full text-white outline-none backdrop-blur-md transition-transform duration-200 ease-out hover:bg-black/75 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/60 active:scale-[0.96] md:bottom-5 md:right-5"
+              style={{
+                backgroundColor: "rgba(12, 12, 12, 0.6)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <SwapIcon active={showAlt} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Copy */}
+      <div className="flex min-w-0 flex-col justify-center px-6 md:col-span-4 md:col-start-8 md:px-0 lg:col-span-3 lg:col-start-8">
+        <div className="mx-auto flex w-full max-w-md flex-col gap-4 md:mx-0 md:max-w-xs lg:max-w-sm">
+          <span
+            className="text-xs font-medium uppercase"
+            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: SANS }}
+          >
+            Step {step.number}
+          </span>
+          <h3
+            className="m-0"
+            style={{
+              fontFamily: DISPLAY,
+              fontWeight: 400,
+              color: INK,
+              fontSize: "clamp(2rem, 1.6rem + 1.6vw, 2.75rem)",
+              lineHeight: 1.05,
+              letterSpacing: "-0.03em",
+              textWrap: "balance",
+            }}
+          >
+            {step.title}
+          </h3>
+          <p
+            className="m-0"
+            style={{
+              fontFamily: SANS,
+              color: INK_SECONDARY,
+              fontSize: "clamp(1.125rem, 1.05rem + 0.3vw, 1.25rem)",
+              lineHeight: 1.5,
+              letterSpacing: "-0.02em",
+              textWrap: "pretty",
+            }}
+          >
+            {step.body}
+          </p>
+        </div>
+      </div>
+    </motion.article>
+  );
+}
+
 export default function HowItWorks() {
-  const [activeId, setActiveId] = useState(STEPS[0].id);
-  const [imageHovered, setImageHovered] = useState(false);
-
-  const activeStep = STEPS.find((s) => s.id === activeId) ?? STEPS[0];
-  const displaySrc =
-    imageHovered && activeStep.hoverImage ? activeStep.hoverImage : activeStep.image;
-
   return (
     <section
       id="howitworks"
+      aria-labelledby="howitworks-heading"
+      className="w-full bg-white"
       style={{
-        width: "100%",
-        backgroundColor: "#ffffff",
-        padding: "5rem 1.5rem 6rem",
-        boxSizing: "border-box",
+        padding: "clamp(4.5rem, 3rem + 6vw, 9rem) 0",
         WebkitFontSmoothing: "antialiased",
       }}
     >
-      <div style={{ maxWidth: "72rem", margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
+      <div
+        className="mx-auto flex flex-col items-center"
+        style={{
+          width: "min(100% - 2rem, 87rem)",
+          gap: "clamp(4rem, 2.5rem + 6vw, 7.5rem)",
+        }}
+      >
+        <header className="flex flex-col items-center gap-3 px-6 text-center">
           <p
-            style={{
-              margin: "0 0 0.625rem",
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "0.6875rem",
-              fontWeight: 600,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "#666",
-            }}
+            className="m-0 text-xs font-medium uppercase"
+            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: SANS }}
           >
             Process
           </p>
           <BlurReveal
             as="h2"
+            id="howitworks-heading"
             style={{
               margin: 0,
-              fontFamily: "'RoobertVF', 'Roobert', 'DM Sans', sans-serif",
-              fontSize: "clamp(1.875rem, 4vw, 3rem)",
-              fontWeight: 700,
-              color: "#111",
+              fontFamily: DISPLAY,
+              fontSize: "clamp(2.25rem, 1.7rem + 2.4vw, 3.75rem)",
+              fontWeight: 400,
+              color: INK,
               letterSpacing: "-0.035em",
-              lineHeight: 1.15,
+              lineHeight: 1.05,
             }}
           >
             How it works
           </BlurReveal>
-        </div>
+        </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-start">
-          {/* Left: image stays aligned with the step list */}
-          <div className="hidden md:flex order-2 md:order-1 items-start">
-            <div
-              onMouseEnter={() => setImageHovered(true)}
-              onMouseLeave={() => setImageHovered(false)}
-              className="w-full relative sticky top-24 rounded-2xl overflow-hidden bg-[#f5f4f2] aspect-[4/5] max-h-[520px]"
-              style={{
-                cursor: activeStep.hoverImage ? "pointer" : "default",
-                boxShadow: "0 1px 2px rgba(17,17,17,0.04), 0 12px 32px -16px rgba(17,17,17,0.12)",
-                border: "1px solid rgba(17,17,17,0.06)",
-              }}
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`${activeId}-${displaySrc}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
-                  className="absolute inset-0"
-                >
-                  <Image
-                    src={displaySrc}
-                    alt=""
-                    fill
-                    unoptimized
-                    className="object-contain object-center p-4"
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </motion.div>
-              </AnimatePresence>
-              {activeStep.hoverImage && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: imageHovered ? 0 : 1 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-sm text-white text-[11px] font-medium tracking-wide pointer-events-none"
-                  style={{ fontFamily: "'DM Sans', sans-serif" }}
-                >
-                  Hover to reveal
-                </motion.div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: steps */}
-          <div className="order-1 md:order-2 flex flex-col gap-4 md:gap-0">
-            <div aria-hidden className="h-px w-full md:block hidden" style={{ background: DASHED }} />
-            {STEPS.map((step, i) => {
-              const isActive = step.id === activeId;
-              return (
-                <div key={step.id}>
-                  {/* Mobile card */}
-                  <div
-                    onTouchStart={() => setActiveId(step.id)}
-                    className="md:hidden flex flex-col gap-0 rounded-[1.5rem] bg-white cursor-default border border-neutral-100 shadow-sm overflow-hidden transition-[transform,box-shadow] duration-300 active:scale-[0.99]"
-                    style={{
-                      fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
-                      WebkitTapHighlightColor: "transparent",
-                    }}
-                  >
-                    <div className="relative w-full bg-[#f5f4f2]" style={{ aspectRatio: "16/9" }}>
-                      <Image
-                        src={step.image}
-                        alt={step.title}
-                        fill
-                        unoptimized
-                        className="object-contain object-center"
-                        sizes="100vw"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-3 p-5">
-                      <span
-                        className="block text-xs font-bold tracking-widest uppercase text-neutral-500"
-                        style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
-                      >
-                        Step {step.number}
-                      </span>
-                      <h3
-                        className="text-xl font-bold leading-snug text-neutral-900 m-0"
-                        style={{
-                          fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
-                          letterSpacing: "-0.025em",
-                        }}
-                      >
-                        {step.title}
-                      </h3>
-                      <p className="m-0 text-sm text-neutral-500 leading-relaxed" style={{ letterSpacing: "-0.01em" }}>
-                        {step.body}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Desktop row */}
-                  <div
-                    onMouseEnter={() => setActiveId(step.id)}
-                    className="hidden md:grid grid-cols-[8.5rem_1fr] gap-6 lg:gap-8 py-7 cursor-default transition-colors duration-200"
-                    style={{
-                      minHeight: "11.5rem",
-                      alignItems: "start",
-                    }}
-                  >
-                    <div className="pt-0.5">
-                      <span
-                        className="block text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-200"
-                        style={{
-                          fontFamily: "'DM Sans', sans-serif",
-                          color: isActive ? "#111" : "#999",
-                        }}
-                      >
-                        Step {step.number}
-                      </span>
-                      <span
-                        className="block mt-2 text-[1.0625rem] font-semibold leading-snug transition-colors duration-200"
-                        style={{
-                          fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
-                          letterSpacing: "-0.02em",
-                          color: isActive ? "#111" : "#8a8a8a",
-                        }}
-                      >
-                        {step.title}
-                      </span>
-                    </div>
-                    <motion.p
-                      animate={{
-                        opacity: isActive ? 1 : 0.4,
-                        color: isActive ? "#525252" : "#8a8a8a",
-                      }}
-                      transition={{ duration: 0.2 }}
-                      className="m-0 text-[1.0625rem] leading-[1.65]"
-                      style={{
-                        fontFamily: "'DM Sans', sans-serif",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      {step.body}
-                    </motion.p>
-                  </div>
-                  {i < STEPS.length - 1 && (
-                    <div aria-hidden className="hidden md:block h-px w-full" style={{ background: DASHED }} />
-                  )}
-                </div>
-              );
-            })}
-            <div aria-hidden className="h-px w-full md:block hidden" style={{ background: DASHED }} />
-          </div>
+        <div
+          className="flex w-full flex-col"
+          style={{ gap: "clamp(4rem, 2.5rem + 6vw, 7.5rem)" }}
+        >
+          {STEPS.map((step) => (
+            <StepRow key={step.id} step={step} />
+          ))}
         </div>
       </div>
     </section>

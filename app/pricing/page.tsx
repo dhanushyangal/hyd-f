@@ -7,7 +7,7 @@ import { faqByQuestions } from "@/lib/faq";
 export const metadata = createPageMetadata({
   title: "Pricing",
   description:
-    "Free $0, Creator $9/mo, Studio $25/mo. Credits, GLB on Free, all formats on paid plans. Cancel anytime.",
+    "Free $0, Starter $5/mo, Pro $12/mo. Credits, GLB on Free, all formats on paid plans. Cancel anytime.",
   path: "/pricing",
 });
 

@@ -17,7 +17,7 @@ Hydrilla and Tripo both turn text or images into 3D meshes. Hydrilla is the stud
 | PBR / segmentation | PBR maps and logical parts | Confirm on Tripo |
 | Exports | GLB, FBX, OBJ, USDZ | Confirm on Tripo |
 | Who it is for | Creators and studios, production-ready meshes, not CAD | See Tripo |
-| Free tier | Yes, 200 credits/month, GLB | See Tripo |
+| Free tier | Yes, 100 credits/month, GLB | See Tripo |
 
 Feature lists drift. Re-check Tripo before an internal bake-off.
 

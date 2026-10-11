@@ -34,7 +34,7 @@ Generate from a text prompt or a reference image, preview in the browser, and ex
 
 Hydrilla is for production-ready generated assets you can refine. It is not CAD, not print-ready engineering, and not a finished hero with no artist pass.
 
-Plans: Free ($${PRICING.free.monthly}, ${PRICING.free.creditsLabel}), Creator ($${PRICING.creator.monthly}/mo), Studio ($${PRICING.studio.monthly}/mo).
+Plans: Free ($${PRICING.free.monthly}, ${PRICING.free.creditsLabel}), Starter ($${PRICING.starter.monthly}/mo), Pro ($${PRICING.pro.monthly}/mo).
 `,
   about: `# About Hydrilla
 
@@ -56,8 +56,8 @@ Contact: ${SITE_URL}/contact
   pricing: `# Hydrilla Pricing
 
 Free: $${PRICING.free.monthly}, ${PRICING.free.creditsLabel}, GLB export.
-Creator: $${PRICING.creator.monthly}/mo ($${PRICING.creator.yearlyMonthlyEquivalent}/mo yearly), ${PRICING.creator.creditsLabel}, GLB, FBX, OBJ, USDZ.
-Studio: $${PRICING.studio.monthly}/mo ($${PRICING.studio.yearlyMonthlyEquivalent}/mo yearly), ${PRICING.studio.creditsLabel}, seats, REST API (10,000 calls/month), all formats.
+Starter: $${PRICING.starter.monthly}/mo, ${PRICING.starter.creditsLabel}, GLB, FBX, OBJ, USDZ.
+Pro: $${PRICING.pro.monthly}/mo, ${PRICING.pro.creditsLabel}, seats, REST API (10,000 calls/month), all formats.
 
 Plans can be upgraded, downgraded, or cancelled from account settings.
 
@@ -69,7 +69,7 @@ ${BRAND_SENTENCE}
 
 Text-to-3D and image-to-3D, segmented meshes, PBR materials, in-browser preview, and GLB, FBX, OBJ, and USDZ exports for Unity, Unreal, and Blender.
 
-GLB on Free; all formats on Creator and Studio.
+GLB on Free; all formats on Starter and Pro.
 
 ${SITE_URL}/features
 `,
@@ -92,7 +92,7 @@ ${SITE_URL}/bluefox3d
 1. Create an account and open a workspace.
 2. Start a generation with a text prompt or a reference image (${MODEL_NAME}).
 3. Wait for the mesh. Inspect parts, PBR, and silhouette in the browser preview.
-4. Export GLB (Free) or GLB/FBX/OBJ/USDZ (Creator/Studio).
+4. Export GLB (Free) or GLB/FBX/OBJ/USDZ (Starter/Pro).
 5. Import into Unity, Unreal, Blender, or your DCC.
 
 Features: ${SITE_URL}/features
@@ -102,9 +102,9 @@ FAQ: ${SITE_URL}/faq
 `,
   api: `# Hydrilla API
 
-Studio plans include REST API access (10,000 calls/month on Studio). Programmatic generation for pipelines. Partner and volume access via ${SITE_URL}/contact. Email ${CONTACT_EMAIL}.
+Pro plans include REST API access (10,000 calls/month on Pro). Programmatic generation for pipelines. Partner and volume access via ${SITE_URL}/contact. Email ${CONTACT_EMAIL}.
 
-API access is available on Studio and by partner arrangement. We do not publish a public OpenAPI on this page.
+API access is available on Pro and by partner arrangement. We do not publish a public OpenAPI on this page.
 
 ${SITE_URL}/api
 `,
@@ -150,7 +150,7 @@ ${SITE_URL}/enterprise
 `,
   security: `# Hydrilla Security
 
-Accounts via Clerk. Generated assets and exports are private on Creator/Studio as stated on Pricing. Contact ${CONTACT_EMAIL} for enterprise security review. We do not claim SOC 2 or similar certifications on this page.
+Accounts via Clerk. Generated assets and exports are private on Starter/Pro as stated on Pricing. Contact ${CONTACT_EMAIL} for enterprise security review. We do not claim SOC 2 or similar certifications on this page.
 
 ${SITE_URL}/security
 `,

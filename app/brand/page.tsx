@@ -8,7 +8,7 @@ const SITELINKS = [
   {
     title: "Pricing",
     url: `${SITE_URL}/pricing`,
-    lines: "Free plan. No credit card needed. Creator from $9/mo.",
+    lines: "Free plan. No credit card needed. Starter from $5/mo.",
   },
   {
     title: "BlueFox 3D",
