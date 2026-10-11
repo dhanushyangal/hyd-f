@@ -657,7 +657,8 @@ function WorkspacePage() {
     setCreditsLoading(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${BACKEND_URL}/api/payments/credits`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${BACKEND_URL}/api/payments/credits`, { headers });
       if (res.ok) {
         const data = await res.json();
         const c = data.credits || {};

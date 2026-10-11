@@ -241,9 +241,8 @@ function BillingSection() {
     setError(null);
     try {
       const token = await getToken();
-      const res = await fetch(`${BACKEND_URL}/api/payments/billing`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${BACKEND_URL}/api/payments/billing`, { headers });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Failed to load billing");
       setPlan(body.plan ?? null);
@@ -277,9 +276,10 @@ function BillingSection() {
     setError(null);
     try {
       const token = await getToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${BACKEND_URL}/api/payments/cancel`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Failed to cancel renewal");

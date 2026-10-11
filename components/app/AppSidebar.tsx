@@ -51,7 +51,7 @@ function CreditsCard() {
     (async () => {
       try {
         const token = await getToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
         const [creditsRes, subRes] = await Promise.all([
           fetch(`${BACKEND_URL}/api/payments/credits`, { headers }),
           fetch(`${BACKEND_URL}/api/payments/subscription`, { headers }),
@@ -162,9 +162,8 @@ export function AppSidebar() {
     (async () => {
       try {
         const token = await getToken();
-        const res = await fetch(`${BACKEND_URL}/api/payments/subscription`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${BACKEND_URL}/api/payments/subscription`, { headers });
         if (res.ok) {
           const { subscription } = await res.json();
           setHasActiveSubscription(!!subscription && (subscription.status === "active" || subscription.status === "on_hold"));

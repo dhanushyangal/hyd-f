@@ -409,11 +409,10 @@ export default function PricingSection({
     void (async () => {
       try {
         const token = await getToken();
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
         const response = await fetch(
           `${BACKEND_URL}/api/payments/subscription`,
-          {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          }
+          { headers }
         );
         if (response.ok) {
           const { subscription } = await response.json();
