@@ -8,7 +8,7 @@ import { CONTACT_EMAIL } from "@/lib/brand";
 export const metadata = createPageMetadata({
   title: "Hydrilla API",
   description:
-    "Studio plans include REST API access for programmatic generation. Partner and volume access via contact. Email founders@hydrilla.ai.",
+    "Pro plans include REST API access for programmatic generation. Partner and volume access via contact. Email founders@hydrilla.ai.",
   path: "/api",
 });
 
@@ -19,14 +19,14 @@ export default function ApiPage() {
         data={getWebPageJsonLd({
           name: "Hydrilla API",
           description:
-            "Studio plans include REST API access for programmatic generation. Partner and volume access via contact.",
+            "Pro plans include REST API access for programmatic generation. Partner and volume access via contact.",
           path: "/api",
         })}
       />
       <MarketingPage
       eyebrow="Developers"
       title="Hydrilla API"
-      description="API access is available on Studio and by partner arrangement. Same BlueFox 1 model, same production exports."
+      description="API access is available on Pro and by partner arrangement. Same BlueFox 1 model, same production exports."
       related={[
         { label: "Docs", href: "/docs", hint: "Getting started in the studio" },
         { label: "Enterprise", href: "/enterprise", hint: "Volume and seats" },
@@ -36,7 +36,7 @@ export default function ApiPage() {
       <MarketingArticle>
         <section className="space-y-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
           <p>
-            Studio plans include REST API access (10,000 calls/month on Studio)
+            Pro plans include REST API access (10,000 calls/month on Pro)
             for programmatic generation in existing pipelines. Partner and
             volume access via{" "}
             <Link href="/contact" className="font-semibold text-neutral-950 underline underline-offset-2">
@@ -73,7 +73,7 @@ export default function ApiPage() {
 
         <ProseHeading>Access</ProseHeading>
         <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          API access is available on Studio and by partner arrangement. We do not
+          API access is available on Pro and by partner arrangement. We do not
           publish a public OpenAPI on this page. Start in the product, then
           request pipeline access if you need jobs from your own backend.
         </p>

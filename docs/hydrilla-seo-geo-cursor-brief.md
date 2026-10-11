@@ -416,7 +416,7 @@ Hydrilla is built for creators, studios, and teams who need fast generation of p
 Hydrilla can generate structured 3D assets in minutes, so teams spend less time on early modeling and concept asset production. Final hero quality still needs an artist pass.
 
 **Is there a free plan available?**  
-Yes. The Free plan is $0/month with 200 credits and GLB export, so you can generate a limited number of models before upgrading.
+Yes. The Free plan is $0/month with 100 credits and GLB export, so you can generate a limited number of models before upgrading.
 
 **Can I change or cancel my plan anytime?**  
 Yes. Plans can be upgraded, downgraded, or cancelled at any time from account settings.

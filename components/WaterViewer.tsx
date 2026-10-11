@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronDown, Download, Droplets } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
 import { StudioOrb } from "@/components/workspace/StudioOrb";
 import { cn } from "@/lib/utils";
 import { ENGINE } from "@/lib/engines";
@@ -25,6 +25,7 @@ import {
   resolveViewerLook,
   sanitizePartMaterials,
   type PartMaterialMap,
+  type ViewerCameraView,
   type ViewerLook,
 } from "@/lib/viewer/look";
 import { SELECTION_HIGHLIGHT } from "@/lib/viewer/highlight";
@@ -40,8 +41,6 @@ type Props = {
   onDownloaded?: (format: ExportFormat) => void;
   /** Hide the built-in top-right controls when the parent renders its own bar. */
   hideToolbar?: boolean;
-  /** Left offset for the engine badge, in CSS pixels. Defaults to 12 (`left-3`). */
-  badgeLeft?: number;
   instance?: {
     position: [number, number, number];
     rotation: [number, number, number];
@@ -55,6 +54,13 @@ type Props = {
   selectedPart?: string | null;
   /** Part clicked in the canvas (null = empty space). */
   onPick?: (name: string | null) => void;
+  onModelStats?: (stats: ModelMeshStats) => void;
+  /** Camera move from the inspector; a new `id` replays the same view. */
+  viewRequest?: { view: ViewerCameraView; id: number } | null;
+  /** Fraction of the viewport to shift the framed model upward. */
+  frameLift?: number;
+  /** Extra classes for the floating stats pill, such as a top offset. */
+  statsClassName?: string;
   onInstanceTransform?: (t: {
     position: [number, number, number];
     rotation: [number, number, number];
@@ -65,7 +71,7 @@ type Props = {
 export type ExportFormat = "glb" | "gltf" | "obj" | "stl" | "png" | "ts";
 
 /** Bump when the sandbox message protocol changes so browsers don't reuse a stale cached iframe. */
-const WATER_SANDBOX_SRC = "/water-sandbox.html?v=4";
+const WATER_SANDBOX_SRC = "/water-sandbox.html?v=5";
 
 export type WaterViewerHandle = {
   exportFormat: (format: ExportFormat) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -139,14 +145,17 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
     onThumbnail,
     onDownloaded,
     hideToolbar = false,
-    badgeLeft = 12,
     instance = null,
     look = DEFAULT_VIEWER_LOOK,
     partMaterials,
     onParts,
     selectedPart = null,
     onPick,
+    onModelStats,
     onInstanceTransform,
+    viewRequest = null,
+    frameLift = 0,
+    statsClassName,
   },
   ref
 ) {
@@ -154,6 +163,7 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
   const onThumbnailRef = useRef(onThumbnail);
   const onPartsRef = useRef(onParts);
   const onPickRef = useRef(onPick);
+  const onModelStatsRef = useRef(onModelStats);
   const onInstanceTransformRef = useRef(onInstanceTransform);
   const pendingExport = useRef<{
     requestId: string;
@@ -172,8 +182,9 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
     onThumbnailRef.current = onThumbnail;
     onPartsRef.current = onParts;
     onPickRef.current = onPick;
+    onModelStatsRef.current = onModelStats;
     onInstanceTransformRef.current = onInstanceTransform;
-  }, [onThumbnail, onParts, onPick, onInstanceTransform]);
+  }, [onThumbnail, onParts, onPick, onModelStats, onInstanceTransform]);
   const resolvedLook = useMemo(() => resolveViewerLook(look), [look]);
 
   const postCode = (code: string) => {
@@ -201,7 +212,9 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
         setModelReady(true);
         onPartsRef.current?.(sanitizePartMaterials(data.parts));
         if (data.stats) {
-          setModelStats(data.stats as ModelMeshStats);
+          const stats = data.stats as ModelMeshStats;
+          setModelStats(stats);
+          onModelStatsRef.current?.(stats);
         }
       }
       if (data.type === "water-select") {
@@ -302,6 +315,19 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
     win.postMessage({ type: "water-highlight", name: selectedPart, spec: SELECTION_HIGHLIGHT }, "*");
   }, [selectedPart, ready, modelReady]);
 
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || !ready || !modelReady || !viewRequest) return;
+    win.postMessage({ type: "water-view", view: viewRequest.view }, "*");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewRequest]);
+
+  useEffect(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win || !ready) return;
+    win.postMessage({ type: "water-lift", lift: frameLift }, "*");
+  }, [frameLift, ready]);
+
   const requestSandboxExport = (format: Exclude<ExportFormat, "ts">) =>
     new Promise<{ ok: true } | { ok: false; error: string }>((resolve) => {
       const win = iframeRef.current?.contentWindow;
@@ -375,7 +401,7 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
   );
 
   return (
-    <div className={cn("relative h-full w-full overflow-hidden bg-white", className)}>
+    <div className={cn("@container relative h-full w-full overflow-hidden bg-white", className)}>
       <iframe
         ref={iframeRef}
         title={`${ENGINE.water.label} preview`}
@@ -386,15 +412,11 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
           setReady(true);
         }}
       />
-      <div
-        className="absolute top-3 z-10 flex items-center gap-2"
-        style={{ left: badgeLeft }}
-      >
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium tracking-tight text-neutral-700 shadow-sm backdrop-blur">
-          <Droplets className="h-3 w-3 text-sky-600" strokeWidth={2} />
-          {ENGINE.water.label}
-        </span>
-      </div>
+      <ModelStatsOverlay
+        stats={modelReady ? modelStats : null}
+        badge={{ label: ENGINE.water.label, icon: "water" }}
+        className={statsClassName}
+      />
       {factoryCode && !hideToolbar && (
         <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
           <button
@@ -480,9 +502,6 @@ export const WaterViewer = forwardRef<WaterViewerHandle, Props>(function WaterVi
         <div className="absolute bottom-3 left-3 right-3 z-10 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           {exportError}
         </div>
-      )}
-      {modelReady && modelStats && (
-        <ModelStatsOverlay stats={modelStats} corner="bottom-left" />
       )}
     </div>
   );

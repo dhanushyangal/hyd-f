@@ -66,7 +66,7 @@ export default function DocsPage() {
                 preview.
               </li>
               <li>
-                Export GLB (Free) or GLB/FBX/OBJ/USDZ (Creator/Studio).
+                Export GLB (Free) or GLB/FBX/OBJ/USDZ (Starter/Pro).
               </li>
               <li>Import into Unity, Unreal, Blender, or your DCC.</li>
             </ol>
@@ -158,7 +158,7 @@ export default function DocsPage() {
               Usage is metered in credits. A reference image costs 2 credits
               on Low or 5 on High, an edit costs 3 or 6, and each 3D model
               costs 10. The free plan includes a monthly credit allotment so
-              you can evaluate the pipeline; Creator and Studio raise volume
+              you can evaluate the pipeline; Starter and Pro raise volume
               and unlock additional export options. Plans can be changed from
               account settings.
             </p>

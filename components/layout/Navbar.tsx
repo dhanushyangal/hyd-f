@@ -13,6 +13,8 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 
 import { NAV_PRIMARY } from "@/lib/nav";
+import { NAVBAR } from "@/lib/nav-chrome";
+import { Button } from "@/components/ui/button";
 import { MegaMenu } from "./MegaMenu";
 import { MobileNav } from "./MobileNav";
 
@@ -147,6 +149,8 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   const [reduceMotion, setReduceMotion] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
+  const expandedWidthRef = useRef(0);
+  const [holdWidth, setHoldWidth] = useState(false);
 
   const isHero = variant === "hero";
   const useHeroStyling = isHero;
@@ -253,34 +257,56 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
     closeTimer.current = window.setTimeout(() => setOpenMenu(null), 160);
   };
 
+  const v2 = NAVBAR === "compact";
+  const shouldShrink = isScrolled && (v2 || isHero);
+
   const containerClasses = useHeroStyling
     ? "bg-white/2 backdrop-blur-[80px] border border-gray-200/20 shadow-2xl"
     : "bg-white/60 backdrop-blur-xl border border-gray-200/50 shadow-lg";
 
-  const textColor = onDark ? "text-white" : "text-black";
-  const logoClasses = `font-bold ${textColor} tracking-tight transition-colors duration-500`;
+  const textColor = v2 ? "text-[#141414]" : onDark ? "text-white" : "text-black";
+  const wordmarkSrc = textColor === "text-white"
+    ? "/logo-hydrilla/hydsvg.svg"
+    : "/logo-hydrilla/hydsvgblack.svg";
 
-  const generateButtonClasses = onDark
-    ? "px-4 py-2 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-xs font-semibold text-white uppercase tracking-wider hover:bg-white/30 transition-all duration-500 ease-out shadow-sm"
-    : "px-4 py-2 rounded-lg bg-gray-100 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-200 transition-all duration-500 ease-out";
+  const v2ButtonHeight = shouldShrink ? "h-8 px-3 text-[14px]" : "h-10 px-4 text-[15px]";
 
-  const signInButtonClasses = onDark
-    ? "text-xs font-semibold text-white uppercase tracking-wider px-4 py-2 rounded-lg backdrop-blur-sm border border-transparent hover:border-white/20 hover:bg-white/10 transition-all duration-700 ease-in-out"
-    : "text-xs font-semibold text-black uppercase tracking-wider hover:text-black/70 transition-colors duration-500 px-4 py-2";
+  const generateButtonClasses = v2
+    ? `${v2ButtonHeight} cursor-pointer items-center rounded-xl bg-[#141414] font-semibold tracking-[-0.01em] text-white normal-case hover:bg-[#2a2a2a]`
+    : onDark
+      ? "px-4 py-2 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 text-xs font-semibold text-white uppercase tracking-wider hover:bg-white/30 transition-all duration-500 ease-out shadow-sm"
+      : "px-4 py-2 rounded-lg bg-gray-100 text-xs font-semibold text-black uppercase tracking-wider hover:bg-gray-200 transition-all duration-500 ease-out";
 
-  const signUpButtonClasses = onDark
-    ? "px-5 py-2.5 text-xs font-semibold text-black uppercase tracking-wider bg-white/90 backdrop-blur-md border border-white/40 rounded-lg hover:bg-white hover:scale-105 hover:shadow-2xl transition-all duration-700 ease-in-out flex items-center gap-1.5 shadow-lg"
-    : "px-5 py-2.5 text-xs font-semibold text-white uppercase tracking-wider bg-black backdrop-blur-md border border-black rounded-lg hover:bg-gray-900 hover:scale-105 transition-all duration-700 ease-in-out flex items-center gap-1.5 shadow-lg hover:shadow-xl";
+  const signInButtonClasses = v2
+    ? `${v2ButtonHeight} cursor-pointer font-medium tracking-[-0.01em] text-[#141414] hover:bg-black/[0.05] hover:text-[#141414]`
+    : onDark
+      ? "h-9 px-3 text-sm font-medium text-white hover:bg-white/10 hover:text-white"
+      : "h-9 px-3 text-sm font-medium text-[#000c1f] hover:bg-[#000c1f]/5 hover:text-[#000c1f]";
 
-  const userButtonBorder = onDark ? "border-white/40" : "border-gray-300";
+  const signUpButtonClasses = v2
+    ? `${v2ButtonHeight} cursor-pointer rounded-xl tracking-[-0.01em] shadow-none`
+    : onDark
+      ? "bg-white text-[#000c1f] shadow-none hover:bg-white/90"
+      : "";
 
-  const hamburgerClasses = onDark
-    ? "lg:hidden relative z-20 flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-white/15"
-    : "lg:hidden relative z-20 flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-black/6";
+  const bookDemoButtonClasses = v2
+    ? `${v2ButtonHeight} cursor-pointer rounded-xl border border-black/10 bg-white font-semibold tracking-[-0.01em] text-[#141414] shadow-none hover:bg-[#f6f7f8]`
+    : signUpButtonClasses;
 
-  const barColor = onDark ? "bg-white" : "bg-black";
+  const userButtonBorder = v2
+    ? "border-black/10"
+    : onDark
+      ? "border-white/40"
+      : "border-gray-300";
 
-  const shouldShrink = isHero && isScrolled;
+  const hamburgerClasses = v2
+    ? "lg:hidden relative z-20 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-black/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141414]/30"
+    : onDark
+      ? "lg:hidden relative z-20 flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-white/15"
+      : "lg:hidden relative z-20 flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-black/6";
+
+  const barColor = v2 ? "bg-[#141414]" : onDark ? "bg-white" : "bg-black";
+
   const activeGroup = NAV_PRIMARY.find((item) => item.label === openMenu);
 
   useEffect(() => {
@@ -288,41 +314,92 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
   }, [shouldShrink]);
 
   useEffect(() => {
+    if (!v2) return;
+    if (shouldShrink) {
+      setHoldWidth(true);
+      return;
+    }
+    const delay = reduceMotion ? 0 : 520;
+    const timer = window.setTimeout(() => setHoldWidth(false), delay);
+    return () => window.clearTimeout(timer);
+  }, [v2, shouldShrink, reduceMotion]);
+
+  useLayoutEffect(() => {
+    if (!v2 || shouldShrink || holdWidth) return;
+    const el = menuRef.current;
+    if (!el) return;
+    const measure = () => {
+      expandedWidthRef.current = el.getBoundingClientRect().width;
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [v2, shouldShrink, holdWidth, pathname]);
+
+  useEffect(() => {
     return () => {
       if (closeTimer.current) window.clearTimeout(closeTimer.current);
     };
   }, []);
 
-  const chromeSurface = useHeroStyling
-    ? `${shouldShrink ? "bg-white/5" : "bg-white/2"} backdrop-blur-[80px] border border-gray-200/20 shadow-2xl`
-    : containerClasses;
-  const dynamicPadding = shouldShrink
-    ? "px-4 md:px-6 py-2"
-    : "px-4 md:px-8 py-2.5";
-  const dynamicRounded = shouldShrink
-    ? "rounded-full"
-    : "rounded-xl md:rounded-2xl";
+  const chromeSurface = v2
+    ? "border border-black/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.4)_10%,rgba(255,255,255,0.8))] shadow-[0_8px_32px_-12px_rgba(3,3,2,0.18),inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[20px]"
+    : useHeroStyling
+      ? `${shouldShrink ? "bg-white/5" : "bg-white/2"} backdrop-blur-[80px] border border-gray-200/20 shadow-2xl`
+      : containerClasses;
+  const dynamicPadding = v2
+    ? `${shouldShrink ? "h-[52px]" : "h-[60px]"} items-center gap-3 pl-4 pr-2`
+    : shouldShrink
+      ? "px-4 md:px-6 py-2"
+      : "px-4 md:px-8 py-2.5";
+  const dynamicRounded = v2
+    ? shouldShrink
+      ? "rounded-full"
+      : "rounded-[14px]"
+    : shouldShrink
+      ? "rounded-full"
+      : "rounded-xl md:rounded-2xl";
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 md:pt-4 px-4 md:px-0"
+      className={`fixed top-0 left-0 right-0 z-50 flex justify-center ${
+        v2 ? "px-3 pt-3 md:px-4" : "pt-2 md:pt-4 px-4 md:px-0"
+      }`}
       data-site-navbar
     >
       <div
         ref={menuRef}
-        className={`relative mx-auto w-full overflow-visible transition-[max-width] ${BAR_EASE} ${
-          shouldShrink ? "max-w-2xl" : "max-w-7xl"
-        }`}
+        className={
+          v2
+            ? `relative mx-auto w-full overflow-visible transition-[width] ${BAR_EASE} lg:w-[min(72rem,calc(100vw-2rem))]`
+            : `relative mx-auto w-full overflow-visible transition-[max-width] ${BAR_EASE} ${
+                shouldShrink ? "max-w-2xl" : "max-w-7xl"
+              }`
+        }
+        style={
+          v2 && shouldShrink && expandedWidthRef.current > 0
+            ? {
+                width: `min(${Math.max(640, Math.round(expandedWidthRef.current * 0.62))}px, 100%)`,
+              }
+            : v2 && holdWidth && expandedWidthRef.current > 0
+              ? { minWidth: `min(${Math.round(expandedWidthRef.current)}px, 100%)` }
+              : undefined
+        }
       >
         <div
-          className={`${chromeSurface} ${dynamicRounded} relative isolate w-full overflow-hidden transition-[border-radius,background-color,box-shadow] ${BAR_EASE} before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-br ${
-            useHeroStyling
-              ? "before:from-white/20 before:via-white/5 before:to-transparent"
-              : "before:from-white/50 before:via-transparent before:to-transparent"
+          className={`${chromeSurface} ${dynamicRounded} relative isolate w-full overflow-hidden transition-[border-radius,background-color,box-shadow] ${BAR_EASE} ${
+            v2
+              ? ""
+              : `before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-br ${
+                  useHeroStyling
+                    ? "before:from-white/20 before:via-white/5 before:to-transparent"
+                    : "before:from-white/50 before:via-transparent before:to-transparent"
+                }`
           }`}
         >
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-            {useHeroStyling ? (
+            {v2 ? null : useHeroStyling ? (
               <>
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-t from-white/15 via-transparent to-white/3" />
@@ -340,38 +417,50 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
           </div>
 
           <div
-            className={`relative z-10 flex items-center justify-between gap-3 md:gap-6 ${dynamicPadding} transition-[padding] ${BAR_EASE}`}
+            className={`relative z-10 flex items-center ${
+              v2
+                ? "justify-between lg:grid lg:grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)]"
+                : "justify-between gap-3 md:gap-6"
+            } ${dynamicPadding} transition-[padding,height] ${BAR_EASE}`}
           >
-          <Link href="/" className="relative z-10 flex shrink-0 items-center gap-2 sm:gap-3 group">
-            <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 logo-spin-hover">
-              <Image
-                src="/hyd01.png"
-                alt="Hydrilla Logo"
-                fill
-                className="object-contain"
-                sizes="(max-width: 640px) 32px, 40px"
-                priority
-              />
+          <Link href="/" className={`relative z-10 flex shrink-0 items-center group ${v2 ? "gap-2.5 lg:justify-self-start" : "gap-2 sm:gap-3"}`}>
+            <div className={`logo-spin-hover shrink-0 transition-[height,width] ${BAR_EASE} ${v2 ? (shouldShrink ? "h-9 w-9" : "h-11 w-11") : "w-8 h-8 sm:w-10 sm:h-10"}`}>
+              <div className={`relative h-full w-full ${v2 ? "-translate-y-0.5" : ""}`}>
+                <Image
+                  src="/hyd01.png"
+                  alt="Hydrilla Logo"
+                  fill
+                  className="object-contain"
+                  sizes={v2 ? "44px" : "(max-width: 640px) 32px, 40px"}
+                  priority
+                />
+              </div>
             </div>
-            <span 
-              className={`${logoClasses} text-xl sm:text-2xl font-dm-sans`}
-            >
-              Hydrilla
-            </span>
+            <img
+              src={wordmarkSrc}
+              alt=""
+              className={`block w-auto transition-[height] ${BAR_EASE} ${v2 ? (shouldShrink ? "h-7 translate-y-px" : "h-9 translate-y-[2px]") : "h-8 sm:h-9"}`}
+            />
           </Link>
 
           <nav
-            className={`pointer-events-none absolute inset-0 hidden items-center justify-center lg:flex transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-              shouldShrink ? "opacity-0" : "opacity-100"
-            }`}
+            className={
+              v2
+                ? `hidden min-w-0 items-center overflow-hidden lg:flex lg:min-w-0 lg:justify-self-center transition-[max-width,opacity] ${BAR_EASE} ${
+                    shouldShrink
+                      ? "pointer-events-none max-w-0 opacity-0"
+                      : "max-w-[42rem] opacity-100"
+                  }`
+                : `pointer-events-none absolute inset-0 hidden items-center justify-center lg:flex transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                    shouldShrink ? "opacity-0" : "opacity-100"
+                  }`
+            }
             aria-hidden={shouldShrink}
             onMouseLeave={scheduleMenuClose}
           >
-            <div
-              className={`flex items-center gap-6 md:gap-8 ${
-                shouldShrink ? "pointer-events-none" : "pointer-events-auto"
-              }`}
-            >
+            <div className={`flex items-center ${v2 ? "gap-4 px-4 xl:gap-5 xl:px-6" : "gap-6 md:gap-8"} ${
+              shouldShrink ? "pointer-events-none" : "pointer-events-auto"
+            }`}>
               {NAV_PRIMARY.map((item) => {
                 const hasMenu = Boolean(item.columns?.length);
                 const isOpen = openMenu === item.label;
@@ -393,9 +482,17 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
                       if (hasMenu) openDesktopMenu(item.label);
                       else setOpenMenu(null);
                     }}
-                    className={`text-[14px] font-medium tracking-[-0.018em] transition-opacity font-dm-sans ${textColor} ${
-                      openMenu && !isOpen ? "opacity-45" : "hover:opacity-80"
-                    }`}
+                    className={
+                      v2
+                        ? `inline-flex h-10 items-center cursor-pointer rounded-lg px-3.5 text-[15px] font-medium leading-none tracking-[-0.012em] transition-colors font-dm-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141414]/25 ${textColor} ${
+                            isOpen
+                              ? "bg-black/[0.05]"
+                              : "hover:bg-black/[0.05]"
+                          } ${openMenu && !isOpen ? "opacity-45" : ""}`
+                        : `text-[14px] font-medium tracking-[-0.018em] transition-opacity font-dm-sans ${textColor} ${
+                            openMenu && !isOpen ? "opacity-45" : "hover:opacity-80"
+                          }`
+                    }
                   >
                     {item.label}
                   </Link>
@@ -404,7 +501,7 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
             </div>
           </nav>
 
-          <div className="relative z-10 flex items-center gap-2 md:gap-4">
+          <div className={`relative z-10 flex shrink-0 items-center ${v2 ? "gap-2 lg:justify-self-end" : "gap-2 md:gap-4"}`}>
             <SignedIn>
               <Link
                 href="/generate"
@@ -420,41 +517,57 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
                 afterSignOutUrl="/"
                 appearance={{
                   elements: {
-                    avatarBox: `w-8 h-8 md:w-9 md:h-9 border-2 ${userButtonBorder}`,
+                    avatarBox: `${v2 ? (shouldShrink ? "h-8 w-8 border" : "h-9 w-9 border") : "w-8 h-8 md:w-9 md:h-9 border-2"} ${userButtonBorder}`,
                   },
                 }}
               />
             </SignedIn>
 
             <SignedOut>
-              <div className="hidden md:flex items-center gap-2 md:gap-4">
+              <div className={`hidden md:flex items-center ${v2 ? "gap-2" : "gap-2 md:gap-4"}`}>
                 <div
                   className={`overflow-hidden transition-[max-width,opacity] ${BAR_EASE} ${
                     shouldShrink
                       ? "pointer-events-none max-w-0 opacity-0"
-                      : "max-w-[7rem] opacity-100"
+                      : "max-w-[8rem] opacity-100"
                   }`}
                 >
                   <SignInButton mode="modal">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       tabIndex={shouldShrink ? -1 : 0}
-                      className={`${signInButtonClasses} font-dm-sans whitespace-nowrap`}
+                      className={`${signInButtonClasses} font-dm-sans`}
                     >
-                      Log In
-                    </button>
+                      Log in
+                    </Button>
                   </SignInButton>
                 </div>
+                <div
+                  className={`overflow-hidden transition-[max-width,opacity] ${BAR_EASE} ${
+                    shouldShrink
+                      ? "pointer-events-none max-w-0 opacity-0"
+                      : "max-w-[10rem] opacity-100"
+                  }`}
+                >
+                  <Button asChild size="sm" variant={v2 ? "outline" : "default"} className={`${bookDemoButtonClasses} font-dm-sans`}>
+                    <a
+                      href="https://cal.com/hydrilla"
+                      tabIndex={shouldShrink ? -1 : 0}
+                    >
+                      Book demo
+                    </a>
+                  </Button>
+                </div>
                 <SignUpButton mode="modal">
-                  <button
+                  <Button
                     type="button"
+                    size="sm"
                     className={`${signUpButtonClasses} font-dm-sans`}
                   >
-                    Get Started
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                    Get started
+                  </Button>
                 </SignUpButton>
               </div>
             </SignedOut>
@@ -523,7 +636,11 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
               animate={{ opacity: 1, y: 0 }}
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
               transition={{ duration: reduceMotion ? 0.1 : 0.18, ease: MENU_EASE }}
-              className="absolute left-0 right-0 top-full z-50 hidden pt-2 lg:block"
+              className={
+                v2
+                  ? "absolute inset-x-0 top-full z-50 hidden pt-2.5 lg:block"
+                  : "absolute left-0 right-0 top-full z-50 hidden pt-2 lg:block"
+              }
               onMouseEnter={cancelMenuClose}
               onMouseLeave={scheduleMenuClose}
             >

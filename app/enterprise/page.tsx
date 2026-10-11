@@ -12,12 +12,12 @@ export default function EnterprisePage() {
       related={[
         { label: "Security", href: "/security", hint: "Accounts, assets, reviews" },
         { label: "API", href: "/api", hint: "Programmatic jobs" },
-        { label: "Pricing", href: "/pricing", hint: "Public Studio plan" },
+        { label: "Pricing", href: "/pricing", hint: "Public Pro plan" },
       ]}
     >
       <MarketingArticle>
         <p className="text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          Studio on the public site is the starting point: 4,000 credits a
+          Pro on the public site is the starting point: 3,000 credits a
           month, seats, and API access. Enterprise is for teams that need
           volume, a named contact, and generation inside an existing production
           stack.
@@ -32,9 +32,9 @@ export default function EnterprisePage() {
           <li>A security review path and a person to email</li>
         </ul>
 
-        <ProseHeading>How this differs from Studio</ProseHeading>
+        <ProseHeading>How this differs from Pro</ProseHeading>
         <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          Studio is self-serve. Enterprise is a conversation: expected monthly
+          Pro is self-serve. Enterprise is a conversation: expected monthly
           volume, which engine you ship in, whether jobs should run from your
           backend, and who owns the account. We do not publish a fake SSO
           checklist.
@@ -43,7 +43,7 @@ export default function EnterprisePage() {
         <ProseHeading>How to start</ProseHeading>
         <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
           Book a demo or email the founders with studio size, engine, and
-          expected monthly volume. If you already generate on the Studio plan,
+          expected monthly volume. If you already generate on the Pro plan,
           say so. That context is more useful than a generic RFP.
         </p>
 

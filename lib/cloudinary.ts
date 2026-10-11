@@ -5,6 +5,7 @@ export const CLOUDINARY_CLOUD_NAME =
 
 export const CLOUDINARY_IMAGE_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 export const CLOUDINARY_VIDEO_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+export const CLOUDINARY_RAW_BASE = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/raw/upload`;
 
 const VERSION = "v1";
 
@@ -21,6 +22,16 @@ export function cloudinaryVideo(
 ): string {
   return `${CLOUDINARY_VIDEO_BASE}/${transform}/${VERSION}/${publicId}`;
 }
+
+/** Raw files (GLB). No image transforms — the CDN caches the original bytes. */
+export function cloudinaryRaw(publicId: string): string {
+  return `${CLOUDINARY_RAW_BASE}/${publicId}`;
+}
+
+export const HERO_STAGE_MODELS = [
+  cloudinaryRaw("v1791059174/hydrilla-landing/hero/stage-a.glb"),
+  cloudinaryRaw("v1791059175/hydrilla-landing/hero/stage-b.glb"),
+] as const;
 
 /** Full-viewport hero poster (WebP). */
 export const HERO_POSTER_URL = cloudinaryImage(
@@ -144,6 +155,6 @@ export function pricingPlanImage(
 
 export const PRICING_IMAGES = {
   free: pricingPlanImage("pricing-3"),
-  creator: pricingPlanImage("pricing-1"),
-  studio: pricingPlanImage("pricing-2"),
+  starter: pricingPlanImage("pricing-1"),
+  pro: pricingPlanImage("pricing-2"),
 } as const;

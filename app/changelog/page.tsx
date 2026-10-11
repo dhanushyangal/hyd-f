@@ -5,7 +5,7 @@ const ENTRIES = [
   {
     date: "2026-08",
     title: "BlueFox 1 in the studio",
-    body: "Text to 3D and image to 3D with segmented meshes, PBR maps, in-browser preview, and GLB, FBX, OBJ, and USDZ export. Free, Creator, and Studio plans.",
+    body: "Text to 3D and image to 3D with segmented meshes, PBR maps, in-browser preview, and GLB, FBX, OBJ, and USDZ export. Free, Starter, and Pro plans.",
   },
   {
     date: "2026-08",

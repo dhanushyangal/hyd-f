@@ -61,7 +61,9 @@ function getBackendBase(): string {
   return url.replace(/\/$/, "");
 }
 
-const PROBE_TIMEOUT_MS = 5_000;
+/** /api/3d/health waits on its own GPU probe (~5s when the GPU is down); a shorter
+ * timeout here wrongly marks every feature offline. */
+const PROBE_TIMEOUT_MS = 15_000;
 const RECOVERY_POLL_MS = 30_000;
 
 let _state: GpuHealthState = {

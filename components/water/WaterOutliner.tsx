@@ -22,7 +22,7 @@ export function WaterOutliner({ meshNames, selectedName, onSelect }: Props) {
           title={name}
           onClick={() => onSelect?.(name)}
           className={cn(
-            "h-6 max-w-full truncate rounded-md px-2 text-[11px] font-medium active:scale-[0.98]",
+            "h-6 max-w-full truncate rounded-md px-2 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25 active:scale-[0.98]",
             selectedName === name
               ? "bg-neutral-950 text-white"
               : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"

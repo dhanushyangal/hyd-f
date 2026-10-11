@@ -18,7 +18,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Is there a free plan available?",
     answer:
-      "Yes. The Free plan is $0/month with 200 credits and GLB export, so you can generate a limited number of models before upgrading.",
+      "Yes. The Free plan is $0/month with 100 credits and GLB export, so you can generate a limited number of models before upgrading.",
   },
   {
     question: "Can I change or cancel my plan anytime?",
@@ -48,7 +48,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Can Hydrilla integrate with my pipeline?",
     answer:
-      "Yes. Export GLB, FBX, OBJ, and USDZ. Studio plans include API access for production workflows. See https://hydrilla.ai/api and https://hydrilla.ai/docs.",
+      "Yes. Export GLB, FBX, OBJ, and USDZ. Pro plans include API access for production workflows. See https://hydrilla.ai/api and https://hydrilla.ai/docs.",
   },
   {
     question: "Do I own what I generate?",
@@ -58,7 +58,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "What formats does Hydrilla export?",
     answer:
-      "GLB, FBX, OBJ, and USDZ (GLB on Free; all formats on Creator and Studio).",
+      "GLB, FBX, OBJ, and USDZ (GLB on Free; all formats on Starter and Pro).",
   },
   {
     question: "Which engines and tools?",

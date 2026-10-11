@@ -415,15 +415,15 @@ export function getPricingJsonLd() {
           },
           {
             "@type": "Offer",
-            name: PRICING.creator.label,
-            price: String(PRICING.creator.monthly),
+            name: PRICING.starter.label,
+            price: String(PRICING.starter.monthly),
             priceCurrency: "USD",
             url,
           },
           {
             "@type": "Offer",
-            name: PRICING.studio.label,
-            price: String(PRICING.studio.monthly),
+            name: PRICING.pro.label,
+            price: String(PRICING.pro.monthly),
             priceCurrency: "USD",
             url,
           },
@@ -435,7 +435,7 @@ export function getPricingJsonLd() {
         url,
         name: `Pricing | ${SITE_NAME}`,
         description:
-          "Free, Creator, and Studio plans for production-ready 3D generation.",
+          "Free, Starter, and Pro plans for production-ready 3D generation.",
         isPartOf: { "@id": ENTITY_IDS.website },
         about: { "@id": ENTITY_IDS.product },
       },

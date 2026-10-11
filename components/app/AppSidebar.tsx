@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { track } from "../../lib/analytics";
+import { planDisplayLabel } from "../../lib/pricing";
 import { useAppLayout } from "../../context/AppLayoutContext";
 
 const RAW_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
@@ -50,11 +51,13 @@ function CreditsCard() {
     (async () => {
       try {
         const token = await getToken();
-        const res = await fetch(`${BACKEND_URL}/api/payments/credits`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (res.ok) {
-          const { credits } = await res.json();
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const [creditsRes, subRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/payments/credits`, { headers }),
+          fetch(`${BACKEND_URL}/api/payments/subscription`, { headers }),
+        ]);
+        if (creditsRes.ok) {
+          const { credits } = await creditsRes.json();
           const nextUsed = credits.used ?? 0;
           const nextTotal = credits.total ?? 0;
           setUsed(nextUsed);
@@ -64,9 +67,11 @@ function CreditsCard() {
               ? credits.remaining
               : Math.max(0, nextTotal - nextUsed)
           );
-          setPlan(credits.plan ?? null);
+          const subJson = subRes.ok ? await subRes.json() : null;
+          const subPlan = subJson?.subscription?.plan ?? null;
+          setPlan(credits.plan || subPlan || null);
         } else {
-          console.error("[Credits] Backend returned", res.status, res.statusText, "from", BACKEND_URL);
+          console.error("[Credits] Backend returned", creditsRes.status, creditsRes.statusText, "from", BACKEND_URL);
         }
       } catch (err) {
         console.error("[Credits] Fetch failed:", err);
@@ -78,9 +83,7 @@ function CreditsCard() {
 
   const pctUsed = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
   const pctLeft = Math.max(0, 100 - pctUsed);
-  const planLabel = plan
-    ? `${plan.charAt(0).toUpperCase() + plan.slice(1)}`
-    : "Free";
+  const planLabel = planDisplayLabel(plan);
   const isLow = !loading && total > 0 && pctLeft <= 15;
 
   return (
@@ -93,7 +96,7 @@ function CreditsCard() {
       <div className="flex items-center justify-between gap-2 mb-3">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-700">
           <Sparkles className="w-2.5 h-2.5 text-neutral-500" strokeWidth={2.25} />
-          {planLabel}
+          {loading ? "…" : planLabel}
         </span>
         <span
           className={cn(

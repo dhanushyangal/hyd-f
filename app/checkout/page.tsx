@@ -6,10 +6,9 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { track } from "@/lib/analytics";
 import {
   checkoutHref,
-  formatUsd,
+  parsePaidPlanParam,
   planPriceLabel,
   PRICING,
-  type BillingInterval,
   type PaidPlanId,
 } from "@/lib/pricing";
 
@@ -24,14 +23,14 @@ const PLAN_INFO: Record<
   PaidPlanId,
   { label: string; credits: string; color: string }
 > = {
-  creator: {
-    label: PRICING.creator.label,
-    credits: PRICING.creator.creditsLabel,
+  starter: {
+    label: PRICING.starter.label,
+    credits: PRICING.starter.creditsLabel,
     color: "#3B8EE8",
   },
-  studio: {
-    label: PRICING.studio.label,
-    credits: PRICING.studio.creditsLabel,
+  pro: {
+    label: PRICING.pro.label,
+    credits: PRICING.pro.creditsLabel,
     color: "#111111",
   },
 };
@@ -43,12 +42,9 @@ function CheckoutContent() {
   const { user } = useUser();
 
   const planParam = searchParams.get("plan") || "";
-  const plan: PaidPlanId | null =
-    planParam === "creator" || planParam === "studio" ? planParam : null;
-  const billing: BillingInterval =
-    searchParams.get("billing") === "yearly" ? "yearly" : "monthly";
+  const plan: PaidPlanId | null = parsePaidPlanParam(planParam);
   const planInfo = plan ? PLAN_INFO[plan] : null;
-  const priceLabel = plan ? planPriceLabel(plan, billing) : null;
+  const priceLabel = plan ? planPriceLabel(plan) : null;
 
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +59,7 @@ function CheckoutContent() {
 
     if (!isSignedIn) {
       const redirect = encodeURIComponent(
-        checkoutHref(plan ?? "creator", billing)
+        checkoutHref(plan ?? "starter")
       );
       router.push(`/sign-in?redirect_url=${redirect}`);
       return;
@@ -86,12 +82,12 @@ function CheckoutContent() {
       startCheckout();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, isSignedIn, userEmail, plan, billing]);
+  }, [isLoaded, isSignedIn, userEmail, plan]);
 
   async function startCheckout() {
     setStatus("loading");
     setError(null);
-    track("checkout_initiated", { plan: planParam, billing });
+    track("checkout_initiated", { plan: planParam, billing: "monthly" });
 
     const url = `${BACKEND_URL}/api/payments/create-checkout`;
     try {
@@ -102,7 +98,7 @@ function CheckoutContent() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ plan: planParam, billing, email: userEmail }),
+        body: JSON.stringify({ plan: planParam, email: userEmail }),
       });
 
       let data: { error?: string; checkoutUrl?: string };
@@ -127,7 +123,7 @@ function CheckoutContent() {
       const isNetworkError = msg === "Failed to fetch" || msg === "Load failed" || msg === "NetworkError when attempting to fetch resource";
       track("checkout_error", {
         plan: planParam,
-        billing,
+        billing: "monthly",
         error_type: isNetworkError ? "network" : "server",
       });
       setError(
@@ -138,13 +134,6 @@ function CheckoutContent() {
       setStatus("error");
     }
   }
-
-  const yearlyTotal =
-    plan === "creator"
-      ? PRICING.creator.yearlyTotal
-      : plan === "studio"
-        ? PRICING.studio.yearlyTotal
-        : null;
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
@@ -211,11 +200,6 @@ function CheckoutContent() {
             )}
             {planInfo && (
               <p className="text-sm text-gray-400">{planInfo.credits}</p>
-            )}
-            {billing === "yearly" && yearlyTotal != null && (
-              <p className="mt-2 text-xs text-gray-400">
-                {formatUsd(yearlyTotal)} charged annually
-              </p>
             )}
 
             <p className="mt-6 text-xs text-gray-400">
