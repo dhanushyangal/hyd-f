@@ -1108,7 +1108,7 @@ export async function fetchQueueInfo(): Promise<
           position: 0,
           jobs_ahead: data.jobs_ahead_for_new ?? 0,
           estimated_wait_seconds: data.estimated_wait_for_new_job_seconds ?? 0,
-          estimated_total_seconds: data.estimated_total_seconds ?? 300,
+          estimated_total_seconds: data.estimated_total_seconds ?? 840,
           queue_length: data.queue_length ?? 0,
           currently_processing: data.currently_processing ?? false,
           estimated_wait_for_preview_seconds:
@@ -1130,7 +1130,7 @@ export async function fetchQueueInfo(): Promise<
       estimated_total_seconds:
         data.estimated_total_seconds ??
         (data.estimated_wait_for_new_job_seconds || 0) +
-          (data.estimated_time_per_job_seconds || 300),
+          (data.estimated_time_per_job_seconds || 840),
       queue_length: data.queue_length || 0,
       currently_processing: data.currently_processing || false,
       estimated_wait_for_preview_seconds:
