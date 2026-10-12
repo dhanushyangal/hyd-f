@@ -2412,3 +2412,125 @@ export async function revokeDeveloperApiKey(
     );
   }
 }
+
+export type SubmitSupportPayload = {
+  type: "issue" | "feedback";
+  request_type?: string;
+  message: string;
+  attachment_url?: string;
+  attachment_name?: string;
+  page_url?: string;
+  metadata?: Record<string, unknown>;
+  email?: string;
+  name?: string;
+};
+
+export async function submitSupportRequest(
+  payload: SubmitSupportPayload,
+  getToken?: () => Promise<string | null>,
+): Promise<{ ok: boolean; ticket: any }> {
+  const headers = await authHeaders(getToken);
+  const res = await fetch(`${backendBase}/api/support`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      (data as { error?: string }).error || "Failed to submit support request",
+    );
+  }
+  return data as { ok: boolean; ticket: any };
+}
+
+export async function uploadSupportFile(
+  file: File,
+  getToken?: () => Promise<string | null>,
+): Promise<{ ok: boolean; url: string; filename: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const headers: HeadersInit = {};
+  if (getToken) {
+    const token = await getToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  const res = await fetch(`${backendBase}/api/support/upload`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      (data as { error?: string }).error || "Failed to upload attachment",
+    );
+  }
+  return data as { ok: boolean; url: string; filename: string };
+}
+
+export type ClaimStatus =
+  | "ok"
+  | "expired"
+  | "disabled"
+  | "exhausted"
+  | "email_mismatch"
+  | "not_found";
+
+export interface ClaimInfoResponse {
+  status: ClaimStatus;
+  amount?: number;
+  reason?: string | null;
+  expiresAt?: string | null;
+  requiresAuth?: boolean;
+  allowedEmail?: string | null;
+  userEmail?: string | null;
+  alreadyClaimedByUser?: boolean;
+  error?: string;
+}
+
+export interface ClaimCreditsResponse {
+  success: boolean;
+  amount: number;
+  remaining: number;
+  total: number;
+  error?: string;
+}
+
+export async function getClaimInfo(
+  token: string,
+  authToken?: string | null
+): Promise<ClaimInfoResponse> {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  const res = await fetch(`${backendBase}/api/credits/claim/${encodeURIComponent(token)}`, {
+    headers,
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({ status: "not_found" }));
+  return data as ClaimInfoResponse;
+}
+
+export async function claimCredits(
+  token: string,
+  authToken: string
+): Promise<ClaimCreditsResponse> {
+  const res = await fetch(`${backendBase}/api/credits/claim/${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authToken}`,
+    },
+  });
+  const data = await res.json().catch(() => ({ success: false, error: "Failed to claim credits" }));
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || "Failed to claim credits");
+  }
+  return data as ClaimCreditsResponse;
+}
+
+

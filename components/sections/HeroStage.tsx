@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { Group, Material, Mesh, Object3D, Texture, WebGLRenderer } from "three";
 import { HERO_STAGE_MODELS } from "@/lib/cloudinary";
 
-const MODELS = HERO_STAGE_MODELS;
+const MODELS = HERO_STAGE_MODELS ?? [];
 
 /** Swap only after the stage has been still this long. */
 const IDLE_SWAP_MS = 6000;
@@ -257,7 +257,13 @@ export function HeroStage({
       };
 
       try {
-        const first = await parse(await loadBuffer(MODELS[0]));
+        const firstUrl = MODELS?.[0];
+        const secondUrl = MODELS?.[1];
+        if (!firstUrl) {
+          return;
+        }
+
+        const first = await parse(await loadBuffer(firstUrl));
         if (disposed || !renderer) {
           disposeObject(first);
           return;
@@ -268,10 +274,14 @@ export function HeroStage({
         const saveData = (
           navigator as Navigator & { connection?: { saveData?: boolean } }
         ).connection?.saveData;
-        if (reduceRef.current || saveData) return;
+        if (reduceRef.current || saveData || !secondUrl) {
+          return;
+        }
 
-        const secondBuffer = await loadBuffer(MODELS[1]);
-        if (disposed) return;
+        const secondBuffer = await loadBuffer(secondUrl);
+        if (disposed) {
+          return;
+        }
 
         const mountSecond = () => {
           if (disposed) return;

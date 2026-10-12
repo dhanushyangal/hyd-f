@@ -1,8 +1,8 @@
 "use client";
 
-import { UserButton } from "@clerk/nextjs";
 import { Bell, Menu } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
+import { UserButtonWithHelp } from "@/components/support/UserButtonWithHelp";
 import { useAppLayout } from "../../context/AppLayoutContext";
 import { requestNotificationPermission } from "@/lib/browserNotifications";
 
@@ -37,7 +37,7 @@ export function AppNavbar() {
           <Bell className="w-[18px] h-[18px] shrink-0" strokeWidth={2} />
         </button>
         <div className="flex items-center justify-center h-9 w-9 shrink-0">
-          <UserButton
+          <UserButtonWithHelp
             afterSignOutUrl="/"
             appearance={{
               elements: {

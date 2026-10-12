@@ -15,12 +15,14 @@ import {
   PanelLeftClose,
   PanelLeft,
   Sparkles,
+  HelpCircle,
   X,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { track } from "../../lib/analytics";
-import { planDisplayLabel } from "../../lib/pricing";
+import { planDisplayLabel } from "@/lib/pricing";
 import { useAppLayout } from "../../context/AppLayoutContext";
+import { useSupport } from "@/context/SupportContext";
 
 const RAW_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const BACKEND_URL = RAW_BACKEND.replace(/\/+$/, "");
@@ -83,7 +85,8 @@ function CreditsCard() {
 
   const pctUsed = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
   const pctLeft = Math.max(0, 100 - pctUsed);
-  const planLabel = planDisplayLabel(plan);
+  const planLabel =
+    typeof planDisplayLabel === "function" ? planDisplayLabel(plan) : plan || "Free";
   const isLow = !loading && total > 0 && pctLeft <= 15;
 
   return (
@@ -149,6 +152,7 @@ export function AppSidebar() {
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const { getToken, isSignedIn } = useAuth();
   const { mobileSidebarOpen, closeMobileSidebar } = useAppLayout();
+  const { openSupport } = useSupport();
 
   // Warm every app route so sidebar clicks feel instant.
   useEffect(() => {
@@ -282,6 +286,26 @@ export function AppSidebar() {
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => {
+              openSupport("issue");
+              closeMobileSidebar();
+            }}
+            className={cn(
+              "sidebar-item flex items-center text-[15px] font-medium tracking-[-0.015em] rounded-full pl-3.5 pr-3.5 max-md:flex w-full text-left transition-colors",
+              collapsed && "md:justify-center md:px-0"
+            )}
+            style={{
+              minHeight: "var(--sidebar-item-height)",
+              gap: "12px",
+              color: "hsl(var(--sidebar-fg-muted))",
+            }}
+            title="Help"
+          >
+            <HelpCircle className="w-[18px] h-[18px] shrink-0" strokeWidth={1.85} />
+            <span className={cn("truncate", collapsed && "md:hidden")}>Help</span>
+          </button>
         </nav>
 
         {/* Credits – hide when collapsed on desktop */}

@@ -107,15 +107,9 @@ const nextConfig = {
           },
         ],
       },
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
+      // Do not set Cache-Control on /_next/static — Next.js owns those headers.
+      // A custom immutable max-age breaks webpack HMR in dev (stale client chunks)
+      // and causes hydration / Server Action mismatches after code changes.
       {
         // Allow CDN/browser to cache images in common paths
         source: "/3d-images/:path*",

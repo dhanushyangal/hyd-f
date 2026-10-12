@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
-import { ChevronDown, Coins, FolderOpen, PanelLeft, Plus, User } from "lucide-react";
+import { ChevronDown, Coins, FolderOpen, HelpCircle, PanelLeft, Plus, User } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
+import { UserButtonWithHelp } from "@/components/support/UserButtonWithHelp";
+import { useSupport } from "@/context/SupportContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +113,8 @@ type AccountProps = {
 
 /** Credits, theme, and profile. Sits in the inspector column, or as a corner pill. */
 export function WorkspaceAccountBar({ creditsRemaining, creditsLoading, clientMounted, className }: AccountProps) {
+  const { openSupport } = useSupport();
+
   return (
     <div className={cn("flex items-center gap-1 [&_button]:h-8 [&_button]:w-8", className)}>
       <Link
@@ -126,10 +129,19 @@ export function WorkspaceAccountBar({ creditsRemaining, creditsLoading, clientMo
         <Coins className="h-3.5 w-3.5 text-neutral-500" strokeWidth={1.9} />
         <span className="font-semibold tabular-nums text-neutral-900">{creditsLoading ? "…" : creditsRemaining}</span>
       </Link>
+      <button
+        type="button"
+        onClick={() => openSupport("issue")}
+        title="Support & Feedback"
+        aria-label="Support & Feedback"
+        className={cn(ICON_BUTTON, "rounded-full")}
+      >
+        <HelpCircle className="h-4 w-4" strokeWidth={1.85} />
+      </button>
       <ModeToggle />
       <div className="flex h-8 w-8 items-center justify-center [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-full">
         {clientMounted ? (
-          <UserButton afterSignOutUrl="/" />
+          <UserButtonWithHelp afterSignOutUrl="/" />
         ) : (
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-200 text-neutral-400 animate-pulse">
             <User className="h-3.5 w-3.5" />
