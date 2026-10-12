@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { track } from "../../lib/analytics";
+import { getCredits } from "@/lib/api";
 import { planDisplayLabel } from "@/lib/pricing";
 import { useAppLayout } from "../../context/AppLayoutContext";
 import { useSupport } from "@/context/SupportContext";
@@ -39,55 +40,67 @@ const navItems = [
 
 /** Credits usage card – wired to /api/payments/credits. Plan badge + progress. */
 function CreditsCard() {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, isLoaded } = useAuth();
   const { closeMobileSidebar } = useAppLayout();
-  const [used, setUsed] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [remaining, setRemaining] = useState(0);
+  const [used, setUsed] = useState<number | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isSignedIn) { setLoading(false); return; }
+    if (!isLoaded) {
+      return;
+    }
+    if (!isSignedIn) {
+      setUsed(null);
+      setTotal(null);
+      setRemaining(null);
+      setPlan(null);
+      setLoading(false);
+      return;
+    }
 
-    (async () => {
+    const state = { cancelled: false };
+    setLoading(true);
+
+    void (async () => {
       try {
-        const token = await getToken();
-        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-        const [creditsRes, subRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/payments/credits`, { headers }),
-          fetch(`${BACKEND_URL}/api/payments/subscription`, { headers }),
-        ]);
-        if (creditsRes.ok) {
-          const { credits } = await creditsRes.json();
-          const nextUsed = credits.used ?? 0;
-          const nextTotal = credits.total ?? 0;
-          setUsed(nextUsed);
-          setTotal(nextTotal);
-          setRemaining(
-            typeof credits.remaining === "number"
-              ? credits.remaining
-              : Math.max(0, nextTotal - nextUsed)
-          );
-          const subJson = subRes.ok ? await subRes.json() : null;
-          const subPlan = subJson?.subscription?.plan ?? null;
-          setPlan(credits.plan || subPlan || null);
-        } else {
-          console.error("[Credits] Backend returned", creditsRes.status, creditsRes.statusText, "from", BACKEND_URL);
+        const credits = await getCredits(getToken);
+        if (state.cancelled) {
+          return;
         }
+        if (!credits) {
+          console.error("[Credits] Failed to load credits for signed-in user");
+          return;
+        }
+        setUsed(credits.used);
+        setTotal(credits.total);
+        setRemaining(credits.remaining);
+        setPlan(credits.plan);
       } catch (err) {
         console.error("[Credits] Fetch failed:", err);
       } finally {
-        setLoading(false);
+        if (!state.cancelled) {
+          setLoading(false);
+        }
       }
     })();
-  }, [isSignedIn, getToken]);
 
-  const pctUsed = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+    return () => {
+      state.cancelled = true;
+    };
+  }, [isSignedIn, isLoaded, getToken]);
+
+  const hasData = remaining !== null && total !== null && used !== null;
+  const pctUsed =
+    hasData && total > 0
+      ? Math.min(100, Math.round((used / total) * 100))
+      : 0;
   const pctLeft = Math.max(0, 100 - pctUsed);
-  const planLabel =
-    typeof planDisplayLabel === "function" ? planDisplayLabel(plan) : plan || "Free";
-  const isLow = !loading && total > 0 && pctLeft <= 15;
+  const planLabel = planDisplayLabel(plan);
+  const isLow = !loading && hasData && total > 0 && pctLeft <= 15;
+  const showPlaceholder = loading || !hasData;
 
   return (
     <Link
@@ -99,7 +112,7 @@ function CreditsCard() {
       <div className="flex items-center justify-between gap-2 mb-3">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-700">
           <Sparkles className="w-2.5 h-2.5 text-neutral-500" strokeWidth={2.25} />
-          {loading ? "…" : planLabel}
+          {showPlaceholder ? "…" : planLabel}
         </span>
         <span
           className={cn(
@@ -107,21 +120,23 @@ function CreditsCard() {
             isLow ? "text-amber-600" : "text-neutral-400"
           )}
         >
-          {loading ? "…" : `${pctLeft}% left`}
+          {showPlaceholder ? "…" : `${pctLeft}% left`}
         </span>
       </div>
 
       <div className="flex items-end justify-between gap-2 mb-2.5">
         <div className="min-w-0">
           <p className="text-[22px] leading-none font-semibold tracking-tight text-neutral-900 tabular-nums">
-            {loading ? "—" : remaining.toLocaleString()}
+            {showPlaceholder ? "—" : remaining.toLocaleString()}
           </p>
           <p className="mt-1 text-[11px] text-neutral-500 font-medium">
             credits remaining
           </p>
         </div>
         <p className="text-[10px] text-neutral-400 tabular-nums shrink-0 pb-0.5">
-          {loading ? "" : `${used.toLocaleString()} / ${total.toLocaleString()}`}
+          {showPlaceholder
+            ? ""
+            : `${used.toLocaleString()} / ${total.toLocaleString()}`}
         </p>
       </div>
 
@@ -134,7 +149,7 @@ function CreditsCard() {
             "h-full rounded-full transition-all duration-500 ease-out",
             isLow ? "bg-amber-500" : "bg-neutral-900"
           )}
-          style={{ width: loading ? "0%" : `${pctLeft}%` }}
+          style={{ width: showPlaceholder ? "0%" : `${pctLeft}%` }}
         />
       </div>
 

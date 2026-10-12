@@ -687,34 +687,69 @@ export interface CreditsInfo {
   resetAt?: string | null;
 }
 
+function normalizeCreditsPayload(raw: unknown): CreditsInfo | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const c = raw as Record<string, unknown>;
+  const used = Number(c.used);
+  const total = Number(c.total);
+  if (!Number.isFinite(used) || !Number.isFinite(total)) {
+    return null;
+  }
+  const remainingRaw = Number(c.remaining);
+  const remaining = Number.isFinite(remainingRaw)
+    ? Math.max(0, remainingRaw)
+    : Math.max(0, total - used);
+  return {
+    used,
+    total,
+    remaining,
+    plan: typeof c.plan === "string" ? c.plan : null,
+    resetAt:
+      typeof c.resetAt === "string" || c.resetAt === null
+        ? (c.resetAt as string | null)
+        : undefined,
+  };
+}
+
 /**
  * Fetch current user credits (requires auth). Backend creates free-tier row if missing.
+ * Returns null when unauthenticated or the request fails — never invents a balance.
  */
 export async function getCredits(
   getToken: () => Promise<string | null>,
-): Promise<CreditsInfo> {
-  const token = await getToken();
-  const headers: HeadersInit = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+): Promise<CreditsInfo | null> {
+  const resolveToken = async (): Promise<string | null> => {
+    const first = await getToken();
+    if (first) {
+      return first;
+    }
+    // Clerk can report signed-in before the JWT is ready; brief retry.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 400);
+    });
+    return getToken();
+  };
+
+  const token = await resolveToken();
+  if (!token) {
+    return null;
+  }
+
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
   const res = await fetch(`${backendBase}/api/payments/credits`, {
     method: "GET",
     headers,
   });
   if (!res.ok) {
-    const fallback = { used: 0, total: 200, remaining: 200, plan: null };
-    try {
-      const data = await res.json();
-      if (data.credits) return data.credits as CreditsInfo;
-    } catch {}
-    return fallback;
+    return null;
   }
-  const data = (await res.json()) as { credits?: CreditsInfo };
-  return (data.credits ?? {
-    used: 0,
-    total: 200,
-    remaining: 200,
-    plan: null,
-  }) as CreditsInfo;
+  const data = (await res.json()) as { credits?: unknown };
+  return normalizeCreditsPayload(data.credits);
 }
 
 /**
