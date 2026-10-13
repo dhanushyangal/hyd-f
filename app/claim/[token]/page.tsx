@@ -127,13 +127,19 @@ export default function ClaimTokenPage() {
               <p className="text-2xl font-bold text-white mt-1">{claimResult.remaining} Credits</p>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-3">
               <Link
                 href="/app/studio"
                 className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-neutral-200 transition-colors"
               >
                 Go to Studio
                 <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/app/settings?tab=billing"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-medium text-neutral-200 hover:bg-white/[0.08] transition-colors"
+              >
+                View in Billing
               </Link>
             </div>
           </div>

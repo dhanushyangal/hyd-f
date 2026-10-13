@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -24,11 +25,15 @@ import {
   deleteUserApiKey,
   fetchUserApiKeys,
   fetchWaterModels,
+  getCredits,
+  getCreditRewardsHistory,
   providerKeyAvailable,
   saveUserApiKey,
   saveUserModelPrefs,
   verifyUserApiKey,
   type ConnectorPublic,
+  type CreditRewardRow,
+  type CreditsInfo,
   type UserApiKeyMeta,
   type UserModelPrefs,
   type WaterModelGroup,
@@ -43,13 +48,22 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export default function SettingsPage() {
   const { getToken, isSignedIn, isLoaded } = useAuth();
+  const searchParams = useSearchParams();
   const [keys, setKeys] = useState<UserApiKeyMeta[]>([]);
   const [sharedKeys, setSharedKeys] = useState<UserApiKeyMeta[]>([]);
   const [connectors, setConnectors] = useState<ConnectorPublic[]>([]);
   const [prefs, setPrefs] = useState<UserModelPrefs | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [section, setSection] = useState<"models" | "billing">("models");
+  const [section, setSection] = useState<"models" | "billing">(() =>
+    searchParams.get("tab") === "billing" ? "billing" : "models",
+  );
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "billing") {
+      setSection("billing");
+    }
+  }, [searchParams]);
 
   const load = async () => {
     if (!isSignedIn) return;
@@ -221,6 +235,16 @@ function formatCharge(amount: number, currency: string): string {
   }
 }
 
+function rewardSourceLabel(source: string): string {
+  if (source === "claim_link") {
+    return "Reward link";
+  }
+  if (source === "admin_grant") {
+    return "Bonus";
+  }
+  return "System";
+}
+
 function BillingSection() {
   const { getToken, isSignedIn } = useAuth();
   const [plan, setPlan] = useState<string | null>(null);
@@ -228,6 +252,8 @@ function BillingSection() {
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [accessUntil, setAccessUntil] = useState<string | null>(null);
   const [payments, setPayments] = useState<BillingPayment[]>([]);
+  const [credits, setCredits] = useState<CreditsInfo | null>(null);
+  const [rewards, setRewards] = useState<CreditRewardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -240,16 +266,25 @@ function BillingSection() {
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
+      const tokenGetter = async () => (await getToken()) ?? null;
+      const token = await tokenGetter();
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${BACKEND_URL}/api/payments/billing`, { headers });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Failed to load billing");
+      const [billingRes, creditsInfo, rewardsHistory] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/payments/billing`, { headers }),
+        getCredits(tokenGetter),
+        getCreditRewardsHistory(tokenGetter),
+      ]);
+      const body = await billingRes.json().catch(() => ({}));
+      if (!billingRes.ok) {
+        throw new Error(body.error || "Failed to load billing");
+      }
       setPlan(body.plan ?? null);
       setRenewsAt(body.renewsAt ?? null);
       setCancelAtPeriodEnd(Boolean(body.cancelAtPeriodEnd));
       setAccessUntil(body.accessUntil ?? null);
       setPayments(Array.isArray(body.payments) ? body.payments : []);
+      setCredits(creditsInfo);
+      setRewards(rewardsHistory);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load billing");
     } finally {
@@ -269,9 +304,13 @@ function BillingSection() {
     : renewLabel;
 
   const cancelRenewal = async () => {
-    if (!plan || cancelAtPeriodEnd || cancelling) return;
+    if (!plan || cancelAtPeriodEnd || cancelling) {
+      return;
+    }
     const until = accessLabel ? ` You keep ${planDisplayLabel(plan)} until ${accessLabel}.` : "";
-    if (!window.confirm(`Cancel renewal?${until} It will not charge again after that.`)) return;
+    if (!window.confirm(`Cancel renewal?${until} It will not charge again after that.`)) {
+      return;
+    }
     setCancelling(true);
     setError(null);
     try {
@@ -282,7 +321,9 @@ function BillingSection() {
         headers,
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Failed to cancel renewal");
+      if (!res.ok) {
+        throw new Error(body.error || "Failed to cancel renewal");
+      }
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to cancel renewal");
@@ -313,6 +354,11 @@ function BillingSection() {
                       ? `Renews ${renewLabel}`
                       : "Free includes 100 credits a month."}
                 </p>
+                {credits ? (
+                  <p className="mt-2 text-sm text-neutral-600 tabular-nums">
+                    {credits.remaining} / {credits.total} credits remaining
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-col items-end gap-2">
                 <Link
@@ -380,6 +426,57 @@ function BillingSection() {
                           {receiptStatus(payment.status)}
                         </span>
                         <p className="mt-0.5 text-[11px] text-neutral-400">{payment.paymentId}</p>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="px-5 pt-5 pb-0">
+          <h2 className="text-[15px] font-semibold tracking-tight text-neutral-900">Rewards & grants</h2>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 pt-3">
+          {loading ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-neutral-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading rewards…
+            </div>
+          ) : rewards.length === 0 ? (
+            <p className="py-6 text-sm text-neutral-500">No claimed rewards yet.</p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-neutral-200">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Date</th>
+                    <th className="px-3 py-2 font-semibold">Type</th>
+                    <th className="px-3 py-2 font-semibold">Reason</th>
+                    <th className="px-3 py-2 font-semibold">Credits</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 text-neutral-700">
+                  {rewards.map((reward) => (
+                    <tr key={reward.id}>
+                      <td className="px-3 py-2.5">
+                        {new Date(reward.createdAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-neutral-900">
+                        {rewardSourceLabel(reward.source)}
+                      </td>
+                      <td className="px-3 py-2.5 text-neutral-600">
+                        {reward.reason || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums font-medium text-emerald-700">
+                        +{reward.amount}
                       </td>
                     </tr>
                   ))}

@@ -752,6 +752,53 @@ export async function getCredits(
   return normalizeCreditsPayload(data.credits);
 }
 
+/** Reward / grant row from GET /api/payments/credits/history */
+export interface CreditRewardRow {
+  id: string;
+  amount: number;
+  reason: string | null;
+  source: "claim_link" | "admin_grant" | "system" | string;
+  createdAt: string;
+}
+
+/**
+ * Fetch user-facing credit rewards history (claim links, admin grants, system).
+ * Returns an empty list when unauthenticated or the request fails.
+ */
+export async function getCreditRewardsHistory(
+  getToken: () => Promise<string | null>,
+): Promise<CreditRewardRow[]> {
+  const token = await getToken();
+  if (!token) {
+    return [];
+  }
+
+  const res = await fetch(`${backendBase}/api/payments/credits/history`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    return [];
+  }
+  const data = (await res.json()) as { rewards?: unknown };
+  if (!Array.isArray(data.rewards)) {
+    return [];
+  }
+  return data.rewards
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+    .map((row) => ({
+      id: String(row.id ?? ""),
+      amount: Number(row.amount) || 0,
+      reason: typeof row.reason === "string" ? row.reason : null,
+      source: typeof row.source === "string" ? row.source : "system",
+      createdAt: typeof row.createdAt === "string" ? row.createdAt : "",
+    }))
+    .filter((row) => row.id && row.amount > 0 && row.createdAt);
+}
+
 /**
  * Check if the user has early/premium access (e.g. active subscription).
  * Used by EarlyAccessBadge. Returns { hasAccess: true } if user has an active subscription.
