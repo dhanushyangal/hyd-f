@@ -524,6 +524,7 @@ export async function generatePreviewImage(
   getToken?: () => Promise<string | null>,
   context?: ImageRequestContext,
   options: ImageOptions = DEFAULT_IMAGE_OPTIONS,
+  extras?: { for3d?: boolean },
 ): Promise<{
   image_url: string;
   preview_id: string;
@@ -557,6 +558,8 @@ export async function generatePreviewImage(
           context?.parentJobIds && context.parentJobIds.length > 0
             ? context.parentJobIds
             : undefined,
+        // When chaining into image-to-3d, backend checks GPU first (no wasted image credits)
+        ...(extras?.for3d ? { for3d: true, intent: "text-to-3d" } : {}),
       }),
     });
   } catch (err: any) {

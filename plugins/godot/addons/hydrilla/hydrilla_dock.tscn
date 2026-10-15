@@ -1,0 +1,48 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/hydrilla/hydrilla_dock.gd" id="1"]
+
+[node name="Hydrilla" type="VBoxContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="Title" type="Label" parent="."]
+text = "Hydrilla"
+
+[node name="ApiKey" type="LineEdit" parent="."]
+placeholder_text = "hyd_live_…"
+secret = true
+
+[node name="ApiBase" type="LineEdit" parent="."]
+text = "https://api.hydrilla.ai"
+
+[node name="Prompt" type="LineEdit" parent="."]
+placeholder_text = "Text prompt"
+
+[node name="GenerateText" type="Button" parent="."]
+text = "Generate from Text"
+
+[node name="ImageUrl" type="LineEdit" parent="."]
+placeholder_text = "Image URL"
+
+[node name="GenerateImage" type="Button" parent="."]
+text = "Generate from Image URL"
+
+[node name="BridgeUrl" type="LineEdit" parent="."]
+text = "http://127.0.0.1:7345"
+
+[node name="BridgeRow" type="HBoxContainer" parent="."]
+
+[node name="CheckBridge" type="Button" parent="BridgeRow"]
+text = "Check Bridge"
+size_flags_horizontal = 3
+
+[node name="ImportBridge" type="Button" parent="BridgeRow"]
+text = "Import"
+size_flags_horizontal = 3
+
+[node name="Status" type="Label" parent="."]
+text = "Ready"
+autowrap_mode = 3

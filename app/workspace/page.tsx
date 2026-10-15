@@ -2140,7 +2140,13 @@ function WorkspacePage() {
       }, 200);
 
       try {
-        const result = await generatePreviewImage(prompt.trim(), tokenGetter, { workspaceId }, imageOptions);
+        const result = await generatePreviewImage(
+          prompt.trim(),
+          tokenGetter,
+          { workspaceId },
+          imageOptions,
+          { for3d: !!thenGenerate3D },
+        );
         if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
 
         setLastPreviewImageUrl(result.image_url);
@@ -2643,7 +2649,13 @@ function WorkspacePage() {
       }, 200);
 
       try {
-        const result = await generatePreviewImage(effectivePrompt, tokenGetter, { workspaceId }, imageOptions);
+        const result = await generatePreviewImage(
+          effectivePrompt,
+          tokenGetter,
+          { workspaceId },
+          imageOptions,
+          { for3d: true },
+        );
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
@@ -3939,6 +3951,8 @@ function WorkspacePage() {
                   onToggleFullView={handleToggleFullView}
                   inspectorOpen={inspectorVisible}
                   onToggleInspector={() => setInspectorOpen((v) => !v)}
+                  meshUrl={centerView.type === "3d" ? centerView.glbUrl : null}
+                  jobId={centerView.type === "3d" ? centerView.jobId : null}
                 />
               )}
               <div className="pointer-events-auto flex items-center rounded-full border border-neutral-200/80 bg-white py-1 pl-1 pr-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
@@ -3957,6 +3971,8 @@ function WorkspacePage() {
               onToggleFullView={handleToggleFullView}
               inspectorOpen={inspectorVisible}
               onToggleInspector={() => setInspectorOpen((v) => !v)}
+              meshUrl={centerView.type === "3d" ? centerView.glbUrl : null}
+              jobId={centerView.type === "3d" ? centerView.jobId : null}
             />
           )}
           {centerView.type === "empty" && (

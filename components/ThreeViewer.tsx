@@ -284,11 +284,13 @@ function highlightEdges(mesh: THREE.Mesh): THREE.EdgesGeometry | null {
 }
 
 const FRAME_PADDING = 1.2;
+// Models face −Z (OpenCV / BlueFox front), so Front sits on −Z looking at the subject.
+// Side (+X) is the right profile when facing Front; Reset is a ¾ from Front-right.
 const VIEW_DIRECTIONS: Record<ViewerCameraView, THREE.Vector3> = {
-  front: new THREE.Vector3(0, 0, 1),
+  front: new THREE.Vector3(0, 0, -1),
   side: new THREE.Vector3(1, 0, 0),
   top: new THREE.Vector3(0, 1, 0.0001).normalize(),
-  reset: new THREE.Vector3(1, 0.75, 1).normalize(),
+  reset: new THREE.Vector3(1, 0.75, -1).normalize(),
 };
 const FLY_MS = 420;
 

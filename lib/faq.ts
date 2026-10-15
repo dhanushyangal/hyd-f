@@ -63,7 +63,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Which engines and tools?",
     answer:
-      "Unity, Unreal, Blender, and other DCCs that ingest those formats. Film vertical also names Maya, Cinema 4D, and Houdini as import targets, not plugins we ship.",
+      "Native plugins and a local Bridge for Blender, Maya, 3ds Max, Unity, Unreal, and Godot, plus an MCP server and REST API. See https://hydrilla.ai/integrations.",
   },
 ];
 

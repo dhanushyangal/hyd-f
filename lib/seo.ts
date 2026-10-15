@@ -70,6 +70,7 @@ export const PUBLIC_ROUTES: Array<{
   { path: "/contact", changeFrequency: "monthly", priority: 0.8 },
   { path: "/docs", changeFrequency: "monthly", priority: 0.8 },
   { path: "/api", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/integrations", changeFrequency: "weekly", priority: 0.8 },
   { path: "/about", changeFrequency: "monthly", priority: 0.8 },
   { path: "/research", changeFrequency: "monthly", priority: 0.8 },
   { path: "/enterprise", changeFrequency: "monthly", priority: 0.7 },

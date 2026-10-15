@@ -1,6 +1,7 @@
 "use client";
 
 import { Box, Download, Grid3x3, Maximize2, Minimize2, RotateCw, SlidersHorizontal } from "lucide-react";
+import { SendToDccButton } from "@/components/integrations/SendToDccButton";
 import type { ViewerLook } from "@/lib/viewer/look";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,9 @@ type Props = {
   onToggleInspector: () => void;
   /** Sit in a parent row instead of pinning itself to the canvas corner. */
   embedded?: boolean;
+  /** Absolute or proxy URL for the current mesh (enables Send to DCC). */
+  meshUrl?: string | null;
+  jobId?: string | null;
 };
 
 function ToggleButton({
@@ -57,6 +61,8 @@ export function ViewerToolbar({
   inspectorOpen,
   onToggleInspector,
   embedded = false,
+  meshUrl = null,
+  jobId = null,
 }: Props) {
   const bar = (
       <div className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-neutral-200/70 bg-white px-1.5 py-1 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
@@ -102,6 +108,9 @@ export function ViewerToolbar({
           <Download className="h-3.5 w-3.5" strokeWidth={2} />
           Export
         </button>
+        {kind === "3d" ? (
+          <SendToDccButton compact meshUrl={meshUrl} jobId={jobId} className="ml-0.5" />
+        ) : null}
         <button
           type="button"
           title={fullView ? "Exit full view" : "Full view"}

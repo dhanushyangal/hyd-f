@@ -6,6 +6,7 @@ export type NavIconName =
   | "preview"
   | "export"
   | "api"
+  | "integrations"
   | "rigging"
   | "enterprise"
   | "security"
@@ -79,6 +80,12 @@ export const NAV_PRIMARY: NavGroup[] = [
         heading: "Build",
         items: [
           { label: "API", href: "/api", icon: "api", description: "Generate from your own product." },
+          {
+            label: "Integrations",
+            href: "/integrations",
+            icon: "integrations",
+            description: "Blender, Maya, Unity, Unreal, MCP.",
+          },
           { label: "Rigging", href: "/rigging", icon: "rigging", description: "Pose characters for animation." },
         ],
       },
@@ -141,6 +148,12 @@ export const NAV_PRIMARY: NavGroup[] = [
         heading: "Learn",
         items: [
           { label: "Documentation", href: "/docs", icon: "docs", description: "Guides from the first prompt to export." },
+          {
+            label: "Integrations",
+            href: "/integrations",
+            icon: "integrations",
+            description: "Plugins for Blender, Maya, Unity, and more.",
+          },
           { label: "FAQ", href: "/faq", icon: "faq", description: "Answers before you book a call." },
           { label: "Blog", href: "/blog", icon: "blog", description: "Notes on the product and the craft." },
           { label: "Changelog", href: "/changelog", icon: "changelog", description: "What shipped recently." },
@@ -210,6 +223,7 @@ export const FOOTER_NAV: Array<{ heading: string; links: NavLink[] }> = [
       { label: "Pricing", href: "/pricing" },
       { label: "BlueFox 3D", href: "/bluefox3d" },
       { label: "API", href: "/api" },
+      { label: "Integrations", href: "/integrations" },
       { label: "Enterprise", href: "/enterprise" },
     ],
   },
@@ -227,6 +241,7 @@ export const FOOTER_NAV: Array<{ heading: string; links: NavLink[] }> = [
     heading: "Resources",
     links: [
       { label: "Documentation", href: "/docs" },
+      { label: "Integrations", href: "/integrations" },
       { label: "FAQ", href: "/faq" },
       { label: "Blog", href: "/blog" },
       { label: "Changelog", href: "/changelog" },

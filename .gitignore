@@ -51,3 +51,5 @@ backend/
 /Users/tharak/Developer/hydrilla-ai/hyd-f/backend
 # Separate GitHub repo (dhanushyangal/admin)
 admin/
+__pycache__/
+*.py[cod]

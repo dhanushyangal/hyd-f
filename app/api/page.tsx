@@ -105,6 +105,12 @@ export default function ApiPage() {
             API Reference (docs.hydrilla.ai)
           </a>
           <Link
+            href="/integrations"
+            className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
+          >
+            DCC Integrations
+          </Link>
+          <Link
             href="/contact"
             className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
           >

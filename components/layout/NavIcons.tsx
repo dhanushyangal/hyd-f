@@ -82,6 +82,14 @@ export function NavIcon({ name, className }: IconProps) {
           <path d="M12 12l-4 4 4 4M20 12l4 4-4 4" stroke="#9333EA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </Glyph>
       );
+    case "integrations":
+      return (
+        <Glyph className={className}>
+          <rect x="5" y="7" width="10" height="10" rx="3" fill="#DBEAFE" />
+          <rect x="17" y="7" width="10" height="10" rx="3" fill="#BFDBFE" />
+          <rect x="5" y="17" width="22" height="8" rx="3" fill="#2563EB" />
+        </Glyph>
+      );
     case "rigging":
       return (
         <Glyph className={className}>

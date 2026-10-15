@@ -28,6 +28,8 @@ type MarketingPageProps = {
   relatedContent?: ReactNode;
   /** Use DM Sans for the title (faster LCP on marketing pages). Default false. */
   useBodyFontForTitle?: boolean;
+  /** Hairline under the hero. Default true. */
+  heroRule?: boolean;
 };
 
 export function MarketingPage({
@@ -41,11 +43,12 @@ export function MarketingPage({
   related,
   relatedContent,
   useBodyFontForTitle = false,
+  heroRule = true,
 }: MarketingPageProps) {
   return (
     <>
       <main className="mkt-root">
-        <section className="mkt-hero">
+        <section className={`mkt-hero${heroRule ? "" : " mkt-hero-no-rule"}`}>
           <div className="mkt-hero-inner">
             <div className="mkt-hero-kicker">
               {eyebrowHref ? (
@@ -111,6 +114,9 @@ export function MarketingPage({
             linear-gradient(180deg, #f4f7fa 0%, #ffffff 100%);
           border-bottom: 1px solid rgba(17, 17, 17, 0.08);
         }
+        .mkt-hero-no-rule {
+          border-bottom: none;
+        }
         .mkt-hero::before {
           content: "";
           position: absolute;
@@ -119,6 +125,9 @@ export function MarketingPage({
           bottom: 1.5rem;
           width: 3px;
           background: #7eb8e8;
+        }
+        .mkt-hero-no-rule::before {
+          display: none;
         }
         .mkt-hero-inner {
           max-width: 42rem;

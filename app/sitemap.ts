@@ -3,6 +3,7 @@ import path from "node:path";
 import type { MetadataRoute } from "next";
 import { fetchBlogSlugs } from "@/lib/blog";
 import { getAllArticles } from "@/lib/content";
+import { INTEGRATIONS } from "@/lib/integrations";
 import { PUBLIC_ROUTES, absoluteUrl } from "@/lib/seo";
 
 const APP_ROOT = path.join(process.cwd(), "app");
@@ -55,6 +56,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     blogEntries = [];
   }
 
+  const integrationEntries: MetadataRoute.Sitemap = INTEGRATIONS.map((item) => ({
+    url: absoluteUrl(`/integrations/${item.slug}`),
+    lastModified: routeLastModified("/integrations"),
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
+  }));
+
   const compareArticles = getAllArticles().map((article) => {
     const contentFile = path.join(CONTENT_ROOT, article.collection, `${article.slug}.md`);
     return {
@@ -67,5 +75,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     };
   });
 
-  return [...pages, ...blogEntries, ...compareArticles];
+  return [...pages, ...integrationEntries, ...blogEntries, ...compareArticles];
 }
