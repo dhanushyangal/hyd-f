@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Hydrilla",
     "author": "Hydrilla",
-    "version": (1, 3, 11),
+    "version": (1, 3, 12),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Hydrilla",
     "description": "Built-in Bridge, Clerk sign-in, and AI 3D generate/import",
@@ -16,11 +16,17 @@ import threading
 import time
 import webbrowser
 from queue import Empty, Queue
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, PointerProperty, StringProperty
+from bpy.props import (
+    BoolProperty,
+    EnumProperty,
+    IntProperty,
+    PointerProperty,
+    StringProperty,
+)
 from bpy.types import AddonPreferences, Operator, Panel
 from bpy_extras.io_utils import ImportHelper
 
@@ -213,6 +219,8 @@ _JOB: dict = {
     "busy": False,
     "cancel": False,
     "events": Queue(),
+    "started_at": 0.0,
+    "mode": "",
 }
 
 
@@ -246,19 +254,82 @@ def _wrap_status_lines(text: str, width: int = 34) -> list:
     return lines or ["Ready"]
 
 
+def _set_scene_status(
+    scene,
+    text: str,
+    *,
+    kind: str = "INFO",
+    phase: str = "",
+    progress: int = -1,
+    busy: Optional[bool] = None,
+    task_id: Optional[str] = None,
+) -> None:
+    """Write durable status onto the scene so reconnect / Sync still shows it."""
+    scene.hydrilla_status = text
+    scene.hydrilla_status_kind = kind
+    if phase:
+        scene.hydrilla_job_phase = phase
+    if progress >= 0:
+        scene.hydrilla_job_progress = max(0, min(100, int(progress)))
+    if busy is not None:
+        scene.hydrilla_busy = bool(busy)
+    if task_id is not None:
+        scene.hydrilla_job_task_id = task_id
+
+
+def _status_icon(kind: str, busy: bool) -> str:
+    if busy or kind == "RUNNING":
+        return "SORTTIME"
+    if kind == "ERROR" or kind == "SESSION":
+        return "ERROR"
+    if kind == "DONE":
+        return "CHECKMARK"
+    return "INFO"
+
+
+def _status_headline(scene) -> str:
+    busy = bool(scene.hydrilla_busy) or bool(_JOB["busy"])
+    kind = scene.hydrilla_status_kind or "INFO"
+    phase = (scene.hydrilla_job_phase or "").strip()
+    progress = int(getattr(scene, "hydrilla_job_progress", 0) or 0)
+    if busy:
+        if phase and progress > 0:
+            return f"Running · {phase} · {progress}%"
+        if phase:
+            return f"Running · {phase}"
+        return "Running…"
+    if kind == "SESSION":
+        return "Session issue"
+    if kind == "ERROR":
+        return "Failed"
+    if kind == "DONE":
+        return "Done"
+    return "Status"
+
+
 def _draw_status_block(layout, scene) -> None:
-    """Full status text as wrapped labels only (no editable field)."""
-    busy = bool(scene.hydrilla_busy)
+    """Always-visible status: running state, progress, Clerk/session errors."""
+    busy = bool(scene.hydrilla_busy) or bool(_JOB["busy"])
+    kind = scene.hydrilla_status_kind or "INFO"
     box = layout.box()
     header = box.row()
-    if busy:
-        header.label(text="Working…", icon="SORTTIME")
-    else:
-        header.label(text="Status", icon="TIME")
+    header.label(text=_status_headline(scene), icon=_status_icon(kind, busy))
+    if busy and _JOB.get("started_at"):
+        elapsed = max(0, int(time.time() - float(_JOB["started_at"])))
+        header.label(text=f"{elapsed}s")
+
     for line in _wrap_status_lines(scene.hydrilla_status or "Ready"):
         box.label(text=line)
-    if busy:
+
+    if kind == "SESSION":
+        box.label(text="Fix: Sign in → keep Connect tab open → Sync", icon="URL")
+        row = box.row(align=True)
+        row.operator("hydrilla.sign_in", text="Sign in", icon="URL")
+        row.operator("hydrilla.sync_account", text="Sync", icon="FILE_REFRESH")
+    elif busy:
         box.operator("hydrilla.cancel_generate", text="Cancel", icon="X")
+    elif (scene.hydrilla_job_task_id or "").strip() and kind == "ERROR":
+        box.operator("hydrilla.resume_job", text="Retry poll task", icon="FILE_REFRESH")
 
 
 def _show_hydrilla_popup(message: str, *, title: str = "Hydrilla", icon: str = "INFO") -> None:
@@ -279,6 +350,26 @@ def _job_emit(kind: str, **payload) -> None:
     _JOB["events"].put({"kind": kind, **payload})
 
 
+def _human_task_status(status: str, progress: Any) -> tuple:
+    """Return (phase, progress_int, status_line)."""
+    code = (status or "").upper()
+    try:
+        pct = int(progress) if progress is not None else 0
+    except Exception:
+        pct = 0
+    if code in {"PENDING", "QUEUED", "WAIT"}:
+        return "Queued", pct, f"Queued on server… {pct}%" if pct else "Queued on server…"
+    if code in {"IN_PROGRESS", "RUNNING", "PROCESSING", "RUN"}:
+        return "Generating", pct, f"Generating mesh… {pct}%" if pct else "Generating mesh…"
+    if code == "SUCCEEDED":
+        return "Done", 100, "Generation succeeded"
+    if code in {"FAILED", "ERROR"}:
+        return "Failed", pct, "Generation failed"
+    if code in {"CANCELLED", "CANCELED"}:
+        return "Cancelled", pct, "Generation cancelled"
+    return code or "Working", pct, f"{code or 'Working'}… {pct}%" if pct else (code or "Working…")
+
+
 def _job_timer() -> Optional[float]:
     """Main-thread timer: apply status to the Hydrilla panel and import when done."""
     scene = getattr(bpy.context, "scene", None)
@@ -290,23 +381,55 @@ def _job_timer() -> Optional[float]:
             event = _JOB["events"].get_nowait()
             kind = event.get("kind")
             if kind == "status":
-                scene.hydrilla_status = str(event.get("text") or "")
-                scene.hydrilla_busy = True
+                text = str(event.get("text") or "")
+                phase = str(event.get("phase") or scene.hydrilla_job_phase or "Working")
+                progress = event.get("progress")
+                progress_i = int(progress) if progress is not None else -1
+                status_kind = "SESSION" if _is_session_error(text) else "RUNNING"
+                _set_scene_status(
+                    scene,
+                    text,
+                    kind=status_kind,
+                    phase=phase,
+                    progress=progress_i,
+                    busy=True,
+                    task_id=event.get("task_id"),
+                )
             elif kind == "error":
                 message = str(event.get("text") or "Failed")
-                scene.hydrilla_status = message
-                scene.hydrilla_busy = False
+                status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+                _set_scene_status(
+                    scene,
+                    message,
+                    kind=status_kind,
+                    phase="Failed" if status_kind == "ERROR" else "Session",
+                    progress=0,
+                    busy=False,
+                )
                 _JOB["busy"] = False
                 _JOB["cancel"] = False
                 _tag_hydrilla_redraw()
-                _show_hydrilla_popup(message, title="Hydrilla — Failed", icon="ERROR")
+                popup_title = (
+                    "Hydrilla — Session expired"
+                    if status_kind == "SESSION"
+                    else "Hydrilla — Failed"
+                )
+                _show_hydrilla_popup(message, title=popup_title, icon="ERROR")
                 return None
             elif kind == "done":
                 path = event.get("path") or ""
                 try:
                     if path and os.path.isfile(path):
                         bpy.ops.import_scene.gltf(filepath=path)
-                    scene.hydrilla_status = "Imported into scene"
+                    _set_scene_status(
+                        scene,
+                        "Imported into the 3D Viewport — check the Outliner.",
+                        kind="DONE",
+                        phase="Imported",
+                        progress=100,
+                        busy=False,
+                        task_id="",
+                    )
                     _show_hydrilla_popup(
                         "Mesh imported into the scene.",
                         title="Hydrilla — Done",
@@ -314,9 +437,15 @@ def _job_timer() -> Optional[float]:
                     )
                 except Exception as error:
                     message = _user_error(error)
-                    scene.hydrilla_status = message
+                    status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+                    _set_scene_status(
+                        scene,
+                        message,
+                        kind=status_kind,
+                        phase="Import failed",
+                        busy=False,
+                    )
                     _show_hydrilla_popup(message, title="Hydrilla — Failed", icon="ERROR")
-                scene.hydrilla_busy = False
                 _JOB["busy"] = False
                 _JOB["cancel"] = False
                 _tag_hydrilla_redraw()
@@ -326,17 +455,22 @@ def _job_timer() -> Optional[float]:
         pass
 
     if not _JOB["busy"]:
-        scene.hydrilla_busy = False
+        # Keep last durable status; only clear busy if scene still thinks it is busy
+        # without a live job (e.g. after reconnect).
+        if scene.hydrilla_busy and not (scene.hydrilla_job_task_id or "").strip():
+            scene.hydrilla_busy = False
         return None
     _tag_hydrilla_redraw()
     return 0.2
 
 
-def _start_background_job(worker) -> bool:
+def _start_background_job(worker, *, mode: str = "") -> bool:
     if _JOB["busy"]:
         return False
     _JOB["busy"] = True
     _JOB["cancel"] = False
+    _JOB["started_at"] = time.time()
+    _JOB["mode"] = mode or ""
     while True:
         try:
             _JOB["events"].get_nowait()
@@ -355,11 +489,30 @@ def _wait_task_cancellable(client, task_id: str) -> dict:
     while True:
         if _JOB["cancel"]:
             raise api_client.HydrillaApiError("Generation cancelled")
-        task = client.get_task(task_id)
+        try:
+            task = client.get_task(task_id)
+        except Exception as error:
+            message = _user_error(error)
+            if _is_session_error(message):
+                _job_emit(
+                    "status",
+                    text=f"Session expired mid-job. {SESSION_REAUTH}",
+                    phase="Session",
+                    progress=0,
+                    task_id=task_id,
+                )
+            raise
         status = str(task.get("status") or "").upper()
         progress = task.get("progress")
-        _job_emit("status", text=f"{status} · {progress}%")
-        if status in {"SUCCEEDED", "FAILED", "CANCELLED"}:
+        phase, pct, line = _human_task_status(status, progress)
+        _job_emit(
+            "status",
+            text=line,
+            phase=phase,
+            progress=pct,
+            task_id=task_id,
+        )
+        if status in {"SUCCEEDED", "FAILED", "CANCELLED", "CANCELED"}:
             return task
         if time.time() - started >= api_client.MAX_POLL_S:
             raise api_client.HydrillaApiError(f"Task {task_id} timed out")
@@ -581,9 +734,24 @@ class HYDRILLA_OT_sync_account(Operator):
 
     def execute(self, context):
         prefs = _prefs(context)
+        scene = context.scene
+        job_running = bool(scene.hydrilla_busy) or bool(_JOB["busy"])
+        job_note = ""
+        if job_running:
+            phase = (scene.hydrilla_job_phase or "Working").strip()
+            progress = int(getattr(scene, "hydrilla_job_progress", 0) or 0)
+            job_note = f" Job still running · {phase}"
+            if progress > 0:
+                job_note += f" · {progress}%"
+
         if not _bridge_running(context):
             self.report({"ERROR"}, "Run Bridge first")
-            context.scene.hydrilla_status = "Run Bridge first"
+            _set_scene_status(
+                scene,
+                "Run Bridge first" + (f" —{job_note}" if job_note else ""),
+                kind="ERROR",
+                busy=job_running,
+            )
             return {"CANCELLED"}
         try:
             session = bridge_runtime.get_auth_session()
@@ -593,12 +761,23 @@ class HYDRILLA_OT_sync_account(Operator):
                 if prefs.api_key:
                     context.scene.hydrilla_account = "API key"
                     context.scene.hydrilla_auth_mode = "API"
-                    context.scene.hydrilla_status = "Using API key"
+                    _set_scene_status(
+                        scene,
+                        "Using API key." + job_note,
+                        kind="RUNNING" if job_running else "INFO",
+                        busy=job_running,
+                    )
                     self.report({"INFO"}, "No Clerk session — using API key")
                     return {"FINISHED"}
                 context.scene.hydrilla_account = "Not signed in"
                 context.scene.hydrilla_auth_mode = "NONE"
-                context.scene.hydrilla_status = SESSION_REAUTH
+                _set_scene_status(
+                    scene,
+                    SESSION_REAUTH + (f" —{job_note}" if job_note else ""),
+                    kind="SESSION",
+                    phase="Session",
+                    busy=job_running,
+                )
                 self.report({"ERROR"}, "No session yet — Sign in and keep Connect tab open")
                 return {"CANCELLED"}
 
@@ -607,19 +786,46 @@ class HYDRILLA_OT_sync_account(Operator):
             if left is not None and left < MIN_TOKEN_SECONDS:
                 context.scene.hydrilla_account = "Session expired"
                 context.scene.hydrilla_auth_mode = "NONE"
-                context.scene.hydrilla_status = SESSION_REAUTH
+                _set_scene_status(
+                    scene,
+                    SESSION_REAUTH + (f" —{job_note}" if job_note else ""),
+                    kind="SESSION",
+                    phase="Session",
+                    busy=job_running,
+                )
                 self.report({"ERROR"}, "Session expired — Sign in again, keep Connect tab open")
                 return {"CANCELLED"}
 
             email = session.get("email") or "Hydrilla account"
             context.scene.hydrilla_account = email
             context.scene.hydrilla_auth_mode = "CLERK"
-            context.scene.hydrilla_status = f"Signed in as {email}. {SESSION_KEEP_TAB}"
-            self.report({"INFO"}, f"Signed in as {email} — keep Connect tab open")
+            if job_running:
+                _set_scene_status(
+                    scene,
+                    f"Reconnected as {email}.{job_note}",
+                    kind="RUNNING",
+                    busy=True,
+                )
+                self.report({"INFO"}, f"Signed in as {email} — job still running")
+            else:
+                _set_scene_status(
+                    scene,
+                    f"Signed in as {email}. {SESSION_KEEP_TAB}",
+                    kind="INFO",
+                    phase="Ready",
+                    busy=False,
+                )
+                self.report({"INFO"}, f"Signed in as {email} — keep Connect tab open")
             return {"FINISHED"}
         except Exception as error:
             message = _user_error(error)
-            context.scene.hydrilla_status = message
+            status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+            _set_scene_status(
+                scene,
+                message + (f" —{job_note}" if job_note else ""),
+                kind=status_kind,
+                busy=job_running,
+            )
             self.report({"ERROR"}, message)
             return {"CANCELLED"}
 
@@ -661,16 +867,28 @@ class HYDRILLA_OT_text_to_3d(Operator):
             _ensure_fresh_clerk_token(client.token, client.mode)
         except Exception as error:
             message = _user_error(error)
-            scene.hydrilla_status = message
+            status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+            _set_scene_status(scene, message, kind=status_kind, phase="Session")
             self.report({"ERROR"}, message)
-            _show_hydrilla_popup(message, title="Hydrilla — Sign in", icon="ERROR")
+            _show_hydrilla_popup(
+                message,
+                title="Hydrilla — Session" if status_kind == "SESSION" else "Hydrilla — Sign in",
+                icon="ERROR",
+            )
             return {"CANCELLED"}
 
         token = client.token
         base_url = client.base_url
         mode = client.mode
-        scene.hydrilla_busy = True
-        scene.hydrilla_status = f"Queued… {SESSION_KEEP_TAB}"
+        _set_scene_status(
+            scene,
+            f"Starting text → 3D… {SESSION_KEEP_TAB}",
+            kind="RUNNING",
+            phase="Starting",
+            progress=0,
+            busy=True,
+            task_id="",
+        )
         _tag_hydrilla_redraw()
 
         def worker():
@@ -685,7 +903,12 @@ class HYDRILLA_OT_text_to_3d(Operator):
                     token_provider=_bridge_token_provider() if mode == "clerk" else None,
                 )
                 if mode == "clerk":
-                    _job_emit("status", text=f"Creating preview image… {SESSION_KEEP_TAB}")
+                    _job_emit(
+                        "status",
+                        text=f"Creating preview image… keep Connect tab open",
+                        phase="Preview",
+                        progress=5,
+                    )
                     image = job_client.text_to_image(prompt)
                     image_url = image.get("image_url")
                     if not image_url:
@@ -693,36 +916,58 @@ class HYDRILLA_OT_text_to_3d(Operator):
                     if _JOB["cancel"]:
                         raise api_client.HydrillaApiError("Generation cancelled")
                     _ensure_fresh_clerk_token(job_client.token, mode)
-                    _job_emit("status", text="Submitting 3D job…")
+                    _job_emit(
+                        "status",
+                        text="Submitting 3D job…",
+                        phase="Submit",
+                        progress=15,
+                    )
                     created = job_client.image_to_3d_url(image_url, prompt=prompt)
                 else:
-                    _job_emit("status", text="Submitting…")
+                    _job_emit(
+                        "status",
+                        text="Submitting text → 3D…",
+                        phase="Submit",
+                        progress=10,
+                    )
                     created = job_client.text_to_3d(prompt)
 
                 task_id = created.get("id") or created.get("task_id")
                 if not task_id:
                     raise api_client.HydrillaApiError("No task id returned")
+                _job_emit(
+                    "status",
+                    text=f"Task {task_id[:8]}… waiting for GPU",
+                    phase="Queued",
+                    progress=20,
+                    task_id=str(task_id),
+                )
 
-                task = _wait_task_cancellable(job_client, task_id)
+                task = _wait_task_cancellable(job_client, str(task_id))
                 if str(task.get("status") or "").upper() != "SUCCEEDED":
                     raise api_client.HydrillaApiError(task.get("error") or "Generation failed")
                 mesh_url = (task.get("result") or {}).get("mesh_url")
                 if not mesh_url:
                     raise api_client.HydrillaApiError("No mesh_url on success")
-                _job_emit("status", text="Downloading mesh…")
+                _job_emit(
+                    "status",
+                    text="Downloading mesh…",
+                    phase="Download",
+                    progress=95,
+                    task_id=str(task_id),
+                )
                 path = api_client.download_to_temp(job_client, mesh_url, task_id)
                 _job_emit("done", path=path)
             except Exception as error:
                 _job_emit("error", text=_user_error(error))
 
-        if not _start_background_job(worker):
+        if not _start_background_job(worker, mode=mode):
             scene.hydrilla_busy = False
             self.report({"WARNING"}, "Already generating")
             return {"CANCELLED"}
 
-        self.report({"INFO"}, "Generating — keep Connect tab open; see Status below")
+        self.report({"INFO"}, "Generating — watch Status panel (keep Connect tab open)")
         return {"FINISHED"}
-
 
 class HYDRILLA_OT_pick_image(Operator, ImportHelper):
     bl_idname = "hydrilla.pick_image"
@@ -791,16 +1036,28 @@ class HYDRILLA_OT_image_to_3d(Operator):
             _ensure_fresh_clerk_token(client.token, client.mode)
         except Exception as error:
             message = _user_error(error)
-            scene.hydrilla_status = message
+            status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+            _set_scene_status(scene, message, kind=status_kind, phase="Session")
             self.report({"ERROR"}, message)
-            _show_hydrilla_popup(message, title="Hydrilla — Sign in", icon="ERROR")
+            _show_hydrilla_popup(
+                message,
+                title="Hydrilla — Session" if status_kind == "SESSION" else "Hydrilla — Sign in",
+                icon="ERROR",
+            )
             return {"CANCELLED"}
 
         token = client.token
         base_url = client.base_url
         mode = client.mode
-        scene.hydrilla_busy = True
-        scene.hydrilla_status = f"Queued… {SESSION_KEEP_TAB}"
+        _set_scene_status(
+            scene,
+            f"Starting image → 3D… {SESSION_KEEP_TAB}",
+            kind="RUNNING",
+            phase="Starting",
+            progress=0,
+            busy=True,
+            task_id="",
+        )
         _tag_hydrilla_redraw()
 
         def worker():
@@ -815,34 +1072,57 @@ class HYDRILLA_OT_image_to_3d(Operator):
                     token_provider=_bridge_token_provider() if mode == "clerk" else None,
                 )
                 if source == "file":
-                    _job_emit("status", text="Uploading image…")
+                    _job_emit(
+                        "status",
+                        text="Uploading image…",
+                        phase="Upload",
+                        progress=10,
+                    )
                     created = job_client.image_to_3d_file(image_path)
                 else:
-                    _job_emit("status", text="Submitting…")
+                    _job_emit(
+                        "status",
+                        text="Submitting image → 3D…",
+                        phase="Submit",
+                        progress=10,
+                    )
                     created = job_client.image_to_3d_url(image_url)
 
                 task_id = created.get("id") or created.get("task_id") or created.get("jobId")
                 if not task_id:
                     raise api_client.HydrillaApiError("No task id returned")
+                _job_emit(
+                    "status",
+                    text=f"Task {str(task_id)[:8]}… waiting for GPU",
+                    phase="Queued",
+                    progress=20,
+                    task_id=str(task_id),
+                )
 
-                task = _wait_task_cancellable(job_client, task_id)
+                task = _wait_task_cancellable(job_client, str(task_id))
                 if str(task.get("status") or "").upper() != "SUCCEEDED":
                     raise api_client.HydrillaApiError(task.get("error") or "Generation failed")
                 mesh_url = (task.get("result") or {}).get("mesh_url")
                 if not mesh_url:
                     raise api_client.HydrillaApiError("No mesh_url on success")
-                _job_emit("status", text="Downloading mesh…")
+                _job_emit(
+                    "status",
+                    text="Downloading mesh…",
+                    phase="Download",
+                    progress=95,
+                    task_id=str(task_id),
+                )
                 path = api_client.download_to_temp(job_client, mesh_url, task_id)
                 _job_emit("done", path=path)
             except Exception as error:
                 _job_emit("error", text=_user_error(error))
 
-        if not _start_background_job(worker):
+        if not _start_background_job(worker, mode=mode):
             scene.hydrilla_busy = False
             self.report({"WARNING"}, "Already generating")
             return {"CANCELLED"}
 
-        self.report({"INFO"}, "Generating — progress is in the Hydrilla Status box")
+        self.report({"INFO"}, "Generating — watch Status panel")
         return {"FINISHED"}
 
 
@@ -855,9 +1135,88 @@ class HYDRILLA_OT_cancel_generate(Operator):
             self.report({"INFO"}, "Nothing to cancel")
             return {"CANCELLED"}
         _JOB["cancel"] = True
-        context.scene.hydrilla_status = "Cancelling…"
+        _set_scene_status(
+            context.scene,
+            "Cancelling…",
+            kind="RUNNING",
+            phase="Cancelling",
+            busy=True,
+        )
         _tag_hydrilla_redraw()
         self.report({"INFO"}, "Cancel requested")
+        return {"FINISHED"}
+
+
+class HYDRILLA_OT_resume_job(Operator):
+    bl_idname = "hydrilla.resume_job"
+    bl_label = "Resume / poll task"
+    bl_description = "If a task id was saved and the job stopped, poll again after reconnect"
+
+    def execute(self, context):
+        scene = context.scene
+        task_id = (scene.hydrilla_job_task_id or "").strip()
+        if not task_id:
+            self.report({"ERROR"}, "No saved task id to resume")
+            return {"CANCELLED"}
+        if scene.hydrilla_busy or _JOB["busy"]:
+            self.report({"WARNING"}, "A job is already running — see Status")
+            return {"CANCELLED"}
+
+        try:
+            client = _resolve_client(context)
+            _ensure_fresh_clerk_token(client.token, client.mode)
+        except Exception as error:
+            message = _user_error(error)
+            status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+            _set_scene_status(scene, message, kind=status_kind, phase="Session")
+            self.report({"ERROR"}, message)
+            return {"CANCELLED"}
+
+        token = client.token
+        base_url = client.base_url
+        mode = client.mode
+        _set_scene_status(
+            scene,
+            f"Resuming task {task_id[:8]}…",
+            kind="RUNNING",
+            phase="Resume",
+            progress=0,
+            busy=True,
+            task_id=task_id,
+        )
+
+        def worker():
+            try:
+                job_client = api_client.HydrillaClient(
+                    token,
+                    base_url=base_url,
+                    mode=mode,
+                    token_provider=_bridge_token_provider() if mode == "clerk" else None,
+                )
+                task = _wait_task_cancellable(job_client, task_id)
+                if str(task.get("status") or "").upper() != "SUCCEEDED":
+                    raise api_client.HydrillaApiError(task.get("error") or "Generation failed")
+                mesh_url = (task.get("result") or {}).get("mesh_url")
+                if not mesh_url:
+                    raise api_client.HydrillaApiError("No mesh_url on success")
+                _job_emit(
+                    "status",
+                    text="Downloading mesh…",
+                    phase="Download",
+                    progress=95,
+                    task_id=task_id,
+                )
+                path = api_client.download_to_temp(job_client, mesh_url, task_id)
+                _job_emit("done", path=path)
+            except Exception as error:
+                _job_emit("error", text=_user_error(error))
+
+        if not _start_background_job(worker, mode=mode):
+            scene.hydrilla_busy = False
+            self.report({"WARNING"}, "Already generating")
+            return {"CANCELLED"}
+
+        self.report({"INFO"}, "Resumed — watch Status panel")
         return {"FINISHED"}
 
 
@@ -972,6 +1331,19 @@ class HYDRILLA_PT_account(Panel):
         box.label(text="Or set API key in Add-on Preferences", icon="INFO")
 
 
+class HYDRILLA_PT_status(Panel):
+    bl_label = "Status"
+    bl_idname = "HYDRILLA_PT_status"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Hydrilla"
+    bl_parent_id = "HYDRILLA_PT_main"
+    bl_options = set()
+
+    def draw(self, context):
+        _draw_status_block(self.layout, context.scene)
+
+
 class HYDRILLA_PT_generate(Panel):
     bl_label = "Generate"
     bl_idname = "HYDRILLA_PT_generate"
@@ -986,7 +1358,7 @@ class HYDRILLA_PT_generate(Panel):
 
         layout.prop(scene, "hydrilla_gen_mode", expand=True)
 
-        busy = bool(scene.hydrilla_busy)
+        busy = bool(scene.hydrilla_busy) or bool(_JOB["busy"])
         box = layout.box()
         if scene.hydrilla_gen_mode == "TEXT":
             box.label(text="Text to 3D", icon="FONT_DATA")
@@ -1013,7 +1385,8 @@ class HYDRILLA_PT_generate(Panel):
             op.enabled = not busy
             op.operator("hydrilla.image_to_3d", text="Generate mesh", icon="MESH_CUBE")
 
-        _draw_status_block(layout, scene)
+        if busy:
+            box.label(text="Job running — see Status above", icon="SORTTIME")
 
 
 class HYDRILLA_PT_studio(Panel):
@@ -1049,10 +1422,12 @@ classes = (
     HYDRILLA_OT_pick_image,
     HYDRILLA_OT_image_to_3d,
     HYDRILLA_OT_cancel_generate,
+    HYDRILLA_OT_resume_job,
     HYDRILLA_OT_poll_bridge,
     HYDRILLA_PT_main,
     HYDRILLA_PT_bridge,
     HYDRILLA_PT_account,
+    HYDRILLA_PT_status,
     HYDRILLA_PT_generate,
     HYDRILLA_PT_studio,
 )
@@ -1084,11 +1459,30 @@ def register():
         type=bpy.types.Image,
     )
     bpy.types.Scene.hydrilla_status = StringProperty(name="Status", default="Ready")
+    bpy.types.Scene.hydrilla_status_kind = EnumProperty(
+        name="Status kind",
+        items=(
+            ("INFO", "Info", ""),
+            ("RUNNING", "Running", ""),
+            ("DONE", "Done", ""),
+            ("ERROR", "Error", ""),
+            ("SESSION", "Session", ""),
+        ),
+        default="INFO",
+    )
     bpy.types.Scene.hydrilla_busy = BoolProperty(
         name="Busy",
         description="True while a background generate job is running",
         default=False,
     )
+    bpy.types.Scene.hydrilla_job_phase = StringProperty(name="Job phase", default="")
+    bpy.types.Scene.hydrilla_job_progress = IntProperty(
+        name="Job progress",
+        default=0,
+        min=0,
+        max=100,
+    )
+    bpy.types.Scene.hydrilla_job_task_id = StringProperty(name="Job task id", default="")
     bpy.types.Scene.hydrilla_account = StringProperty(name="Account", default="Not signed in")
     bpy.types.Scene.hydrilla_auth_mode = EnumProperty(
         name="Auth",
@@ -1122,7 +1516,11 @@ def unregister():
     del bpy.types.Scene.hydrilla_image_path
     del bpy.types.Scene.hydrilla_preview
     del bpy.types.Scene.hydrilla_status
+    del bpy.types.Scene.hydrilla_status_kind
     del bpy.types.Scene.hydrilla_busy
+    del bpy.types.Scene.hydrilla_job_phase
+    del bpy.types.Scene.hydrilla_job_progress
+    del bpy.types.Scene.hydrilla_job_task_id
     del bpy.types.Scene.hydrilla_account
     del bpy.types.Scene.hydrilla_auth_mode
     del bpy.types.Scene.hydrilla_gen_mode
