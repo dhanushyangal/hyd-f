@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Hydrilla",
     "author": "Hydrilla",
-    "version": (1, 3, 10),
+    "version": (1, 3, 11),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Hydrilla",
     "description": "Built-in Bridge, Clerk sign-in, and AI 3D generate/import",
@@ -494,14 +494,14 @@ class HydrillaPreferences(AddonPreferences):
     )
     site_url: StringProperty(
         name="Hydrilla Site URL",
-        description="Frontend for sign-in. Local: http://localhost:3000",
-        default=DEFAULT_LOCAL_SITE,
+        description="Frontend for sign-in (live: https://hydrilla.ai). Local: http://localhost:3000",
+        default=DEFAULT_SITE,
     )
     # Fresh prop name so old api_base / api_base_url values stuck on :3000 are ignored
     api_server: StringProperty(
         name="API Base URL",
-        description="Backend API only. Local: http://localhost:4000 — never use :3000 here",
-        default=DEFAULT_LOCAL_API,
+        description="Backend API (live by default). Local: http://localhost:4000 — never use :3000 here",
+        default=DEFAULT_API_BASE,
     )
     bridge_url: StringProperty(
         name="Bridge URL",
