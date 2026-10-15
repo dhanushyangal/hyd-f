@@ -5,7 +5,7 @@ import type { ViewerLook } from "@/lib/viewer/look";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  /** "3d" shows look toggles; "code" (Water) only exposes export + full view. */
+  /** "3d" shows look toggles; "code" (Water) only exposes export + focus. */
   kind: "3d" | "code";
   look: ViewerLook;
   onLookChange: (patch: Partial<ViewerLook>) => void;
@@ -36,9 +36,10 @@ function ToggleButton({
       type="button"
       title={title}
       aria-label={label}
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "flex h-8 w-8 items-center justify-center rounded-full",
+        "flex h-8 w-8 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-neutral-300",
         active ? "bg-neutral-950 text-white" : "text-neutral-500 hover:bg-neutral-100"
       )}
     >
@@ -86,10 +87,19 @@ export function ViewerToolbar({
             >
               <Box className="h-4 w-4" strokeWidth={1.85} />
             </ToggleButton>
+            <span className="mx-1 h-4 w-px bg-neutral-200" />
           </>
         ) : null}
         <ToggleButton active={inspectorOpen} label="Adjust" title="Adjust look and parts" onClick={onToggleInspector}>
           <SlidersHorizontal className="h-4 w-4" strokeWidth={1.85} />
+        </ToggleButton>
+        <ToggleButton
+          active={fullView}
+          label={fullView ? "Exit focus" : "Focus"}
+          title={fullView ? "Show library and composer" : "Focus on the model"}
+          onClick={onToggleFullView}
+        >
+          {fullView ? <Minimize2 className="h-4 w-4" strokeWidth={1.85} /> : <Maximize2 className="h-4 w-4" strokeWidth={1.85} />}
         </ToggleButton>
         <span className="mx-1 h-4 w-px bg-neutral-200" />
         <button
@@ -97,19 +107,10 @@ export function ViewerToolbar({
           title="Export GLB"
           aria-label="Export GLB"
           onClick={onExport}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-neutral-950 px-3 text-[12px] font-semibold text-white hover:bg-neutral-800"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-neutral-950 px-3 text-[12px] font-semibold text-white outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-300"
         >
-          <Download className="h-3.5 w-3.5" strokeWidth={2} />
+          <Download className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
           Export
-        </button>
-        <button
-          type="button"
-          title={fullView ? "Exit full view" : "Full view"}
-          aria-label={fullView ? "Exit full view" : "Full view"}
-          onClick={onToggleFullView}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 max-lg:hidden"
-        >
-          {fullView ? <Minimize2 className="h-4 w-4" strokeWidth={1.85} /> : <Maximize2 className="h-4 w-4" strokeWidth={1.85} />}
         </button>
       </div>
   );

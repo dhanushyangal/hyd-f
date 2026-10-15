@@ -7,7 +7,6 @@ import { useAuth } from "@clerk/nextjs";
 import {
   LayoutDashboard,
   FolderOpen,
-  ImageIcon,
   BarChart3,
   CreditCard,
   Settings,
@@ -15,115 +14,209 @@ import {
   PanelLeftClose,
   PanelLeft,
   Sparkles,
+  Clock,
+  ChevronRight,
+  Coins,
   X,
 } from "lucide-react";
+import { useSlotStatus } from "../../hooks/useSlotStatus";
 import { cn } from "../../lib/utils";
 import { track } from "../../lib/analytics";
-import { planDisplayLabel } from "../../lib/pricing";
+import { isPaidPlan, planDisplayLabel } from "../../lib/pricing";
 import { useAppLayout } from "../../context/AppLayoutContext";
 
 const RAW_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const BACKEND_URL = RAW_BACKEND.replace(/\/+$/, "");
 
-const navItems = [
+const baseNavItems = [
   { href: "/app/studio", label: "Studio", icon: LayoutDashboard },
   { href: "/app/assets", label: "Assets", icon: FolderOpen },
-  { href: "/app/image", label: "Image", icon: ImageIcon },
   { href: "/app/usage", label: "Usage", icon: BarChart3 },
   { href: "/app/api-keys", label: "API Keys", icon: Key },
   { href: "/app/settings", label: "Settings", icon: Settings },
-  { href: "/app/pricing", label: "Pricing", icon: CreditCard },
+  { href: "/app/pricing", label: "Pricing", icon: CreditCard, hideWhenPaid: true },
 ];
 
-/** Credits usage card – wired to /api/payments/credits. Plan badge + progress. */
-function CreditsCard() {
+type CreditsState = {
+  used: number;
+  total: number;
+  remaining: number;
+  plan: string | null;
+  resetAt: string | null;
+  loading: boolean;
+};
+
+function formatShortReset(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return null;
+  }
+}
+
+function SlotCard({ collapsed }: { collapsed: boolean }) {
   const { getToken, isSignedIn } = useAuth();
   const { closeMobileSidebar } = useAppLayout();
-  const [used, setUsed] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [remaining, setRemaining] = useState(0);
-  const [plan, setPlan] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const slot = useSlotStatus(getToken, !!isSignedIn, { tick: true });
 
-  useEffect(() => {
-    if (!isSignedIn) { setLoading(false); return; }
+  if (!slot.enrolled) return null;
 
-    (async () => {
-      try {
-        const token = await getToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const [creditsRes, subRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/payments/credits`, { headers }),
-          fetch(`${BACKEND_URL}/api/payments/subscription`, { headers }),
-        ]);
-        if (creditsRes.ok) {
-          const { credits } = await creditsRes.json();
-          const nextUsed = credits.used ?? 0;
-          const nextTotal = credits.total ?? 0;
-          setUsed(nextUsed);
-          setTotal(nextTotal);
-          setRemaining(
-            typeof credits.remaining === "number"
-              ? credits.remaining
-              : Math.max(0, nextTotal - nextUsed)
-          );
-          const subJson = subRes.ok ? await subRes.json() : null;
-          const subPlan = subJson?.subscription?.plan ?? null;
-          setPlan(credits.plan || subPlan || null);
-        } else {
-          console.error("[Credits] Backend returned", creditsRes.status, creditsRes.statusText, "from", BACKEND_URL);
-        }
-      } catch (err) {
-        console.error("[Credits] Fetch failed:", err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [isSignedIn, getToken]);
+  if (slot.needsHour) {
+    if (collapsed) {
+      return (
+        <Link
+          href="/app/settings?section=billing"
+          prefetch
+          onClick={closeMobileSidebar}
+          title="Select your hour"
+          aria-label="Select your hour"
+          className="mx-auto mb-2 hidden h-10 w-10 items-center justify-center rounded-full bg-neutral-900 text-white md:flex"
+        >
+          <Clock className="h-4 w-4" strokeWidth={1.75} />
+        </Link>
+      );
+    }
+    return (
+      <Link
+        href="/app/settings?section=billing"
+        prefetch
+        onClick={closeMobileSidebar}
+        className="mb-2 block rounded-2xl border border-neutral-200/80 bg-white p-3.5 font-dm-sans shadow-[0_1px_2px_rgba(17,17,17,0.04),0_8px_24px_-12px_rgba(17,17,17,0.12)] transition-colors hover:border-neutral-300"
+      >
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
+          <Clock className="h-2.5 w-2.5" strokeWidth={2.25} />
+          Slot
+        </span>
+        <p className="mt-2.5 text-[15px] font-semibold tracking-[-0.02em] text-neutral-900">
+          Select your hour
+        </p>
+        <p className="mt-1 text-[12px] leading-5 text-neutral-500">
+          Choose the hour you can generate images and models.
+        </p>
+      </Link>
+    );
+  }
+
+  const phrase = slot.open
+    ? `${slot.remainingLabel} left in ${slot.label}`
+    : `Opens in ${slot.remainingLabel}. Your hours are ${slot.label}.`;
+
+  if (collapsed) {
+    return (
+      <div
+        className="mx-auto mb-2 hidden h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-900 md:flex"
+        title={phrase}
+        role="status"
+      >
+        <Clock className="h-4 w-4" strokeWidth={1.75} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="mb-2 rounded-2xl border border-neutral-200/80 bg-white p-3.5 font-dm-sans shadow-[0_1px_2px_rgba(17,17,17,0.04),0_8px_24px_-12px_rgba(17,17,17,0.12)]"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-700">
+          <Clock className="h-2.5 w-2.5 text-neutral-500" strokeWidth={2.25} />
+          {slot.open ? "Open" : "Closed"}
+        </span>
+      </div>
+      <p className="mt-2.5 text-[22px] leading-none font-semibold tracking-tight text-neutral-900 tabular-nums">
+        {slot.remainingLabel}
+      </p>
+      <p className="mt-1 text-[12px] leading-5 text-neutral-500">
+        {slot.open ? `left · ${slot.label}` : `until ${slot.label}`}
+      </p>
+    </div>
+  );
+}
+
+/** Credits usage card – links to /app/usage with clean balance & progress display. */
+function CreditsCard({
+  credits,
+  collapsed,
+}: {
+  credits: CreditsState;
+  collapsed: boolean;
+}) {
+  const { closeMobileSidebar } = useAppLayout();
+  const { used, total, remaining, plan, resetAt, loading } = credits;
 
   const pctUsed = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
   const pctLeft = Math.max(0, 100 - pctUsed);
   const planLabel = planDisplayLabel(plan);
   const isLow = !loading && total > 0 && pctLeft <= 15;
+  const resetLabel = formatShortReset(resetAt);
+
+  if (collapsed) {
+    return (
+      <Link
+        href="/app/usage"
+        prefetch
+        onClick={closeMobileSidebar}
+        title={loading ? "Credits & usage" : `${remaining.toLocaleString()} credits left · View usage`}
+        aria-label="View credit usage"
+        className="mx-auto hidden h-10 w-10 items-center justify-center rounded-full border border-neutral-200/80 bg-white text-neutral-700 shadow-xs transition-colors hover:border-neutral-300 hover:text-neutral-900 md:flex"
+      >
+        <Coins className="h-4 w-4" strokeWidth={1.8} />
+      </Link>
+    );
+  }
 
   return (
     <Link
-      href="/app/pricing"
+      href="/app/usage"
       prefetch
       onClick={closeMobileSidebar}
-      className="credits-card group block rounded-2xl border border-neutral-200/80 bg-white p-3.5 font-dm-sans shadow-[0_1px_2px_rgba(17,17,17,0.04),0_8px_24px_-12px_rgba(17,17,17,0.12)] transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
+      className="credits-card group block rounded-2xl border border-neutral-200/80 bg-white p-3.5 font-dm-sans shadow-[0_1px_2px_rgba(17,17,17,0.04),0_10px_26px_-12px_rgba(17,17,17,0.12)] transition-all duration-200 hover:border-neutral-300 hover:shadow-[0_2px_4px_rgba(17,17,17,0.05),0_14px_30px_-12px_rgba(17,17,17,0.16)] active:scale-[0.99]"
     >
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-700">
-          <Sparkles className="w-2.5 h-2.5 text-neutral-500" strokeWidth={2.25} />
+      {/* Top row: Plan badge + Percentage remaining */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900/[0.06] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-neutral-700">
+          <Sparkles className="h-2.5 w-2.5 text-neutral-500" strokeWidth={2.25} />
           {loading ? "…" : planLabel}
         </span>
         <span
           className={cn(
-            "text-[10px] font-medium tabular-nums tracking-tight",
+            "inline-flex items-center gap-1 text-[10px] font-semibold tabular-nums tracking-tight",
             isLow ? "text-amber-600" : "text-neutral-400"
           )}
         >
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              loading ? "bg-neutral-300" : isLow ? "bg-amber-500" : "bg-emerald-500"
+            )}
+          />
           {loading ? "…" : `${pctLeft}% left`}
         </span>
       </div>
 
-      <div className="flex items-end justify-between gap-2 mb-2.5">
-        <div className="min-w-0">
-          <p className="text-[22px] leading-none font-semibold tracking-tight text-neutral-900 tabular-nums">
+      {/* Main balance */}
+      <div className="mt-3 flex items-baseline justify-between gap-2">
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <p className="text-[24px] leading-none font-semibold tracking-[-0.03em] text-neutral-900 tabular-nums">
             {loading ? "—" : remaining.toLocaleString()}
           </p>
-          <p className="mt-1 text-[11px] text-neutral-500 font-medium">
-            credits remaining
-          </p>
+          <span className="text-[11px] font-medium text-neutral-400 truncate">
+            credits
+          </span>
         </div>
-        <p className="text-[10px] text-neutral-400 tabular-nums shrink-0 pb-0.5">
-          {loading ? "" : `${used.toLocaleString()} / ${total.toLocaleString()}`}
-        </p>
+        {!loading && total > 0 && (
+          <p className="text-[10px] font-medium text-neutral-400 tabular-nums shrink-0">
+            {used.toLocaleString()} / {total.toLocaleString()}
+          </p>
+        )}
       </div>
 
+      {/* Progress bar */}
       <div
-        className="h-1 w-full rounded-full overflow-hidden bg-neutral-200/80"
+        className="mt-2.5 h-1.5 w-full rounded-full overflow-hidden bg-neutral-100"
         aria-label="Credits remaining"
       >
         <div
@@ -135,9 +228,16 @@ function CreditsCard() {
         />
       </div>
 
-      <p className="mt-2.5 text-[11px] font-medium text-neutral-500 group-hover:text-neutral-800 transition-colors">
-        Manage plan →
-      </p>
+      {/* Footer link to usage */}
+      <div className="mt-2.5 flex items-center justify-between gap-2 pt-0.5">
+        <span className="text-[11px] font-medium text-neutral-500 group-hover:text-neutral-900 transition-colors">
+          {resetLabel ? `Resets ${resetLabel}` : "View usage"}
+        </span>
+        <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-neutral-700 group-hover:text-neutral-950 transition-colors">
+          Usage
+          <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+        </span>
+      </div>
     </Link>
   );
 }
@@ -147,33 +247,89 @@ export function AppSidebar() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [credits, setCredits] = useState<CreditsState>({
+    used: 0,
+    total: 0,
+    remaining: 0,
+    plan: null,
+    resetAt: null,
+    loading: true,
+  });
   const { getToken, isSignedIn } = useAuth();
   const { mobileSidebarOpen, closeMobileSidebar } = useAppLayout();
 
-  // Warm every app route so sidebar clicks feel instant.
+  useEffect(() => {
+    if (!isSignedIn) {
+      setHasActiveSubscription(false);
+      setCredits((prev) => ({ ...prev, loading: false }));
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+        const [creditsRes, subRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/payments/credits`, { headers }),
+          fetch(`${BACKEND_URL}/api/payments/subscription`, { headers }),
+        ]);
+
+        if (cancelled) return;
+
+        const subJson = subRes.ok ? await subRes.json().catch(() => null) : null;
+        const subscription = subJson?.subscription ?? null;
+        const subPlan = subscription?.plan ?? null;
+        const subActive =
+          !!subscription &&
+          (subscription.status === "active" ||
+            subscription.status === "past_due" ||
+            subscription.status === "on_hold");
+
+        if (creditsRes.ok) {
+          const { credits: c } = await creditsRes.json();
+          const nextUsed = c?.used ?? 0;
+          const nextTotal = c?.total ?? 0;
+          const resolvedPlan = c?.plan || subPlan || null;
+          setCredits({
+            used: nextUsed,
+            total: nextTotal,
+            remaining:
+              typeof c?.remaining === "number"
+                ? c.remaining
+                : Math.max(0, nextTotal - nextUsed),
+            plan: resolvedPlan,
+            resetAt: c?.resetAt ?? null,
+            loading: false,
+          });
+          setHasActiveSubscription(subActive || isPaidPlan(resolvedPlan));
+        } else {
+          setHasActiveSubscription(subActive || isPaidPlan(subPlan));
+          setCredits((prev) => ({ ...prev, plan: subPlan, loading: false }));
+        }
+      } catch {
+        if (!cancelled) {
+          setHasActiveSubscription(false);
+          setCredits((prev) => ({ ...prev, loading: false }));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, getToken]);
+
+  const navItems = baseNavItems.filter(
+    (item) => !(item.hideWhenPaid && hasActiveSubscription)
+  );
+
+  // Warm visible app routes so sidebar clicks feel instant.
   useEffect(() => {
     for (const { href } of navItems) {
       router.prefetch(href);
     }
-  }, [router]);
-
-  useEffect(() => {
-    if (!isSignedIn) { setHasActiveSubscription(false); return; }
-    (async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${BACKEND_URL}/api/payments/subscription`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (res.ok) {
-          const { subscription } = await res.json();
-          setHasActiveSubscription(!!subscription && (subscription.status === "active" || subscription.status === "on_hold"));
-        }
-      } catch {
-        setHasActiveSubscription(false);
-      }
-    })();
-  }, [isSignedIn, getToken]);
+  }, [router, hasActiveSubscription]);
 
   const sidebarFg = "hsl(var(--sidebar-fg))";
   const sidebarBorder = "hsl(var(--sidebar-border))";
@@ -256,7 +412,8 @@ export function AppSidebar() {
           {navItems.map(({ href, label, icon: Icon }) => {
             const isActive =
               pathname === href ||
-              (href !== "/app/studio" && pathname?.startsWith(href));
+              (href !== "/app/studio" && pathname?.startsWith(href)) ||
+              (href === "/app/assets" && pathname?.startsWith("/app/image"));
             return (
               <Link
                 key={href}
@@ -285,20 +442,19 @@ export function AppSidebar() {
           })}
         </nav>
 
-        {/* Credits – hide when collapsed on desktop */}
-        {!collapsed && (
-          <div
-            className="shrink-0 pb-3"
-            style={{
-              paddingLeft: "var(--sidebar-spacing)",
-              paddingRight: "var(--sidebar-spacing)",
-            }}
-          >
-            <CreditsCard />
-          </div>
-        )}
+        {/* Slot & Credits card */}
+        <div
+          className="shrink-0 pb-3 empty:hidden"
+          style={{
+            paddingLeft: "var(--sidebar-spacing)",
+            paddingRight: "var(--sidebar-spacing)",
+          }}
+        >
+          <SlotCard collapsed={collapsed} />
+          <CreditsCard credits={credits} collapsed={collapsed} />
+        </div>
 
-        {/* Upgrade */}
+        {/* Upgrade (only for non-paying users) */}
         {!hasActiveSubscription && (
           <div
             className="shrink-0 p-2 border-t"

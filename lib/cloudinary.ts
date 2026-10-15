@@ -33,6 +33,9 @@ export const HERO_STAGE_MODELS = [
   cloudinaryRaw("v1791059175/hydrilla-landing/hero/stage-b.glb"),
 ] as const;
 
+/** 404 grass field. Served from the original uncompressed model in /public. */
+export const NOT_FOUND_GRASS_URL = "/notfound-3d/simple_grass_chunks.glb";
+
 /** Full-viewport hero poster (WebP). */
 export const HERO_POSTER_URL = cloudinaryImage(
   "hydrilla-landing/hero/poster",

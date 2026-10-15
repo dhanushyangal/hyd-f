@@ -49,7 +49,7 @@ Text-to-3D is text-to-image followed by image-to-3D: **12** credits on Low, **15
 
 Credits are deducted atomically when the operation is submitted
 (`backend/src/services/credits.ts`). Image credits are refunded if the provider call fails.
-Free tier starts at **200** credits; Creator **1000** / Studio **4000** via Dodo subscriptions.
+Free starts at **100** credits; Starter and Slot include **900**; Pro and Slot Pro include **3,000** via Dodo subscriptions.
 
 ### Image options (text-to-image + edit)
 

@@ -215,7 +215,7 @@ export default function Footer() {
         .footer-root {
           width: 100%;
           background: #f7f6f3;
-          font-family: 'DM Sans', Arial, sans-serif;
+          font-family: var(--font-geist-sans), 'Geist', sans-serif;
           -webkit-font-smoothing: antialiased;
           box-sizing: border-box;
           overflow: hidden;
@@ -241,7 +241,7 @@ export default function Footer() {
 
         .footer-brand-name {
           margin: 0 0 0.75rem;
-          font-family: 'RoobertVF', 'Roobert', 'DM Sans', sans-serif;
+          font-family: var(--font-dm-sans), 'DM Sans', Arial, sans-serif;
           font-size: 1.75rem;
           font-weight: 600;
           letter-spacing: -0.03em;
@@ -272,7 +272,7 @@ export default function Footer() {
 
         .footer-col-heading {
           margin: 0 0 1.15rem;
-          font-family: 'RoobertVF', 'Roobert', 'DM Sans', sans-serif;
+          font-family: var(--font-dm-sans), 'DM Sans', Arial, sans-serif;
           font-size: 0.6875rem;
           font-weight: 600;
           letter-spacing: 0.12em;

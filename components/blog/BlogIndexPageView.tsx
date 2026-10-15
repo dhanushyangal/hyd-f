@@ -1,6 +1,7 @@
 import { Suspense } from "react";
+import Footer from "@/components/layout/Footer";
+import { ArticleColumn, ArticlePage } from "@/components/layout/ArticlePage";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { MarketingPage } from "@/components/layout/MarketingPage";
 import { BlogContinueSection } from "@/components/blog/BlogContinueSection";
 import { BlogIndexGrid } from "@/components/blog/BlogIndexGrid";
 import { createPageMetadata, getWebPageJsonLd } from "@/lib/seo";
@@ -13,21 +14,34 @@ export const blogIndexMetadata = createPageMetadata({
   absoluteTitle: true,
 });
 
+function BlogListSkeleton() {
+  return (
+    <ArticleColumn className="article-empty" aria-hidden>
+      <div className="space-y-8">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-3 border-b border-black/10 pb-8">
+            <div className="h-7 w-3/4 rounded bg-[#eff4fb]" />
+            <div className="h-4 w-full rounded bg-[#eff4fb]" />
+            <div className="h-4 w-1/3 rounded bg-[#eff4fb]" />
+          </div>
+        ))}
+      </div>
+    </ArticleColumn>
+  );
+}
+
 export function BlogGridSkeleton() {
   return (
-    <div className="mx-auto max-w-5xl space-y-10 px-5 py-10 sm:px-6 sm:py-14" aria-hidden>
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-7 w-20 animate-pulse rounded-full bg-neutral-100" />
-        ))}
-      </div>
-      <div className="h-64 animate-pulse rounded-2xl bg-neutral-100" />
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-72 animate-pulse rounded-xl bg-neutral-100" />
-        ))}
-      </div>
-    </div>
+    <>
+      <ArticlePage
+        headingId="blog-heading"
+        title="Blog"
+        subtitle="Notes on BlueFox, exports, and production 3D."
+      >
+        <BlogListSkeleton />
+      </ArticlePage>
+      <Footer />
+    </>
   );
 }
 
@@ -46,20 +60,19 @@ export function BlogIndexPageView({ page = 1, categorySlug }: BlogIndexPageViewP
           path: "/blog",
         })}
       />
-      <MarketingPage
-        eyebrow="Resources"
+      <ArticlePage
+        headingId="blog-heading"
         title="Blog"
-        description="Answer-first notes on BlueFox, exports, and production 3D. Written so a person or a model can quote them."
-        formats={false}
-        useBodyFontForTitle
+        subtitle="Notes on BlueFox, exports, and production 3D."
       >
-        <Suspense fallback={<BlogGridSkeleton />}>
+        <Suspense fallback={<BlogListSkeleton />}>
           <BlogIndexGrid page={page} categorySlug={categorySlug} />
         </Suspense>
         <Suspense fallback={null}>
           <BlogContinueSection />
         </Suspense>
-      </MarketingPage>
+      </ArticlePage>
+      <Footer />
     </>
   );
 }

@@ -23,6 +23,8 @@ type LibraryProps = {
   onNewWorkspace: () => void;
   /** Pill over the canvas when the library column is closed. */
   floating?: boolean;
+  /** Hidden when the library bar flag is the options list, so the full column stays closed. */
+  showLibraryToggle?: boolean;
 };
 
 /** Logo, library toggle, and workspace name. Only as wide as the library column. */
@@ -33,19 +35,22 @@ export function WorkspaceLibraryBar({
   onToggleLibrary,
   onNewWorkspace,
   floating = false,
+  showLibraryToggle = true,
 }: LibraryProps) {
   return (
     <div
       className={cn(
         "flex shrink-0 items-center bg-white",
         floating
-          ? "pointer-events-auto h-10 max-w-[220px] gap-0.5 rounded-full border border-neutral-200/80 px-1 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]"
+          ? "pointer-events-auto h-10 w-[220px] gap-0.5 rounded-full border border-neutral-200/80 px-1 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]"
           : "h-12 gap-1 border-b border-neutral-200/80 px-2"
       )}
     >
       <Link
-        href="/"
-        aria-label="Hydrilla home"
+        href="/app/studio"
+        prefetch
+        aria-label="Back to Studio"
+        title="Back to Studio"
         className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-900", FOCUS)}
       >
         <span className="relative h-[18px] w-[18px] logo-spin-hover">
@@ -53,16 +58,18 @@ export function WorkspaceLibraryBar({
         </span>
       </Link>
 
-      <button
-        type="button"
-        onClick={onToggleLibrary}
-        aria-pressed={libraryOpen}
-        aria-label={libraryOpen ? "Hide library" : "Show library"}
-        title="Library"
-        className={cn(ICON_BUTTON, "rounded-full", libraryOpen && "bg-neutral-100 text-neutral-950")}
-      >
-        <PanelLeft className="h-4 w-4" strokeWidth={1.85} />
-      </button>
+      {showLibraryToggle ? (
+        <button
+          type="button"
+          onClick={onToggleLibrary}
+          aria-pressed={libraryOpen}
+          aria-label={libraryOpen ? "Hide library" : "Show library"}
+          title="Library"
+          className={cn(ICON_BUTTON, "rounded-full", libraryOpen && "bg-neutral-100 text-neutral-950")}
+        >
+          <PanelLeft className="h-4 w-4" strokeWidth={1.85} />
+        </button>
+      ) : null}
 
       <div className="flex min-w-0 flex-1 items-center">
         <input

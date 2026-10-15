@@ -3,6 +3,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import { MarketingPage } from "@/components/layout/MarketingPage";
 import { createPageMetadata, FEATURES_META, getWebPageJsonLd } from "@/lib/seo";
 import { faqByQuestions } from "@/lib/faq";
+import { SANS_FONT as DISPLAY_FONT, GEIST_FONT as SANS_FONT } from "@/lib/fonts";
 
 export const metadata = createPageMetadata({
   title: "Features",
@@ -36,7 +37,7 @@ export default function FeaturesPage() {
       <MarketingPage
         eyebrow="Product"
         title="From first prompt to production."
-        description="Text-to-3D and image-to-3D, segmented meshes, PBR materials, in-browser preview, and GLB, FBX, OBJ, and USDZ exports for Unity, Unreal, and Blender."
+        description="Text-to-3D and image-to-3D with BlueFox, segmented meshes, PBR maps, Studio editing, API access, and exports for Unity, Unreal, and Blender."
         related={[
           { label: "BlueFox 3D", href: "/bluefox3d", hint: "What the model produces" },
           { label: "Docs", href: "/docs", hint: "First prompt to export" },
@@ -46,18 +47,18 @@ export default function FeaturesPage() {
         <FeaturesSection hideHeader />
         <section className="mx-auto max-w-[42rem] px-5 pb-4 sm:px-6">
           <h2
-            className="text-[22px] font-semibold tracking-[-0.03em] text-neutral-950"
-            style={{
-              fontFamily:
-                "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif",
-            }}
+            className="text-[22px] font-normal tracking-[-0.03em] text-neutral-950"
+            style={{ fontFamily: DISPLAY_FONT }}
           >
             Questions this page answers
           </h2>
-          <dl className="mt-8 space-y-8">
+          <dl className="mt-8 space-y-8" style={{ fontFamily: SANS_FONT }}>
             {FEATURE_FAQ.map((item) => (
               <div key={item.question}>
-                <dt className="text-[16px] font-semibold text-neutral-950">
+                <dt
+                  className="text-[16px] font-semibold text-neutral-950"
+                  style={{ fontFamily: DISPLAY_FONT }}
+                >
                   {item.question}
                 </dt>
                 <dd className="mt-2 text-[16px] leading-7 text-neutral-700">

@@ -25,7 +25,11 @@ import type { ModelBadge } from "../../components/workspace/ModelStatsOverlay";
 import { ResolutionDropdown } from "../../components/workspace/composer/ResolutionDropdown";
 import { InspectorPanel } from "../../components/workspace/inspector/InspectorPanel";
 import { LibraryPanel } from "../../components/workspace/library/LibraryPanel";
+import { LibraryRail } from "../../components/workspace/library/LibraryRail";
+import { LibraryOptionsBar } from "../../components/workspace/library/LibraryOptionsBar";
+import { LIBRARY_BAR } from "../../lib/library-bar";
 import { COMPOSER_SIZE } from "../../lib/composer-size";
+import { useSlotStatus } from "../../hooks/useSlotStatus";
 import { WorkspaceAccountBar, WorkspaceLibraryBar } from "../../components/workspace/shell/WorkspaceTopBar";
 import {
   CanvasEmptyState,
@@ -252,6 +256,7 @@ export default function WorkspacePageWrapper() {
 
 function WorkspacePage() {
   const { isSignedIn, getToken, isLoaded } = useAuth();
+  const slotStatus = useSlotStatus(getToken, !!isSignedIn);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -991,12 +996,26 @@ function WorkspacePage() {
   const [isCompact, setIsCompact] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 1023px)").matches : false
   );
-  const [libraryOpen, setLibraryOpen] = useState(() =>
-    typeof window !== "undefined" ? !window.matchMedia("(max-width: 1023px)").matches : true
-  );
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [leftLibraryTab, setLeftLibraryTab] = useState<"images" | "3d">("images");
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [fullView, setFullView] = useState(false);
+  const [hideSidebars, setHideSidebars] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable) return;
+      if (inspectorOpen) {
+        setInspectorOpen(false);
+        return;
+      }
+      if (fullView) setFullView(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [inspectorOpen, fullView]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -1573,6 +1592,15 @@ function WorkspacePage() {
     setIsRenderingMultiView(false);
   }, [setImage1, setFile1, setJobId1]);
 
+  const clearComposerDraft = useCallback(() => {
+    setPrompt("");
+    setEditPrompt("");
+    setAgentPrompt("");
+    setRefineDraft("");
+    setPendingAttach(null);
+    handleClearImage();
+  }, [setPrompt, handleClearImage]);
+
   // ──────────── Water (bring-your-own model): text → procedural Three.js ────────────
   // No GPU, no credits, no image required. The backend runs the img2threejs-style pipeline
   // (intake gate → spec → blockout codegen → code gate) and we just poll the pass names.
@@ -1656,6 +1684,8 @@ function WorkspacePage() {
         parentJobId: parentId,
         parentJobIds: parentId ? [parentId] : [],
       });
+      promptHistory.record(description, "water");
+      clearComposerDraft();
 
       // Invalidate any previous Water poll loop
       const pollGen = ++waterPollGenRef.current;
@@ -1846,6 +1876,8 @@ function WorkspacePage() {
       waterQualityTier,
       centerView,
       codeFactoryCode,
+      promptHistory.record,
+      clearComposerDraft,
     ]
   );
 
@@ -2104,6 +2136,8 @@ function WorkspacePage() {
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Generating image from text..." });
+      promptHistory.record(trimmedPrompt, "cloud");
+      clearComposerDraft();
 
       // Optimistic pending entry so the image library shows a loader immediately.
       const pendingTextImageId = addPendingJob({
@@ -2150,19 +2184,6 @@ function WorkspacePage() {
         setGeneratingPreview(false);
         mobileGenStartedAtRef.current = null;
         setMobileGeneratedToast(true);
-
-        // Auto-select the new image in the right panel for next action
-        setInputMode("text_1img");
-        setModeStates((prev) => ({
-          ...prev,
-          text_1img: {
-            ...prev.text_1img,
-            image1: result.image_url,
-            file1: null,
-            jobId1: result.preview_id,
-            prompt: prev.text_1img.prompt ?? "", // Keep prompt; new image is selected
-          },
-        }));
 
         // Text-only: no parent (root job)
         try { await registerJobWithPreview(result.preview_id, result.image_url, prompt.trim(), tokenGetter, null, null, workspaceId, null); } catch { /* non-critical */ }
@@ -2226,6 +2247,7 @@ function WorkspacePage() {
       setLastPreviewImageUrl(uploadedImageUrl);
       setLastPreviewId(jobId1);
       setCenterView({ type: "preview", imageUrl: uploadedImageUrl, previewId: jobId1 || undefined });
+      clearComposerDraft();
       await start3DFromImage(uploadedImageUrl, jobId1);
       return;
     }
@@ -2258,6 +2280,7 @@ function WorkspacePage() {
         setLastPreviewImageUrl(imageUrl);
         setLastPreviewId(jobId1);
         setCenterView({ type: "preview", imageUrl, previewId: jobId1 || undefined });
+        clearComposerDraft();
         await start3DFromImage(imageUrl, jobId1);
         return;
       }
@@ -2265,6 +2288,8 @@ function WorkspacePage() {
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Editing image..." });
+      promptHistory.record(prompt.trim(), "cloud");
+      clearComposerDraft();
       track("image_edit_started", {
         mode: "text_1img",
         provider: imageOptions.provider,
@@ -2340,19 +2365,6 @@ function WorkspacePage() {
         setGeneratingPreview(false);
         mobileGenStartedAtRef.current = null;
         setMobileGeneratedToast(true);
-
-        // Auto-select the new image in the right panel for next action
-        setInputMode("text_1img");
-        setModeStates((prev) => ({
-          ...prev,
-          text_1img: {
-            ...prev.text_1img,
-            image1: result.image_url,
-            file1: null,
-            jobId1: result.edit_id,
-            prompt: prev.text_1img.prompt ?? "",
-          },
-        }));
 
         try { await registerJobWithPreview(result.edit_id, result.image_url, prompt.trim(), tokenGetter, null, "EditImage", workspaceId, editParent, editParentIds, editSrcImages); } catch { /* non-critical */ }
         removePendingJob(pendingEditId);
@@ -2439,6 +2451,8 @@ function WorkspacePage() {
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Modifying 3D model..." });
+      promptHistory.record(effectivePrompt, "cloud");
+      clearComposerDraft();
 
       const pendingEditId = addPendingJob({
         generateType: "EditImage",
@@ -2502,7 +2516,6 @@ function WorkspacePage() {
           if (is3DModelFile && file1) {
             try {
               const snapshot = await renderGlbSnapshot(file1);
-              setImage1(snapshot.dataUrl);
               return snapshot.file;
             } catch (singleErr) {
               console.warn("Single snapshot failed:", singleErr);
@@ -2624,6 +2637,8 @@ function WorkspacePage() {
       setGeneratingPreview(true);
       markMobileGenerationStart();
       setCenterView({ type: "generating", progress: 0, message: "Synthesizing concept art from prompt..." });
+      promptHistory.record(effectivePrompt, "cloud");
+      clearComposerDraft();
 
       const pendingTextImageId = addPendingJob({
         generateType: "TextToImage",
@@ -2736,6 +2751,8 @@ function WorkspacePage() {
       setLastPreviewImageUrl(displayUrl);
       setLastPreviewId(parentId);
       setCenterView({ type: "preview", imageUrl: displayUrl, previewId: parentId || undefined });
+      if (effectivePrompt) promptHistory.record(effectivePrompt, "cloud");
+      clearComposerDraft();
       await start3DFromImage(displayUrl, parentId, file1);
     } finally {
       if (revokeState.url) {
@@ -3267,9 +3284,6 @@ function WorkspacePage() {
       return;
     }
     void handleGenerateImage(false);
-    if (hasWorkspaceContext) {
-      promptHistory.record(text, "cloud");
-    }
   };
 
   const isGenerating = loading || generatingPreview || (currentGenerating?.status === "generating");
@@ -3288,7 +3302,15 @@ function WorkspacePage() {
   const generatingProgress =
     centerView.type === "generating" ? centerView.progress : (currentGenerating?.progress ?? 0);
 
-  const handleToggleFullView = () => setFullView((v) => !v);
+  const handleToggleFullView = () => {
+    setFullView((v) => {
+      if (!v) setInspectorOpen(false);
+      return !v;
+    });
+  };
+  const handleToggleInspector = () => {
+    setInspectorOpen((v) => !v);
+  };
 
   const handleExportViewer = () => {
     if (centerView.type === "3d") {
@@ -3842,9 +3864,10 @@ function WorkspacePage() {
     );
   }
 
-  const libraryVisible = libraryOpen && !fullView;
+  const expandableLibrary = LIBRARY_BAR === "expandable";
+  const libraryVisible = expandableLibrary && libraryOpen && !fullView && !hideSidebars;
   const inspectorKind = centerView.type === "3d" || centerView.type === "code" ? centerView.type : null;
-  const inspectorVisible = inspectorOpen && !fullView && inspectorKind !== null;
+  const inspectorVisible = inspectorOpen && inspectorKind !== null;
   const library = (
     <LibraryPanel
       images={mergedLibraryImages}
@@ -3859,7 +3882,8 @@ function WorkspacePage() {
     />
   );
   const libraryFloat = !libraryVisible;
-  const accountFloat = !inspectorVisible;
+  const showLeftRail = libraryFloat && !fullView && !hideSidebars;
+  const accountFloat = !(inspectorVisible && isCompact);
   const openNewWorkspace = () => {
     setForcedWorkspaceModal(false);
     setNewWorkspaceName("");
@@ -3869,11 +3893,20 @@ function WorkspacePage() {
     <WorkspaceLibraryBar
       workspaceName={workspaceName}
       onWorkspaceNameChange={handleWorkspaceNameChange}
-      libraryOpen={!floating}
+      libraryOpen={expandableLibrary ? !floating : !hideSidebars && !fullView}
       floating={floating}
       onToggleLibrary={() => {
-        setFullView(false);
-        setLibraryOpen(floating);
+        if (expandableLibrary) {
+          setFullView(false);
+          setLibraryOpen(floating);
+          return;
+        }
+        if (fullView) {
+          setFullView(false);
+          setHideSidebars(false);
+          return;
+        }
+        setHideSidebars((v) => !v);
       }}
       onNewWorkspace={openNewWorkspace}
     />
@@ -3886,6 +3919,13 @@ function WorkspacePage() {
     />
   );
   const frameLift = fullView ? 0 : COMPOSER_SIZE === "large" ? 0.16 : COMPOSER_SIZE === "medium" ? 0.12 : 0.1;
+  const statsClassName = showLeftRail
+    ? expandableLibrary
+      ? "top-14"
+      : "left-[15.5rem] top-3"
+    : libraryFloat
+      ? "top-14"
+      : undefined;
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-white text-neutral-950 font-dm-sans">
@@ -3903,7 +3943,7 @@ function WorkspacePage() {
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {libraryVisible && !isCompact ? (
-          <div className="flex h-full w-[264px] shrink-0 flex-col overflow-hidden border-r border-neutral-200/80 bg-white pt-[env(safe-area-inset-top)]">
+          <div className="library-panel-in flex h-full w-[264px] shrink-0 flex-col overflow-hidden border-r border-neutral-200/80 bg-white pt-[env(safe-area-inset-top)]">
             {libraryBar(false)}
             {library}
           </div>
@@ -3916,7 +3956,7 @@ function WorkspacePage() {
               onClick={() => setLibraryOpen(false)}
               className="absolute inset-0 bg-black/20"
             />
-            <div className="relative flex h-full w-[264px] max-w-[85vw] flex-col overflow-hidden bg-white pt-[env(safe-area-inset-top)] shadow-[24px_0_60px_-30px_rgba(0,0,0,0.35)]">
+            <div className="library-panel-in relative flex h-full w-[264px] max-w-[85vw] flex-col overflow-hidden bg-white pt-[env(safe-area-inset-top)] shadow-[24px_0_60px_-30px_rgba(0,0,0,0.35)]">
               {libraryBar(false)}
               {library}
             </div>
@@ -3924,9 +3964,44 @@ function WorkspacePage() {
         ) : null}
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-50/50 pt-[env(safe-area-inset-top)]">
-          {libraryFloat ? <div className="absolute left-3 top-3 z-30">{libraryBar(true)}</div> : null}
+          {libraryFloat && !fullView ? <div className="absolute left-3 top-3 z-30">{libraryBar(true)}</div> : null}
+          {showLeftRail && expandableLibrary ? (
+            <div className="pointer-events-none absolute left-3 top-1/2 z-20 -translate-y-1/2">
+              <LibraryRail
+                images={mergedLibraryImages}
+                assets3D={mergedLibrary3DAssets}
+                loading={libraryLoading}
+                activeJobId={canvasJobId}
+                onImageClick={(job) => openLibraryItem(() => handleImageClick(job))}
+                on3DClick={(job) => openLibraryItem(() => handle3DClick(job))}
+                isWaterJobFn={isWaterJobFn}
+                onExpand={() => {
+                  setFullView(false);
+                  setLibraryOpen(true);
+                }}
+              />
+            </div>
+          ) : null}
+          {showLeftRail && !expandableLibrary ? (
+            <div className="pointer-events-none absolute left-3 top-1/2 z-20 w-[148px] -translate-y-1/2">
+              <LibraryOptionsBar
+                images={mergedLibraryImages}
+                assets3D={mergedLibrary3DAssets}
+                loading={libraryLoading}
+                activeJobId={canvasJobId}
+                onImageClick={(job) => openLibraryItem(() => handleImageClick(job))}
+                on3DClick={(job) => openLibraryItem(() => handle3DClick(job))}
+                isWaterJobFn={isWaterJobFn}
+              />
+            </div>
+          ) : null}
           {accountFloat ? (
-            <div className="pointer-events-none absolute right-3 top-3 z-30 flex items-center gap-2">
+            <div
+              className={cn(
+                "pointer-events-none absolute right-3 top-3 z-30 flex items-center gap-2 transition-transform duration-[320ms] ease-out motion-reduce:transition-none",
+                inspectorVisible && !isCompact && "-translate-x-[288px]"
+              )}
+            >
               {(centerView.type === "3d" || centerView.type === "code") && (
                 <ViewerToolbar
                   embedded
@@ -3937,7 +4012,7 @@ function WorkspacePage() {
                   fullView={fullView}
                   onToggleFullView={handleToggleFullView}
                   inspectorOpen={inspectorVisible}
-                  onToggleInspector={() => setInspectorOpen((v) => !v)}
+                  onToggleInspector={handleToggleInspector}
                 />
               )}
               <div className="pointer-events-auto flex items-center rounded-full border border-neutral-200/80 bg-white py-1 pl-1 pr-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
@@ -3955,7 +4030,7 @@ function WorkspacePage() {
               fullView={fullView}
               onToggleFullView={handleToggleFullView}
               inspectorOpen={inspectorVisible}
-              onToggleInspector={() => setInspectorOpen((v) => !v)}
+              onToggleInspector={handleToggleInspector}
             />
           )}
           {centerView.type === "empty" && (
@@ -4023,7 +4098,7 @@ function WorkspacePage() {
                 onPick={setSelectedPart}
                 viewRequest={viewRequest}
                 frameLift={frameLift}
-                statsClassName={libraryFloat ? "top-14" : undefined}
+                statsClassName={statsClassName}
                 onModelStats={(stats) => {
                   if (centerView.type === "code") setReportedStats({ id: centerView.jobId, stats });
                 }}
@@ -4083,7 +4158,7 @@ function WorkspacePage() {
                   statsBadge={canvasModelBadge}
                   viewRequest={viewRequest}
                   frameLift={frameLift}
-                  statsClassName={libraryFloat ? "top-14" : undefined}
+                  statsClassName={statsClassName}
                   onModelStats={(stats) => {
                     if (centerView.type === "3d") setReportedStats({ id: centerView.jobId, stats });
                   }}
@@ -4157,7 +4232,8 @@ function WorkspacePage() {
                 settings={composerSettings}
                 cost={composerConfig.cost}
                 submitLabel={composerConfig.label}
-                canSubmit={composerConfig.canSubmit && !isGenerating}
+                canSubmit={composerConfig.canSubmit && !isGenerating && !slotStatus.blockedNote}
+                blockedNote={slotStatus.blockedNote}
                 generating={isGenerating || (agentRefining && waterThread.busy)}
                 onSubmit={composerConfig.submit}
                 error={error}
@@ -4169,27 +4245,29 @@ function WorkspacePage() {
               />
             </div>
           ) : null}
-        </main>
 
-        {inspectorVisible && inspectorKind ? (
-          <InspectorPanel
-            kind={inspectorKind}
-            parts={Object.keys(authoredParts)}
-            selectedPart={selectedPart}
-            onSelectPart={setSelectedPart}
-            look={look}
-            onLookChange={updateLook}
-            partMaterial={selectedPartMaterial}
-            onPartMaterial={handlePartMaterial}
-            authoredPbr={authoredPbr}
-            onCameraView={requestCameraView}
-            stats={reportedStats && reportedStats.id === canvasJobId ? reportedStats.stats : null}
-            badge={inspectorKind === "code" ? { label: ENGINE.water.label, icon: "water" } : canvasModelBadge}
-            onClose={() => setInspectorOpen(false)}
-            overlay={isCompact}
-            account={accountBar}
-          />
-        ) : null}
+          {inspectorVisible && inspectorKind ? (
+            <div className={isCompact ? undefined : "pointer-events-none absolute inset-y-0 right-0 z-20"}>
+              <InspectorPanel
+                kind={inspectorKind}
+                parts={Object.keys(authoredParts)}
+                selectedPart={selectedPart}
+                onSelectPart={setSelectedPart}
+                look={look}
+                onLookChange={updateLook}
+                partMaterial={selectedPartMaterial}
+                onPartMaterial={handlePartMaterial}
+                authoredPbr={authoredPbr}
+                onCameraView={requestCameraView}
+                stats={reportedStats && reportedStats.id === canvasJobId ? reportedStats.stats : null}
+                badge={inspectorKind === "code" ? { label: ENGINE.water.label, icon: "water" } : canvasModelBadge}
+                onClose={() => setInspectorOpen(false)}
+                overlay={isCompact}
+                account={isCompact ? accountBar : null}
+              />
+            </div>
+          ) : null}
+        </main>
       </div>
     </div>
   );

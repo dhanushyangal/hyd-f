@@ -10,7 +10,7 @@ export default function FAQPage() {
       formats={false}
       related={[
         { label: "Docs", href: "/docs", hint: "Getting started" },
-        { label: "Pricing", href: "/pricing", hint: "Free, Starter, Pro" },
+        { label: "Pricing", href: "/pricing", hint: "Free, full access, and Slot" },
         { label: "Compare", href: "/compare", hint: "Vs Meshy, Luma, Tripo" },
       ]}
     >

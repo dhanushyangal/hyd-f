@@ -20,10 +20,9 @@ import {
   ChevronRight,
   PenLine,
   Download,
-  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { checkoutHref, formatUsd, normalizePlanId, planDisplayLabel, PRICING } from "@/lib/pricing";
+import { planDisplayLabel } from "@/lib/pricing";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 
@@ -61,36 +60,6 @@ type WaterUsageRow = {
   totalTokens: number | null;
   createdAt: string;
 };
-
-const PLANS = [
-  {
-    id: "free",
-    name: PRICING.free.label,
-    price: formatUsd(PRICING.free.monthly),
-    credits: PRICING.free.creditsLabel,
-    tagline: "Explore image and 3D generation.",
-    cta: "Start creating",
-    href: "/generate",
-  },
-  {
-    id: "starter",
-    name: PRICING.starter.label,
-    price: formatUsd(PRICING.starter.monthly),
-    credits: PRICING.starter.creditsLabel,
-    tagline: "More volume and quality for independent work.",
-    cta: "Choose Starter",
-    href: checkoutHref("starter"),
-  },
-  {
-    id: "pro",
-    name: PRICING.pro.label,
-    price: formatUsd(PRICING.pro.monthly),
-    credits: PRICING.pro.creditsLabel,
-    tagline: "Collaboration and scale for teams.",
-    cta: "Choose Pro",
-    href: checkoutHref("pro"),
-  },
-] as const;
 
 const BREAKDOWN_ICONS: Record<string, typeof Box> = {
   "3d": Box,
@@ -204,7 +173,6 @@ export default function UsagePage() {
       : Math.max(0, credits.total - credits.used)
     : 0;
   const resetStr = formatResetDate(credits?.resetAt);
-  const currentPlanId = normalizePlanId(credits?.plan);
   const planLabel = planDisplayLabel(credits?.plan);
 
   const now = Date.now();
@@ -287,70 +255,12 @@ export default function UsagePage() {
             </p>
           </div>
           <Link
-            href="/app/pricing"
-            className="inline-flex items-center justify-center gap-1.5 h-10 px-5 text-sm font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition-colors shrink-0"
+            href="/app/settings?section=billing"
+            className="inline-flex items-center justify-center gap-1.5 h-10 px-5 text-sm font-medium text-neutral-700 bg-white border border-neutral-200/80 hover:bg-neutral-50 hover:text-neutral-900 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors shrink-0"
           >
-            Manage plan
+            Billing
             <ChevronRight className="w-4 h-4" />
           </Link>
-        </div>
-
-        {/* Plan cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {PLANS.map((plan) => {
-            const isCurrent = currentPlanId === plan.id;
-            return (
-              <div
-                key={plan.id}
-                className={cn(
-                  "relative flex min-h-[220px] flex-col rounded-[22px] border bg-white p-5 transition-all duration-200",
-                  isCurrent
-                    ? "border-neutral-900 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(0,0,0,0.18)]"
-                    : "border-neutral-200/70 shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:border-neutral-300 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)]"
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[15px] font-semibold tracking-tight text-neutral-900">
-                      {plan.name}
-                    </p>
-                    <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-neutral-400">
-                      {plan.credits}
-                    </p>
-                  </div>
-                  {isCurrent && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-                      <Check className="h-3 w-3" strokeWidth={2.5} />
-                      Current
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-5 flex items-baseline gap-1.5">
-                  <span className="text-[32px] font-semibold tracking-[-0.04em] text-neutral-900">
-                    {plan.price}
-                  </span>
-                  <span className="text-sm text-neutral-500">/ month</span>
-                </div>
-                <p className="mt-2 text-sm leading-5 text-neutral-500 flex-1">
-                  {plan.tagline}
-                </p>
-
-                <Link
-                  href={isCurrent ? "/app/pricing" : plan.href}
-                  className={cn(
-                    "mt-5 inline-flex h-10 w-full items-center justify-center gap-1 rounded-full text-sm font-medium transition-colors",
-                    isCurrent
-                      ? "bg-neutral-100 text-neutral-800 hover:bg-neutral-200"
-                      : "bg-neutral-900 text-white hover:bg-neutral-800"
-                  )}
-                >
-                  {isCurrent ? "Manage plan" : plan.cta}
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              </div>
-            );
-          })}
         </div>
 
         {/* Credits balance */}

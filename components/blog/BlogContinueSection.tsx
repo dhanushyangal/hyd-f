@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MarketingPage } from "@/components/layout/MarketingPage";
+import { ArticleColumn } from "@/components/layout/ArticlePage";
 import { continueItemsToLinks, fetchBlogContinue } from "@/lib/blog";
 
 export async function BlogContinueSection({ excludeSlug }: { excludeSlug?: string }) {
@@ -8,18 +8,20 @@ export async function BlogContinueSection({ excludeSlug }: { excludeSlug?: strin
   if (!related.length) return null;
 
   return (
-    <nav className="mkt-related" aria-label="Related">
-      <p className="mkt-related-label">Continue</p>
-      <ul>
-        {related.map((item) => (
-          <li key={item.href}>
-            <Link href={item.href}>
-              <span className="mkt-related-title">{item.label}</span>
-              {item.hint ? <span className="mkt-related-hint">{item.hint}</span> : null}
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <nav className="article-continue" aria-label="Continue reading">
+      <ArticleColumn>
+        <h2 className="article-h3">Continue</h2>
+        <ul>
+          {related.map((item) => (
+            <li key={item.href}>
+              <Link href={item.href}>
+                <span>{item.label}</span>
+                {item.hint ? <span className="article-continue-hint">{item.hint}</span> : null}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </ArticleColumn>
     </nav>
   );
 }

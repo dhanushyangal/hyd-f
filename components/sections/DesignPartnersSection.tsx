@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
 
 export default function DesignPartnersSection() {
   return (
@@ -8,13 +9,13 @@ export default function DesignPartnersSection() {
       <div className="max-w-4xl mx-auto text-center">
         <p
           className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-4"
-          style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+          style={{ fontFamily: SANS_FONT }}
         >
           Design partners
         </p>
         <p
           className="text-neutral-600 text-sm sm:text-base"
-          style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+          style={{ fontFamily: GEIST_FONT }}
         >
           Studios and teams building production workflows with Hydrilla.
         </p>

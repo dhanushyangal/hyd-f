@@ -147,6 +147,8 @@ type Props = {
   cost: number | null;
   submitLabel: string;
   canSubmit: boolean;
+  /** Shown when the submit control is held, for example outside a booked hour. */
+  blockedNote?: string | null;
   generating: boolean;
   onSubmit: () => void;
   error: string | null;
@@ -238,6 +240,7 @@ export function Composer({
   cost,
   submitLabel,
   canSubmit,
+  blockedNote = null,
   generating,
   onSubmit,
   error,
@@ -424,6 +427,9 @@ export function Composer({
         </div>
         )}
 
+        {blockedNote ? (
+          <p className="px-3 pt-2 text-[12px] leading-5 text-neutral-600">{blockedNote}</p>
+        ) : null}
         <div className={cn("flex items-center gap-1 border-t border-neutral-200", metrics.foot)}>
           <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto no-scrollbar">{settings}</div>
 
@@ -443,8 +449,8 @@ export function Composer({
             type="button"
             onClick={submitIfReady}
             disabled={!ready}
-            aria-label={submitLabel}
-            title={submitLabel}
+            aria-label={blockedNote && !ready ? blockedNote : submitLabel}
+            title={blockedNote && !ready ? blockedNote : submitLabel}
             className={cn(
               "ml-1 flex shrink-0 items-center justify-center rounded-full",
               metrics.submit,

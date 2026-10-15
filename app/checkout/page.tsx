@@ -6,10 +6,11 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { track } from "@/lib/analytics";
 import {
   checkoutHref,
-  parsePaidPlanParam,
+  parseCheckoutPlanParam,
   planPriceLabel,
   PRICING,
-  type PaidPlanId,
+  SLOT_PRICING,
+  type CheckoutPlanId,
 } from "@/lib/pricing";
 
 // Ensure we never point at the frontend; use production API when env is wrong or unset
@@ -20,7 +21,7 @@ const BACKEND_URL =
     : "https://hydrilla-backend.vercel.app";
 
 const PLAN_INFO: Record<
-  PaidPlanId,
+  CheckoutPlanId,
   { label: string; credits: string; color: string }
 > = {
   starter: {
@@ -33,6 +34,16 @@ const PLAN_INFO: Record<
     credits: PRICING.pro.creditsLabel,
     color: "#111111",
   },
+  slot: {
+    label: SLOT_PRICING.slot.label,
+    credits: SLOT_PRICING.slot.summary,
+    color: "#3B8EE8",
+  },
+  slot_pro: {
+    label: SLOT_PRICING.slot_pro.label,
+    credits: SLOT_PRICING.slot_pro.summary,
+    color: "#111111",
+  },
 };
 
 function CheckoutContent() {
@@ -42,7 +53,7 @@ function CheckoutContent() {
   const { user } = useUser();
 
   const planParam = searchParams.get("plan") || "";
-  const plan: PaidPlanId | null = parsePaidPlanParam(planParam);
+  const plan: CheckoutPlanId | null = parseCheckoutPlanParam(planParam);
   const planInfo = plan ? PLAN_INFO[plan] : null;
   const priceLabel = plan ? planPriceLabel(plan) : null;
 
@@ -98,7 +109,7 @@ function CheckoutContent() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ plan: planParam, email: userEmail }),
+        body: JSON.stringify({ plan: plan ?? planParam, email: userEmail }),
       });
 
       let data: { error?: string; checkoutUrl?: string };
@@ -203,7 +214,7 @@ function CheckoutContent() {
             )}
 
             <p className="mt-6 text-xs text-gray-400">
-              You&apos;ll be securely redirected to our payment provider.
+              You will continue to Dodo Payments to pay.
             </p>
           </div>
         )}

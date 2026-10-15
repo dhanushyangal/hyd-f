@@ -69,7 +69,7 @@ Googlebot still sees `noindex` on `/brand`. Robots also Disallows `/brand` so it
 | `/` | Rank for Hydrilla / AI 3D generation. Entity home. | Brand sentence, product thesis, homepage JSON-LD (Organization + ResearchOrganization + two SoftwareApplications) |
 | `/features` | Sitelink + “what does it do”. | Generate, preview, export. FAQ answers for formats and engines. |
 | `/bluefox3d` | Rank the **model**, not only the company. | BlueFox 1 capabilities, PBR, exports. `SoftwareApplication` JSON-LD. Unique OG when set. |
-| `/pricing` | High-intent sitelink. | Free / Creator / Studio. Offer JSON-LD. |
+| `/pricing` | High-intent sitelink. | Free / Starter / Pro / Slot / Slot Pro. Offer JSON-LD. |
 | `/api` | Studio / developer sitelink. | Job-based generation, partner access. |
 | `/docs` | “How do I start” sitelink. | Getting started, text/image to 3D, preview, exports, workspaces, API. `TechArticle` JSON-LD. |
 | `/enterprise` | Volume buyers, not self-serve Studio. | Seats, API, security review path. |
@@ -167,7 +167,7 @@ Not listed: `/brand`, app routes, Water, Rigging.
 - The three entities and URLs
 - BlueFox 1 inputs / outputs / exports / limits
 - Four-step loop
-- Plan prices and credits
+- Current monthly plan prices, credits, and Slot windows
 - Public URL list
 - Contact + `sameAs` socials
 
@@ -229,7 +229,7 @@ Emitted as `<script type="application/ld+json">` from `components/seo/JsonLd.tsx
 | `WebPage` + `BreadcrumbList` | Most marketing pages | Hierarchy. |
 | `AboutPage` | `/about` | About intent. |
 | `FAQPage` | `/faq` | Rich results + answer engines. |
-| `Offer` on pricing | `/pricing` | Free / Creator / Studio prices. |
+| `Offer` on pricing | `/pricing` | Free / Starter / Pro / Slot / Slot Pro prices. |
 | `TechArticle` | `/docs` | Docs as an article, not a random webpage. |
 | `Article` | Blog + compare posts | Dates, publisher Hydrilla. |
 | `Person` | `/team` + founders on home | People graph. |

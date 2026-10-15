@@ -1,0 +1,15 @@
+---
+description: Do not use browser tools or browser automation in this project
+alwaysApply: true
+---
+
+# No browser actions
+
+Do not open, drive, inspect, or screenshot the app with browser tools. This includes Cursor browser tabs, snapshots, clicks, typing, CDP, screenshots, and lock/unlock.
+
+Verify UI another way when needed (types, tests, a local render check) and say that the browser was not used.
+
+```text
+❌ browser_navigate, browser_snapshot, browser_click, browser_cdp, browser_take_screenshot
+✅ read the component, typecheck, describe what was not checked in a browser
+```

@@ -5,11 +5,8 @@ import Image from "next/image";
 import { motion, useReducedMotion } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { WHY_HYDRILLA_MEDIA } from "@/lib/cloudinary";
+import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
-
-const FONT = "var(--font-dm-sans), 'DM Sans', sans-serif";
-const FONT_DISPLAY =
-  "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif";
 
 const RADIUS = "rounded-[28px] sm:rounded-[32px]";
 const GAP = "gap-3 sm:gap-3.5 lg:gap-4";
@@ -150,7 +147,7 @@ function BigTitle({
         className
       )}
       style={{
-        fontFamily: FONT_DISPLAY,
+        fontFamily: SANS_FONT,
         fontWeight: 700,
         textShadow: tone === "light" ? TITLE_SHADOW : undefined,
         WebkitFontSmoothing: "antialiased",
@@ -237,7 +234,7 @@ function BlueFoxHero({ className }: { className?: string }) {
         <p
           className="w-full shrink-0 pt-3 text-center text-[13px] font-semibold tracking-[-0.01em] text-white sm:text-sm"
           style={{
-            fontFamily: FONT,
+            fontFamily: GEIST_FONT,
             textShadow: TITLE_SHADOW,
           }}
         >
@@ -253,7 +250,7 @@ export default function WhyHydrilla() {
     <section
       id="why-hydrilla"
       className="relative w-full overflow-hidden bg-white px-3 py-16 sm:px-4 sm:py-20 md:px-5 lg:px-6 lg:py-24 xl:px-8"
-      style={{ fontFamily: FONT }}
+      style={{ fontFamily: SANS_FONT }}
       aria-labelledby="why-hydrilla-heading"
     >
       <div
@@ -270,7 +267,7 @@ export default function WhyHydrilla() {
             as="h2"
             id="why-hydrilla-heading"
             className="mt-3 text-[clamp(1.75rem,4vw,2.75rem)] font-bold leading-[1.08] tracking-[-0.035em] text-[#111]"
-            style={{ fontFamily: FONT_DISPLAY }}
+            style={{ fontFamily: SANS_FONT }}
           >
             Production-ready assets.
           </BlurReveal>
