@@ -23,6 +23,7 @@
     "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
     "dialkit": "^2.0.2",
+    "geist": "^1.7.2",
     "lucide-react": "^1.24.0",
     "motion": "^12.42.2",
     "next": "^16.1.1",

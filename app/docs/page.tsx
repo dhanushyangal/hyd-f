@@ -155,12 +155,12 @@ export default function DocsPage() {
               to a client-ready file without scattering assets across folders.
             </p>
             <p>
-              Usage is metered in credits. A reference image costs 2 credits
-              on Low or 5 on High, an edit costs 3 or 6, and each 3D model
-              costs 10. The free plan includes a monthly credit allotment so
-              you can evaluate the pipeline; Starter and Pro raise volume
-              and unlock additional export options. Plans can be changed from
-              account settings.
+              Usage is metered in credits. At default quality, a model from an
+              uploaded image costs 30 credits. Starting from text also creates
+              the source image, bringing the default total to 45 credits. Free
+              includes 100 credits; Starter and Slot include 900; Pro and Slot
+              Pro include 3,000. Slot plans use the same credit budgets during
+              a chosen daily generation window.
             </p>
           </DocSection>
 

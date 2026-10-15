@@ -6,6 +6,7 @@ import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Plus } from "lucide-react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { FAQ_ITEMS } from "@/lib/faq";
+import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
 
 interface FAQItemProps {
   question: string;
@@ -127,7 +128,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
         }
         .faq-kicker {
           margin: 0 0 0.875rem;
-          font-family: 'DM Sans', sans-serif;
+          font-family: ${SANS_FONT};
           font-size: 0.75rem;
           font-weight: 700;
           letter-spacing: 0.12em;
@@ -136,7 +137,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
         }
         .faq-title {
           margin: 0;
-          font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
+          font-family: ${SANS_FONT};
           font-size: clamp(2rem, 4.5vw, 3.25rem);
           font-weight: 700;
           color: #111827;
@@ -197,7 +198,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
           border-radius: 1.45rem 1.45rem 0.25rem 1.45rem;
           background: linear-gradient(135deg, #111827, #1f2937);
           color: #fff;
-          font-family: 'DM Sans', sans-serif;
+          font-family: ${SANS_FONT};
           font-size: 1rem;
           font-weight: 500;
           line-height: 1.55;
@@ -253,7 +254,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
           background: #fff;
           border: 1px solid rgba(148, 163, 184, 0.24);
           box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
-          font-family: 'DM Sans', sans-serif;
+          font-family: ${GEIST_FONT};
           font-size: 0.98rem;
           color: #334155;
           line-height: 1.7;

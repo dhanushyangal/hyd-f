@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import SeeWorkspaceButton from "../SeeWorkspaceButton";
 import { BlurReveal } from "@/components/ui/BlurReveal";
+import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
 
 const CLOUDINARY_WORKFLOW_BASE =
   "https://res.cloudinary.com/dqizbxc9e/image/upload";
@@ -49,7 +50,7 @@ export default function AppShowcase() {
           <BlurReveal
             as="h2"
             className="text-3xl sm:text-4xl md:text-5xl lg:text-[2.75rem] font-bold text-[#111] tracking-tight leading-[1.12]"
-            style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
+            style={{ fontFamily: SANS_FONT }}
           >
             Workflow for you
           </BlurReveal>
@@ -77,13 +78,13 @@ export default function AppShowcase() {
             >
               <h3
                 className="font-semibold text-[#111] text-[12px] sm:text-[13px] leading-tight tracking-[-0.01em]"
-                style={{ fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif" }}
+                style={{ fontFamily: SANS_FONT }}
               >
                 {tag.title}
               </h3>
               <p
                 className="mt-1 text-neutral-500 text-[11px] sm:text-[12px] leading-snug"
-                style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+                style={{ fontFamily: GEIST_FONT }}
               >
                 {tag.description}
               </p>

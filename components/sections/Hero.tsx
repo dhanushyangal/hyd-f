@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { motion } from "motion/react";
 import { savePendingHeroPrompt } from "@/lib/pendingHeroPrompt";
+import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
 import { PromptBox } from "../PromptBox";
 import { HeroStage } from "./HeroStage";
 
@@ -15,11 +16,6 @@ const ROTATING_PROMPTS = [
 ];
 
 const ROTATE_INTERVAL_MS = 3800;
-
-const FONT_DISPLAY =
-  '"Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", Times, serif';
-const FONT_BODY =
-  '"Helvetica Now Text", var(--font-dm-sans), Arial, Helvetica, sans-serif';
 
 export default function Hero() {
   const router = useRouter();
@@ -94,7 +90,7 @@ export default function Hero() {
           <h1
             className="text-balance font-medium text-[#000c1f]"
             style={{
-              fontFamily: FONT_DISPLAY,
+              fontFamily: SANS_FONT,
               fontSize: "clamp(3.4rem, calc(2.15rem + 5vw), 6.5rem)",
               lineHeight: 0.92,
               letterSpacing: "-0.03em",
@@ -105,7 +101,7 @@ export default function Hero() {
 
           <p
             className="max-w-xl text-pretty text-lg leading-snug tracking-[-0.015em] text-[#000c1f]/68 sm:text-xl md:text-[1.65rem]"
-            style={{ fontFamily: FONT_BODY }}
+            style={{ fontFamily: GEIST_FONT }}
           >
             AI-powered 3D generation for creators, studios, and platforms.
           </p>

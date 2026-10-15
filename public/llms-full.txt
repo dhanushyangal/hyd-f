@@ -30,11 +30,15 @@ Hydrilla is the product. Hawan Research Labs is the lab. BlueFox 3D is the model
 
 ## Plans (public)
 
-- Free: $0 / month, 200 credits / month, GLB export
-- Creator: $9 / month ($7 / month billed yearly, −20%), 1,000 credits / month, all formats (GLB, FBX, OBJ, USDZ)
-- Studio: $25 / month ($20 / month billed yearly, −20%), 4,000 credits / month, seats, REST API (10,000 calls / month), all formats
+- Free: $0 / month, 100 credits / month, generate any time, GLB export
+- Starter: $5 / month, 900 credits / month, generate any time, all formats (GLB, FBX, OBJ, USDZ)
+- Pro: $12 / month, 3,000 credits / month, generate any time, seats, REST API (10,000 calls / month), all formats
+- Slot: $3 / month, 900 credits / month (Starter budget), generation during one chosen hour each day, all formats
+- Slot Pro: $8 / month, 3,000 credits / month (Pro budget), generation during two chosen hours each day, all formats
 
-Plans can be upgraded, downgraded, or cancelled from account settings. Volume beyond Studio: https://hydrilla.ai/enterprise
+A default model costs 30 credits from an uploaded image. A text prompt also creates the source image, bringing the default total to 45 credits. At that rate, 100 credits covers about 2 models from text or 3 from uploaded images. 900 credits covers about 20 from text or 30 from images. 3,000 credits covers about 66 from text or 100 from images. Leftover credits stay on the account.
+
+Plans are monthly and managed from account settings. Switching to or from a Slot plan requires cancelling the current paid plan first. Volume beyond Pro: https://hydrilla.ai/enterprise
 
 ## Public pages
 

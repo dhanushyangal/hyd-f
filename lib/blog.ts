@@ -1,3 +1,5 @@
+import { PRICING, SLOT_PRICING } from "@/lib/pricing";
+
 export type BlogListPost = {
   slug: string;
   title: string;
@@ -32,6 +34,32 @@ export type ContinueItem = {
 };
 
 const BLOG_REVALIDATE = 3600;
+const PRICING_POST_EXCERPT =
+  `Free is $${PRICING.free.monthly} with ${PRICING.free.credits} credits. Starter is $${PRICING.starter.monthly}/month. Pro is $${PRICING.pro.monthly}/month. Slot and Slot Pro are $${SLOT_PRICING.slot.monthly} and $${SLOT_PRICING.slot_pro.monthly} for a chosen daily window.`;
+
+function withCanonicalPricing(post: BlogPost): BlogPost {
+  if (post.slug !== "hydrilla-pricing-explained") return post;
+
+  return {
+    ...post,
+    title: "Hydrilla pricing explained",
+    headline: "How do Hydrilla plans work?",
+    excerpt: PRICING_POST_EXCERPT,
+    seoTitle: "Hydrilla pricing explained: plans, credits, and model estimates",
+    seoDescription: PRICING_POST_EXCERPT,
+    updatedAt: "2026-10-15T00:00:00+00:00",
+    content: `<p>Hydrilla has five monthly plans. Free is $${PRICING.free.monthly} with ${PRICING.free.credits.toLocaleString("en-US")} credits and GLB export. Starter is $${PRICING.starter.monthly}/month with ${PRICING.starter.credits.toLocaleString("en-US")} credits. Pro is $${PRICING.pro.monthly}/month with ${PRICING.pro.credits.toLocaleString("en-US")} credits, seats, and REST API access. Starter and Pro export GLB, FBX, OBJ, and USDZ, and generate at any hour.</p>
+<p>Slot is $${SLOT_PRICING.slot.monthly}/month with the Starter credit budget and one daily generation hour. Slot Pro is $${SLOT_PRICING.slot_pro.monthly}/month with the Pro credit budget and two daily generation hours. You pick the window in Billing; the interface shows it in local time.</p>
+<h2>How many models do the credits cover?</h2>
+<p>A default model costs 30 credits from an uploaded image. A text prompt also creates the source image, bringing the default total to 45 credits. At that rate, 100 credits covers about 2 models from text or 3 from uploaded images. 900 credits covers about 20 from text or 30 from images. 3,000 credits covers about 66 from text or 100 from images. Leftover credits stay on the account.</p>
+<h2>Which plan fits which workflow?</h2>
+<p>Use Free to try the workflow. Starter fits individual creators who generate at any hour. Pro fits studios and small teams that need more volume, seats, or API access. Slot and Slot Pro fit work that can run during a chosen daily window.</p>
+<h2>Can I cancel?</h2>
+<p>Yes. Plans are monthly and managed from account settings. Switching to or from a Slot plan requires cancelling the current paid plan first.</p>
+<h2>Where are the official numbers?</h2>
+<p>The current plan table lives on <a href="/pricing">Pricing</a>. Volume beyond Pro is handled through <a href="/enterprise">Enterprise</a>.</p>`,
+  };
+}
 
 function backendBase(): string {
   return (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -57,13 +85,32 @@ export async function fetchBlogPosts(opts?: {
   if (opts?.limit) params.set("limit", String(opts.limit));
   if (opts?.category) params.set("category", opts.category);
   const qs = params.toString();
-  return fetchJson<BlogListResponse>(`/api/blog/posts${qs ? `?${qs}` : ""}`);
+  const result = await fetchJson<BlogListResponse>(
+    `/api/blog/posts${qs ? `?${qs}` : ""}`
+  );
+  return {
+    ...result,
+    posts: result.posts.map((post) =>
+      post.slug === "hydrilla-pricing-explained"
+        ? {
+            ...post,
+            title: "Hydrilla pricing explained",
+            headline: "How do Hydrilla plans work?",
+            excerpt: PRICING_POST_EXCERPT,
+            seoTitle:
+              "Hydrilla pricing explained: plans, credits, and model estimates",
+            seoDescription: PRICING_POST_EXCERPT,
+            updatedAt: "2026-10-15T00:00:00+00:00",
+          }
+        : post
+    ),
+  };
 }
 
 export async function fetchBlogPost(slug: string): Promise<BlogPost | null> {
   try {
     const data = await fetchJson<{ post: BlogPost }>(`/api/blog/posts/${encodeURIComponent(slug)}`);
-    return data.post;
+    return withCanonicalPricing(data.post);
   } catch {
     return null;
   }
@@ -74,7 +121,11 @@ export async function fetchBlogSlugs(): Promise<Array<{ slug: string; updatedAt:
     const data = await fetchJson<{ slugs: Array<{ slug: string; updatedAt: string }> }>(
       "/api/blog/slugs"
     );
-    return data.slugs;
+    return data.slugs.map((item) =>
+      item.slug === "hydrilla-pricing-explained"
+        ? { ...item, updatedAt: "2026-10-15T00:00:00+00:00" }
+        : item
+    );
   } catch {
     return [];
   }

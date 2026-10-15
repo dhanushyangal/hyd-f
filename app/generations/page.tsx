@@ -1,16 +1,114 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { motion } from "motion/react";
-import { fetchWorkspace, fetchWorkspaceJobs, getProxiedImageUrl } from "../../lib/api";
+import { ArrowLeft, Box, Droplets, Image as ImageIcon, Search, X } from "lucide-react";
+import { fetchWorkspace, fetchWorkspaceJobs, getProxiedImageUrl, type BackendJob } from "../../lib/api";
+import { isWaterJob } from "../../lib/engines";
 import { cn, getCurrentWorkspaceId } from "../../lib/utils";
-import type { BackendJob } from "../../lib/api";
-import { Button } from "../../components/ui/button";
 
 const displayImageUrl = (url: string | null | undefined): string => getProxiedImageUrl(url) || url || "";
+
+type Tab = "images" | "3d";
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function isImageJob(job: BackendJob): boolean {
+  return Boolean(job.previewImageUrl || job.imageUrl) && !job.resultGlbUrl && !isWaterJob(job);
+}
+
+function is3DJob(job: BackendJob): boolean {
+  return Boolean(job.resultGlbUrl) || isWaterJob(job);
+}
+
+function GenerationCard({
+  job,
+  kind,
+  onSelect,
+}: {
+  job: BackendJob;
+  kind: Tab;
+  onSelect: () => void;
+}) {
+  const preview = displayImageUrl(job.previewImageUrl || job.imageUrl);
+  const water = isWaterJob(job);
+  const badge = kind === "images" ? "Image" : water ? "Water" : "3D";
+  const title = job.prompt?.trim() || (kind === "images" ? "Untitled image" : water ? "Water scene" : "3D model");
+  const running = job.status === "RUN" || job.status === "WAIT" || job.id.startsWith("pending-");
+  const failed = job.status === "FAIL";
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="group min-w-0 w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 rounded-[20px]"
+    >
+      <div className="relative aspect-square overflow-hidden rounded-[20px] border border-neutral-200/80 bg-gradient-to-b from-neutral-100 to-neutral-50 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] transition-[transform,box-shadow] duration-200 ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_2px_6px_rgba(0,0,0,0.05),0_16px_40px_-16px_rgba(0,0,0,0.18)] group-active:scale-[0.98]">
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center text-neutral-300">
+            {kind === "images" ? (
+              <ImageIcon className="h-7 w-7" strokeWidth={1.5} />
+            ) : water ? (
+              <Droplets className="h-7 w-7" strokeWidth={1.5} />
+            ) : (
+              <Box className="h-7 w-7" strokeWidth={1.5} />
+            )}
+          </span>
+        )}
+
+        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full border border-black/[0.06] bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-neutral-700 shadow-xs backdrop-blur-md">
+          {kind === "images" ? (
+            <ImageIcon className="h-3 w-3" strokeWidth={2.1} aria-hidden />
+          ) : water ? (
+            <Droplets className="h-3 w-3" strokeWidth={2.1} aria-hidden />
+          ) : (
+            <Box className="h-3 w-3" strokeWidth={2.1} aria-hidden />
+          )}
+          {badge}
+        </span>
+
+        {running || failed ? (
+          <span
+            className={cn(
+              "absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full ring-2 ring-white shadow-sm",
+              failed ? "bg-red-500" : "bg-amber-400 animate-pulse"
+            )}
+            aria-label={failed ? "Failed" : "In progress"}
+          />
+        ) : null}
+      </div>
+
+      <div className="mt-2.5 px-0.5">
+        <p className="truncate text-[13px] font-semibold tracking-tight text-neutral-900">{title}</p>
+        <p className="mt-0.5 text-[11px] text-neutral-400">
+          {badge}
+          {job.createdAt ? ` · ${formatDate(job.createdAt)}` : ""}
+        </p>
+      </div>
+    </button>
+  );
+}
 
 export default function GenerationsPage() {
   const router = useRouter();
@@ -20,7 +118,7 @@ export default function GenerationsPage() {
   const [libraryImages, setLibraryImages] = useState<BackendJob[]>([]);
   const [library3DAssets, setLibrary3DAssets] = useState<BackendJob[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"images" | "3d">("images");
+  const [tab, setTab] = useState<Tab>("images");
   const [searchQuery, setSearchQuery] = useState("");
   const [previewImage, setPreviewImage] = useState<BackendJob | null>(null);
 
@@ -39,281 +137,283 @@ export default function GenerationsPage() {
     }
     setWorkspaceId(id);
     setLoading(true);
-    Promise.all([
-      fetchWorkspace(id, tokenGetter).then((ws) => ws?.name ?? ""),
-      fetchWorkspaceJobs(id, tokenGetter),
-    ])
+    Promise.all([fetchWorkspace(id, tokenGetter).then((ws) => ws?.name ?? ""), fetchWorkspaceJobs(id, tokenGetter)])
       .then(([name, jobs]) => {
         setWorkspaceName(name);
-        setLibraryImages(jobs.filter((j) => (j.previewImageUrl || j.imageUrl) && !j.resultGlbUrl).slice(0, 50));
-        setLibrary3DAssets(jobs.filter((j) => j.resultGlbUrl).slice(0, 50));
+        const sorted = [...jobs].sort((a, b) => Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
+        setLibraryImages(sorted.filter(isImageJob).slice(0, 80));
+        setLibrary3DAssets(sorted.filter(is3DJob).slice(0, 80));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [isLoaded, isSignedIn, tokenGetter, router]);
 
-  const filteredImages = libraryImages.filter((a) =>
-    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
-  const filtered3D = library3DAssets.filter((a) =>
-    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    if (!previewImage) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewImage(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewImage]);
 
-  const handleImageClick = (item: BackendJob) => {
-    setPreviewImage(item);
-  };
+  const filteredImages = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return libraryImages;
+    return libraryImages.filter((a) => (a.prompt || "").toLowerCase().includes(q));
+  }, [libraryImages, searchQuery]);
 
+  const filtered3D = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return library3DAssets;
+    return library3DAssets.filter((a) => (a.prompt || "").toLowerCase().includes(q));
+  }, [library3DAssets, searchQuery]);
+
+  const items = tab === "images" ? filteredImages : filtered3D;
+  const totalCount = tab === "images" ? libraryImages.length : library3DAssets.length;
+
+  const handleImageClick = (item: BackendJob) => setPreviewImage(item);
   const handle3DClick = (item: BackendJob) => {
     router.push(`/workspace?open3d=${encodeURIComponent(item.id)}`);
   };
 
   if (!isLoaded || !isSignedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-        <div className="w-8 h-8 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
+      <div className="flex min-h-dvh items-center justify-center bg-[var(--app-canvas)] font-dm-sans">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-900" />
       </div>
     );
   }
 
-  if (!workspaceId) {
-    return null;
-  }
+  if (!workspaceId) return null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      {/* Header: back to workspace + title */}
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-200 bg-white shrink-0">
-        <Link
-          href="/workspace"
-          className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-neutral-100 text-neutral-600 transition-colors shrink-0"
-          aria-label="Back to workspace"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </Link>
-        <h1 className="text-lg font-semibold tracking-tight text-neutral-900 truncate flex-1 text-center mx-2">
-          {workspaceName || "Generations"}
-        </h1>
-        <div className="w-10 shrink-0" />
+    <div className="flex min-h-dvh flex-col bg-[var(--app-canvas)] font-dm-sans text-neutral-950">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-neutral-200/80 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
+          <Link
+            href="/workspace"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-600 outline-none transition-colors hover:bg-neutral-100 hover:text-neutral-950 focus-visible:ring-2 focus-visible:ring-neutral-900"
+            aria-label="Back to workspace"
+            title="Back to workspace"
+          >
+            <ArrowLeft className="h-5 w-5" strokeWidth={1.85} />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">Generations</p>
+            <h1 className="truncate text-[15px] font-semibold tracking-tight text-neutral-900 sm:text-[17px]">
+              {workspaceName || "Workspace"}
+            </h1>
+          </div>
+          <Link
+            href="/workspace"
+            className="hidden h-10 shrink-0 items-center rounded-full bg-neutral-950 px-4 text-[13px] font-semibold text-white outline-none transition-colors hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 sm:inline-flex"
+          >
+            Open workspace
+          </Link>
+        </div>
       </header>
 
-      {/* Search */}
-      <div className="px-3 py-3 border-b border-neutral-100">
-        <div className="relative">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-full pl-10 pr-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder:text-neutral-500 text-sm focus:border-neutral-300 focus:ring-2 focus:ring-neutral-200/80 focus:outline-none transition-shadow"
-          />
-        </div>
-      </div>
+      <main className="scrollbar-minimal min-h-0 flex-1 overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+          <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-[26px] font-semibold tracking-[-0.03em] text-neutral-900 sm:text-[32px]">
+                {tab === "images" ? "Images" : "3D models"}
+              </h2>
+              <p className="mt-1.5 text-sm text-neutral-500">
+                {loading
+                  ? "Loading this workspace…"
+                  : searchQuery.trim()
+                    ? `${items.length} match${items.length === 1 ? "" : "es"}`
+                    : `${totalCount} ${totalCount === 1 ? "item" : "items"} in this workspace`}
+              </p>
+            </div>
 
-      {/* Tabs: Images | 3D — shadcn buttons + sliding pill */}
-      <div className="px-3 pt-3 pb-2">
-        <div
-          role="tablist"
-          aria-label="Library tabs"
-          className="relative inline-flex h-11 w-full items-center rounded-full bg-neutral-100 p-1 border border-neutral-200/80"
-        >
-          <motion.div
-            className="absolute top-1 bottom-1 rounded-full bg-neutral-950 shadow-sm"
-            initial={false}
-            animate={{
-              left: tab === "images" ? 4 : "50%",
-              width: "calc(50% - 4px)",
-            }}
-            transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
-            aria-hidden
-          />
-          <Button
-            type="button"
-            role="tab"
-            variant="ghost"
-            aria-selected={tab === "images"}
-            onClick={() => setTab("images")}
-            title="Images"
-            className={cn(
-              "relative z-10 h-full flex-1 gap-2 rounded-full text-sm font-semibold hover:bg-transparent",
-              tab === "images" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
-            )}
-          >
-            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-            Images
-          </Button>
-          <Button
-            type="button"
-            role="tab"
-            variant="ghost"
-            aria-selected={tab === "3d"}
-            onClick={() => setTab("3d")}
-            title="3D Assets"
-            className={cn(
-              "relative z-10 h-full flex-1 gap-2 rounded-full text-sm font-semibold hover:bg-transparent",
-              tab === "3d" ? "text-white hover:text-white" : "text-neutral-500 hover:text-neutral-800"
-            )}
-          >
-            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-              <line x1="12" y1="22.08" x2="12" y2="12" />
-            </svg>
-            3D
-          </Button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 min-h-0">
-        {tab === "images" && (
-          <div className="space-y-4">
-            <h2 className="text-xs font-bold text-neutral-800 uppercase tracking-widest">Images</h2>
-            {loading ? (
-              <div className="flex items-center justify-center min-h-[160px]">
-                <div className="w-8 h-8 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
+            <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-56">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search prompts…"
+                  aria-label="Search generations"
+                  className="h-11 w-full rounded-full border border-neutral-200/80 bg-white pl-9 pr-9 text-[13px] text-neutral-900 shadow-[0_1px_2px_rgba(0,0,0,0.03)] outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-400 sm:h-10"
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </div>
-            ) : filteredImages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center min-h-[160px] rounded-2xl bg-neutral-50 border border-dashed border-neutral-200 text-neutral-600 text-sm gap-3">
-                <svg className="w-10 h-10 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-                <span>No images in this workspace yet</span>
+
+              <div
+                role="tablist"
+                aria-label="Generation type"
+                className="inline-flex h-11 w-full items-center gap-0.5 overflow-x-auto rounded-full border border-neutral-200/80 bg-white p-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:h-10 sm:w-auto"
+              >
+                {(
+                  [
+                    { id: "images" as const, label: "Images", count: libraryImages.length },
+                    { id: "3d" as const, label: "3D", count: library3DAssets.length },
+                  ] as const
+                ).map((item) => {
+                  const selected = tab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setTab(item.id)}
+                      className={cn(
+                        "h-full min-w-0 flex-1 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-colors sm:flex-none",
+                        selected ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-800"
+                      )}
+                    >
+                      {item.label}
+                      {item.count > 0 ? (
+                        <span className={cn("ml-1.5 tabular-nums text-[10px]", selected ? "text-white/70" : "text-neutral-400")}>
+                          {item.count}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 sm:mt-8">
+            {loading ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 md:grid-cols-4 lg:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="animate-pulse">
+                    <div className="aspect-square rounded-[20px] bg-neutral-200/70" />
+                    <div className="mt-3 h-3.5 w-2/3 rounded-full bg-neutral-200/70" />
+                    <div className="mt-1.5 h-3 w-1/3 rounded-full bg-neutral-200/50" />
+                  </div>
+                ))}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-[24px] border border-dashed border-neutral-200 bg-white px-6 py-16 text-center sm:py-20">
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100">
+                  {tab === "images" ? (
+                    <ImageIcon className="h-7 w-7 text-neutral-400" strokeWidth={1.5} />
+                  ) : (
+                    <Box className="h-7 w-7 text-neutral-400" strokeWidth={1.5} />
+                  )}
+                </div>
+                <p className="text-[17px] font-semibold tracking-tight text-neutral-900">
+                  {searchQuery.trim()
+                    ? "No matches"
+                    : tab === "images"
+                      ? "No images yet"
+                      : "No 3D models yet"}
+                </p>
+                <p className="mt-1.5 max-w-sm text-sm text-neutral-500">
+                  {searchQuery.trim()
+                    ? "Try another keyword, or clear the search."
+                    : tab === "images"
+                      ? "Generate or edit an image in this workspace and it will show up here."
+                      : "Generate a 3D model in this workspace and open it from here."}
+                </p>
+                {searchQuery.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="mt-6 inline-flex h-11 items-center rounded-full border border-neutral-200 bg-white px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
+                  >
+                    Clear search
+                  </button>
+                ) : (
+                  <Link
+                    href="/workspace"
+                    className="mt-6 inline-flex h-11 items-center rounded-full bg-neutral-950 px-5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800"
+                  >
+                    Back to workspace
+                  </Link>
+                )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {filteredImages.map((item) => (
-                  <button
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 md:grid-cols-4 lg:grid-cols-5">
+                {items.map((item) => (
+                  <GenerationCard
                     key={item.id}
-                    type="button"
-                    onClick={() => handleImageClick(item)}
-                    className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-lg active:scale-[0.98] transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-neutral-300"
-                  >
-                    {(item.previewImageUrl || item.imageUrl) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={displayImageUrl(item.previewImageUrl || item.imageUrl)}
-                        alt={item.prompt || "Image"}
-                        className="w-full h-full object-cover pointer-events-none"
-                      />
-                    ) : (
-                      <span className="text-neutral-600 text-xs text-center px-2 truncate max-w-full font-medium">
-                        {item.prompt || "Image"}
-                      </span>
-                    )}
-                  </button>
+                    job={item}
+                    kind={tab}
+                    onSelect={() => (tab === "images" ? handleImageClick(item) : handle3DClick(item))}
+                  />
                 ))}
               </div>
             )}
           </div>
-        )}
+        </div>
+      </main>
 
-        {tab === "3d" && (
-          <div className="space-y-4">
-            <h2 className="text-xs font-bold text-neutral-800 uppercase tracking-widest">3D Assets</h2>
-            {loading ? (
-              <div className="flex items-center justify-center min-h-[160px]">
-                <div className="w-8 h-8 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
-              </div>
-            ) : filtered3D.length === 0 ? (
-              <div className="flex flex-col items-center justify-center min-h-[160px] rounded-2xl bg-neutral-50 border border-dashed border-neutral-200 text-neutral-600 text-sm gap-3">
-                <svg className="w-10 h-10 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-                <span>No 3D assets in this workspace yet</span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {filtered3D.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handle3DClick(item)}
-                    className="aspect-square rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-400 hover:shadow-lg active:scale-[0.98] transition-all cursor-pointer bg-white shadow-sm flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-neutral-300"
-                  >
-                    {item.previewImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={displayImageUrl(item.previewImageUrl)}
-                        alt={item.prompt || "3D Asset"}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center text-neutral-500">
-                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
-                        <span className="text-xs mt-1 font-medium">3D</span>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Image preview popup — tap X to close */}
-      {previewImage && (
+      {previewImage ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-6"
           onClick={() => setPreviewImage(null)}
           role="dialog"
           aria-modal="true"
           aria-label="Image preview"
         >
           <div
-            className="relative max-w-full max-h-full rounded-2xl overflow-hidden bg-white shadow-2xl"
+            className="relative flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[24px] border border-neutral-200/70 bg-white shadow-[0_24px_80px_-16px_rgba(0,0,0,0.28)] sm:rounded-[24px]"
             onClick={(e) => e.stopPropagation()}
           >
-            {(previewImage.previewImageUrl || previewImage.imageUrl) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={displayImageUrl(previewImage.previewImageUrl || previewImage.imageUrl)}
-                alt={previewImage.prompt || "Preview"}
-                className="max-w-full max-h-[85vh] w-auto h-auto object-contain"
-              />
-            ) : (
-              <div className="w-64 h-64 flex items-center justify-center text-neutral-500 text-sm">
-                {previewImage.prompt || "Image"}
-              </div>
-            )}
-            {previewImage.prompt && (
-              <p className="p-3 text-xs text-neutral-600 line-clamp-2 border-t border-neutral-100">
-                {previewImage.prompt}
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-neutral-100 px-4">
+              <p className="truncate pr-3 text-[13px] font-medium text-neutral-700">
+                {previewImage.prompt || "Image preview"}
               </p>
-            )}
-            <Button
-              type="button"
-              onClick={() => setPreviewImage(null)}
-              size="sm"
-              className="absolute top-2 right-2 h-10 w-10 rounded-full bg-black/50 p-0 hover:bg-black/70"
-              aria-label="Close preview"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </Button>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-neutral-500 outline-none transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-neutral-900"
+                aria-label="Close preview"
+              >
+                <X className="h-5 w-5" strokeWidth={1.85} />
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-neutral-50 p-4 sm:p-6">
+              {(previewImage.previewImageUrl || previewImage.imageUrl) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={displayImageUrl(previewImage.previewImageUrl || previewImage.imageUrl)}
+                  alt={previewImage.prompt || "Preview"}
+                  className="max-h-[min(70dvh,640px)] max-w-full rounded-2xl object-contain shadow-[0_8px_30px_-12px_rgba(0,0,0,0.2)]"
+                />
+              ) : (
+                <div className="flex h-64 w-64 items-center justify-center text-sm text-neutral-500">
+                  {previewImage.prompt || "Image"}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-neutral-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="inline-flex h-10 items-center rounded-full px-4 text-[13px] font-medium text-neutral-600 hover:bg-neutral-100"
+              >
+                Close
+              </button>
+              <Link
+                href="/workspace"
+                className="inline-flex h-10 items-center rounded-full bg-neutral-950 px-4 text-[13px] font-semibold text-white hover:bg-neutral-800"
+              >
+                Open in workspace
+              </Link>
+            </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

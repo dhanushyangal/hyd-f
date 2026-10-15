@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { SignInButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { BlurReveal } from "@/components/ui/BlurReveal";
+import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
 
 interface ShowcaseItem {
   id: string;
@@ -338,7 +339,7 @@ export default function Showcase() {
           <BlurReveal
             as="h2"
             className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-[#111] leading-tight tracking-tight"
-            style={{ fontFamily: "var(--font-dm-sans), DM Sans, sans-serif" }}
+            style={{ fontFamily: SANS_FONT }}
           >
             The Industry&apos;s Best Generative 3D Models
           </BlurReveal>
@@ -524,7 +525,7 @@ export default function Showcase() {
                       )}
                       <span 
                         className="text-base sm:text-lg font-semibold text-white"
-                        style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
+                        style={{ fontFamily: SANS_FONT }}
                       >
                         {item.name}
                       </span>
@@ -540,7 +541,7 @@ export default function Showcase() {
                     <div className="mb-3 sm:mb-4">
                       <span 
                         className="text-xs sm:text-sm font-medium text-white/95 uppercase tracking-widest"
-                        style={{ fontFamily: "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif" }}
+                        style={{ fontFamily: SANS_FONT }}
                       >
                         Create
                       </span>
@@ -549,7 +550,7 @@ export default function Showcase() {
                     {/* Description Text - Adjusted size */}
                     <p 
                       className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white leading-[1.1]"
-                      style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif' }}
+                      style={{ fontFamily: GEIST_FONT }}
                     >
                       &ldquo;{item.description}&rdquo;
                     </p>
@@ -561,7 +562,7 @@ export default function Showcase() {
                       <Link
                         href="/app/studio"
                         className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit no-underline text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out"
-                        style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif', lineHeight: '100%' }}
+                        style={{ fontFamily: SANS_FONT, lineHeight: '100%' }}
                       >
                         Create 3D
                       </Link>
@@ -571,7 +572,7 @@ export default function Showcase() {
                         <button
                           type="button"
                           className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out cursor-pointer"
-                          style={{ fontFamily: 'var(--font-dm-sans), DM Sans, sans-serif', lineHeight: '100%' }}
+                          style={{ fontFamily: SANS_FONT, lineHeight: '100%' }}
                         >
                           Create 3D
                         </button>

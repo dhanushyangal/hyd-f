@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion, useReducedMotion } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { cloudinaryImage } from "@/lib/cloudinary";
-import { DISPLAY_FONT as DISPLAY, SANS_FONT as SANS } from "@/lib/glyphic";
+import { SANS_FONT as DISPLAY, GEIST_FONT as SANS } from "@/lib/fonts";
 
 /** Explicit WebP + width — avoids Next Image Optimizer timeouts on large f_auto PNGs. */
 const workflowStepImage = (id: string) =>
@@ -153,7 +153,7 @@ function StepRow({ step }: { step: Step }) {
         <div className="mx-auto flex w-full max-w-md flex-col gap-4 md:mx-0 md:max-w-xs lg:max-w-sm">
           <span
             className="text-xs font-medium uppercase"
-            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: SANS }}
+            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: DISPLAY }}
           >
             Step {step.number}
           </span>
@@ -211,7 +211,7 @@ export default function HowItWorks() {
         <header className="flex flex-col items-center gap-3 px-6 text-center">
           <p
             className="m-0 text-xs font-medium uppercase"
-            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: SANS }}
+            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: DISPLAY }}
           >
             Process
           </p>

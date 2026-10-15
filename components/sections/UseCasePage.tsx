@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
 import { USE_CASE_NAV, type UseCaseId } from "@/lib/usecases";
 import { cn } from "@/lib/utils";
 
@@ -143,6 +144,7 @@ function UseCaseSwitcher({ currentId }: { currentId: UseCaseId }) {
                         "mt-0.5 block text-[12px] leading-snug",
                         active ? "text-white/65" : "text-neutral-500"
                       )}
+                      style={{ fontFamily: GEIST_FONT }}
                     >
                       {item.blurb}
                     </span>
@@ -209,7 +211,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
   const hasHero = Boolean(displayHeroSrc);
 
   return (
-    <main className="w-full bg-white font-dm-sans antialiased">
+    <main className="w-full bg-white antialiased" style={{ fontFamily: SANS_FONT }}>
       {/* Hero — Clay-style: switcher + headline + CTA + image */}
       <section className="relative overflow-hidden border-b border-neutral-200/80 bg-[#fafafa]">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 pb-14 pt-28 sm:px-6 sm:pb-16 sm:pt-32 lg:grid-cols-[minmax(0,1fr)_minmax(280px,480px)] lg:items-end lg:gap-12 lg:pb-20 lg:pt-36">
@@ -220,7 +222,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
               <h1 className="text-[36px] font-semibold leading-[1.08] tracking-[-0.035em] text-neutral-950 sm:text-[44px] lg:text-[52px]">
                 {data.headline}
               </h1>
-              <p className="mt-4 max-w-lg text-[16px] leading-7 text-neutral-600 sm:text-[17px]">
+              <p className="mt-4 max-w-lg text-[16px] leading-7 text-neutral-600 sm:text-[17px]" style={{ fontFamily: GEIST_FONT }}>
                 {data.tagline}
               </p>
             </div>
@@ -281,7 +283,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
               {data.capabilitiesHeading ?? "Built for your pipeline"}
             </h2>
             {data.example ? (
-              <p className="mt-4 text-[16px] leading-7 text-neutral-600">
+              <p className="mt-4 text-[16px] leading-7 text-neutral-600" style={{ fontFamily: GEIST_FONT }}>
                 {data.example}
               </p>
             ) : null}
@@ -302,7 +304,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
                     <h3 className="text-[15px] font-semibold tracking-tight text-neutral-950">
                       {feature.title}
                     </h3>
-                    <p className="mt-1.5 text-[14px] leading-6 text-neutral-600">
+                    <p className="mt-1.5 text-[14px] leading-6 text-neutral-600" style={{ fontFamily: GEIST_FONT }}>
                       {feature.body}
                     </p>
                   </div>
@@ -334,7 +336,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
                 <p className="text-[14px] font-semibold tracking-tight text-neutral-950">
                   {item.role}
                 </p>
-                <p className="mt-2 text-[13px] leading-6 text-neutral-600">
+                <p className="mt-2 text-[13px] leading-6 text-neutral-600" style={{ fontFamily: GEIST_FONT }}>
                   {item.description}
                 </p>
               </div>
@@ -349,7 +351,7 @@ export default function UseCasePage({ data }: { data: UseCaseData }) {
           <h2 className="text-[28px] font-semibold tracking-[-0.03em] text-white sm:text-[36px]">
             Start generating today
           </h2>
-          <p className="max-w-md text-[15px] leading-7 text-neutral-400">
+          <p className="max-w-md text-[15px] leading-7 text-neutral-400" style={{ fontFamily: GEIST_FONT }}>
             Production-ready 3D from text or image. Export GLB, FBX, OBJ, and USDZ.
           </p>
           <div className="flex flex-wrap gap-3 sm:justify-center">

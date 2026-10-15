@@ -12,7 +12,7 @@ import {
 import { getAllArticles } from "@/lib/content";
 import { fetchBlogPost, htmlToMarkdownLite } from "@/lib/blog";
 import { FAQ_ITEMS } from "@/lib/faq";
-import { PRICING } from "@/lib/pricing";
+import { PRICING, SLOT_PRICING } from "@/lib/pricing";
 
 const PAGE_MARKDOWN: Record<string, string> = {
   index: `# ${SITE_NAME}
@@ -34,7 +34,7 @@ Generate from a text prompt or a reference image, preview in the browser, and ex
 
 Hydrilla is for production-ready generated assets you can refine. It is not CAD, not print-ready engineering, and not a finished hero with no artist pass.
 
-Plans: Free ($${PRICING.free.monthly}, ${PRICING.free.creditsLabel}), Starter ($${PRICING.starter.monthly}/mo), Pro ($${PRICING.pro.monthly}/mo).
+Plans: Free ($${PRICING.free.monthly}, ${PRICING.free.creditsLabel}), Starter ($${PRICING.starter.monthly}/mo), Pro ($${PRICING.pro.monthly}/mo), Slot ($${SLOT_PRICING.slot.monthly}/mo, ${SLOT_PRICING.slot.detail}), and Slot Pro ($${SLOT_PRICING.slot_pro.monthly}/mo, ${SLOT_PRICING.slot_pro.detail}).
 `,
   about: `# About Hydrilla
 
@@ -53,13 +53,19 @@ Research: ${SITE_URL}/research
 BlueFox 3D: ${SITE_URL}/bluefox3d
 Contact: ${SITE_URL}/contact
 `,
-  pricing: `# Hydrilla Pricing
+  pricing: `# What a month of Hydrilla costs
 
-Free: $${PRICING.free.monthly}, ${PRICING.free.creditsLabel}, GLB export.
-Starter: $${PRICING.starter.monthly}/mo, ${PRICING.starter.creditsLabel}, GLB, FBX, OBJ, USDZ.
-Pro: $${PRICING.pro.monthly}/mo, ${PRICING.pro.creditsLabel}, seats, REST API (10,000 calls/month), all formats.
+Free: $${PRICING.free.monthly}, ${PRICING.free.creditsLabel}, generate any time, GLB export.
+Starter: $${PRICING.starter.monthly}/mo, ${PRICING.starter.creditsLabel}, generate any time, GLB, FBX, OBJ, USDZ.
+Pro: $${PRICING.pro.monthly}/mo, ${PRICING.pro.creditsLabel}, generate any time, seats, REST API (10,000 calls/month), all formats.
+Slot: $${SLOT_PRICING.slot.monthly}/mo, ${SLOT_PRICING.slot.credits.toLocaleString("en-US")} credits, ${SLOT_PRICING.slot.detail}, ${SLOT_PRICING.slot.exports}.
+Slot Pro: $${SLOT_PRICING.slot_pro.monthly}/mo, ${SLOT_PRICING.slot_pro.credits.toLocaleString("en-US")} credits, ${SLOT_PRICING.slot_pro.detail}, ${SLOT_PRICING.slot_pro.exports}.
 
-Plans can be upgraded, downgraded, or cancelled from account settings.
+A default model costs 30 credits from an uploaded image. A text prompt also creates the source image, bringing the default total to 45 credits.
+
+At default quality, 100 credits covers about 2 models from text or 3 from uploaded images. 900 credits covers about 20 from text or 30 from images. 3,000 credits covers about 66 from text or 100 from images.
+
+Plans are monthly and can be managed from account settings. Switching to or from a Slot plan requires cancelling the current paid plan first. Volume beyond Pro: ${SITE_URL}/enterprise
 
 ${SITE_URL}/pricing
 `,
@@ -69,7 +75,7 @@ ${BRAND_SENTENCE}
 
 Text-to-3D and image-to-3D, segmented meshes, PBR materials, in-browser preview, and GLB, FBX, OBJ, and USDZ exports for Unity, Unreal, and Blender.
 
-GLB on Free; all formats on Starter and Pro.
+GLB on Free; GLB, FBX, OBJ, and USDZ on Starter, Pro, Slot, and Slot Pro.
 
 ${SITE_URL}/features
 `,
@@ -92,7 +98,7 @@ ${SITE_URL}/bluefox3d
 1. Create an account and open a workspace.
 2. Start a generation with a text prompt or a reference image (${MODEL_NAME}).
 3. Wait for the mesh. Inspect parts, PBR, and silhouette in the browser preview.
-4. Export GLB (Free) or GLB/FBX/OBJ/USDZ (Starter/Pro).
+4. Export GLB (Free) or GLB/FBX/OBJ/USDZ (Starter, Pro, Slot, Slot Pro).
 5. Import into Unity, Unreal, Blender, or your DCC.
 
 Features: ${SITE_URL}/features

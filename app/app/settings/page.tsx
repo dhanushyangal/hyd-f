@@ -40,7 +40,8 @@ import {
 } from "@/lib/api";
 import { FALLBACK_CONNECTORS } from "@/lib/connectors";
 import { migrateCodeModelId, type ApiKeyProvider, type ModelId } from "@/lib/models";
-import { planDisplayLabel } from "@/lib/pricing";
+import { checkoutHref, planDisplayLabel, PRICING, SLOT_PRICING, type CheckoutPlanId } from "@/lib/pricing";
+import { SlotHours } from "@/components/app/SlotHours";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,11 @@ export default function SettingsPage() {
       setSection("billing");
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const asked = new URLSearchParams(window.location.search).get("section");
+    if (asked === "billing") setSection("billing");
+  }, []);
 
   const load = async () => {
     if (!isSignedIn) return;
@@ -213,8 +219,10 @@ type BillingPayment = {
 function receiptPlan(plan: string | null): string {
   if (plan === "starter") return "Starter";
   if (plan === "pro") return "Pro";
-  if (plan === "creator") return "Creator";
-  if (plan === "studio") return "Studio";
+  if (plan === "slot") return "Slot";
+  if (plan === "slot_pro") return "Slot Pro";
+  if (plan === "creator") return "Starter";
+  if (plan === "studio") return "Pro";
   return "Subscription";
 }
 
@@ -243,6 +251,126 @@ function rewardSourceLabel(source: string): string {
     return "Bonus";
   }
   return "System";
+}
+
+type CompactPlanOption = {
+  id: CheckoutPlanId;
+  name: string;
+  priceLabel: string;
+  description: string;
+  cta: string;
+  href: string;
+};
+
+function resolveCanonicalPlan(plan: string | null): "free" | CheckoutPlanId {
+  const raw = (plan ?? "").toLowerCase();
+  if (raw === "starter" || raw === "creator") {
+    return "starter";
+  }
+  if (raw === "pro" || raw === "studio") {
+    return "pro";
+  }
+  if (raw === "slot") {
+    return "slot";
+  }
+  if (raw === "slot_pro" || raw === "slot-pro") {
+    return "slot_pro";
+  }
+  return "free";
+}
+
+function getCurrentPlanDetails(canonical: "free" | CheckoutPlanId): {
+  name: string;
+  priceLabel: string;
+  description: string;
+  quotaTitle: string;
+} {
+  switch (canonical) {
+    case "starter":
+      return {
+        name: PRICING.starter.label,
+        priceLabel: `$${PRICING.starter.monthly} /mo.`,
+        description:
+          "Entry-level paid plan with 900 monthly credits (~30 3D models), commercial use, and 24/7 generation.",
+        quotaTitle: "900 Monthly Credits Included",
+      };
+    case "pro":
+      return {
+        name: PRICING.pro.label,
+        priceLabel: `$${PRICING.pro.monthly} /mo.`,
+        description:
+          "High-volume plan with 3,000 monthly credits (~100 3D models), commercial use, and priority scale.",
+        quotaTitle: "3,000 Monthly Credits Included",
+      };
+    case "slot":
+      return {
+        name: SLOT_PRICING.slot.label,
+        priceLabel: `$${SLOT_PRICING.slot.monthly} /mo.`,
+        description:
+          "900 monthly credits with 1 dedicated daily generation hour (up to 2 seats per hour).",
+        quotaTitle: "900 Credits · 1h Daily Window",
+      };
+    case "slot_pro":
+      return {
+        name: SLOT_PRICING.slot_pro.label,
+        priceLabel: `$${SLOT_PRICING.slot_pro.monthly} /mo.`,
+        description:
+          "3,000 monthly credits with 2 dedicated daily generation hours (up to 4 seats per window).",
+        quotaTitle: "3,000 Credits · 2h Daily Window",
+      };
+    default:
+      return {
+        name: PRICING.free.label,
+        priceLabel: `$${PRICING.free.monthly} /mo.`,
+        description:
+          "Free access with 100 monthly credits for exploring image and 3D model generation.",
+        quotaTitle: "100 Monthly Credits Included",
+      };
+  }
+}
+
+function getUpgradeOptions(canonical: "free" | CheckoutPlanId): CompactPlanOption[] {
+  const proCard: CompactPlanOption = {
+    id: "pro",
+    name: PRICING.pro.label,
+    priceLabel: `$${PRICING.pro.monthly} /mo.`,
+    description:
+      "3,000 monthly credits, about 100 default models from uploaded images, and generation at any time.",
+    cta: "Upgrade to Pro",
+    href: checkoutHref("pro"),
+  };
+  const starterCard: CompactPlanOption = {
+    id: "starter",
+    name: PRICING.starter.label,
+    priceLabel: `$${PRICING.starter.monthly} /mo.`,
+    description:
+      "900 monthly credits, about 30 default models from uploaded images, and generation at any time.",
+    cta: canonical === "pro" || canonical === "slot_pro" ? "Switch to Starter" : "Upgrade to Starter",
+    href: checkoutHref("starter"),
+  };
+  const slotProCard: CompactPlanOption = {
+    id: "slot_pro",
+    name: SLOT_PRICING.slot_pro.label,
+    priceLabel: `$${SLOT_PRICING.slot_pro.monthly} /mo.`,
+    description:
+      "Get 3,000 monthly credits with a 2-hour daily generation window at a lower monthly rate.",
+    cta: canonical === "pro" ? "Switch to Slot Pro" : "Upgrade to Slot Pro",
+    href: checkoutHref("slot_pro"),
+  };
+
+  if (canonical === "starter") {
+    return [proCard, slotProCard];
+  }
+  if (canonical === "slot") {
+    return [starterCard, slotProCard];
+  }
+  if (canonical === "slot_pro") {
+    return [proCard, starterCard];
+  }
+  if (canonical === "pro") {
+    return [starterCard, slotProCard];
+  }
+  return [starterCard, proCard];
 }
 
 function BillingSection() {
@@ -332,64 +460,21 @@ function BillingSection() {
     }
   };
 
+  const canonicalPlan = resolveCanonicalPlan(plan);
+  const currentPlanMeta = getCurrentPlanDetails(canonicalPlan);
+  const upgradeOptions = getUpgradeOptions(canonicalPlan);
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="px-5 pt-5 pb-0">
-          <h2 className="text-[15px] font-semibold tracking-tight text-neutral-900">Current plan</h2>
-        </CardHeader>
-        <CardContent className="px-5 pb-5 pt-3">
-          {loading ? (
-            <p className="text-sm text-neutral-500">Loading…</p>
-          ) : (
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <p className="text-[22px] font-semibold tracking-tight text-neutral-900">
-                  {planDisplayLabel(plan)}
-                </p>
-                <p className="mt-1 text-sm text-neutral-500">
-                  {plan && cancelAtPeriodEnd
-                    ? `Cancels ${accessLabel || "at the end of this period"}. You keep this plan until then.`
-                    : plan && renewLabel
-                      ? `Renews ${renewLabel}`
-                      : "Free includes 100 credits a month."}
-                </p>
-                {credits ? (
-                  <p className="mt-2 text-sm text-neutral-600 tabular-nums">
-                    {credits.remaining} / {credits.total} credits remaining
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <Link
-                  href="/app/pricing"
-                  className="text-sm font-medium text-neutral-900 underline underline-offset-2"
-                >
-                  {plan ? "Change plan" : "See plans"}
-                </Link>
-                {plan && !cancelAtPeriodEnd && (
-                  <button
-                    type="button"
-                    onClick={() => void cancelRenewal()}
-                    disabled={cancelling}
-                    className="text-sm font-medium text-neutral-500 underline underline-offset-2 hover:text-neutral-900 disabled:opacity-50"
-                  >
-                    {cancelling ? "Cancelling…" : "Cancel renewal"}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <SlotHours getToken={getToken} active={plan === "slot" || plan === "slot_pro"} />
 
       <Card>
         <CardHeader className="px-5 pt-5 pb-0">
-          <h2 className="text-[15px] font-semibold tracking-tight text-neutral-900">Payment history</h2>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">Payment history</p>
         </CardHeader>
         <CardContent className="px-5 pb-5 pt-3">
           {error && (
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="mb-3 text-sm text-red-700">{error}</p>
           )}
           {loading ? (
             <div className="flex items-center gap-2 py-6 text-sm text-neutral-500">
@@ -486,6 +571,121 @@ function BillingSection() {
           )}
         </CardContent>
       </Card>
+
+      {/* Compact plan & upgrade cards at the end of billing */}
+      {!loading && (
+        <section className="space-y-3 pt-1" aria-label="Plan options">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {upgradeOptions.map((option) => (
+              <div
+                key={option.id}
+                className="flex flex-col justify-between rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+              >
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <h3 className="text-[16px] font-semibold tracking-[-0.02em] text-neutral-900">
+                      {option.name}
+                    </h3>
+                    <span className="text-[13px] font-medium text-neutral-400 tabular-nums">
+                      {option.priceLabel}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-neutral-500">
+                    {option.description}
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <Link
+                    href={option.href}
+                    className="inline-flex h-8 items-center rounded-lg bg-neutral-900 px-3.5 text-[12px] font-medium text-white transition-colors hover:bg-neutral-800"
+                  >
+                    {option.cta}
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] sm:grid-cols-2 sm:items-stretch">
+            <div className="flex flex-col justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-[16px] font-semibold tracking-[-0.02em] text-neutral-900">
+                    {currentPlanMeta.name}
+                  </h3>
+                  <span
+                    className={cn(
+                      "rounded-md px-2 py-0.5 text-[11px] font-medium",
+                      plan && cancelAtPeriodEnd
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-neutral-100 text-neutral-600"
+                    )}
+                  >
+                    {plan && cancelAtPeriodEnd ? "Ending" : "Current"}
+                  </span>
+                  <span className="text-[13px] font-medium text-neutral-400 tabular-nums">
+                    {currentPlanMeta.priceLabel}
+                  </span>
+                </div>
+                <p className="mt-2 text-[13px] leading-relaxed text-neutral-500">
+                  {plan && cancelAtPeriodEnd
+                    ? `You keep ${planDisplayLabel(plan)} until ${accessLabel || "the end of this period"}. It will not renew.`
+                    : currentPlanMeta.description}
+                </p>
+              </div>
+
+              <div className="mt-6 pt-1">
+                {plan && !cancelAtPeriodEnd ? (
+                  <button
+                    type="button"
+                    onClick={() => void cancelRenewal()}
+                    disabled={cancelling}
+                    className="inline-flex h-8 items-center rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-900 disabled:opacity-50"
+                  >
+                    {cancelling ? "Cancelling…" : "Adjust Plan"}
+                  </button>
+                ) : !plan ? (
+                  <Link
+                    href="/app/pricing"
+                    className="inline-flex h-8 items-center rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
+                  >
+                    Adjust Plan
+                  </Link>
+                ) : (
+                  <span className="inline-flex h-8 items-center rounded-lg border border-neutral-200/70 bg-neutral-50 px-3 text-[12px] font-medium text-neutral-400">
+                    Cancellation scheduled
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-between rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
+              <div>
+                <p className="text-[14px] font-semibold tracking-[-0.01em] text-neutral-900">
+                  {currentPlanMeta.quotaTitle}
+                </p>
+                <div
+                  aria-hidden
+                  className="my-2.5 border-b border-dotted border-neutral-300"
+                />
+                <p className="text-[12px] leading-relaxed text-neutral-500">
+                  {plan && !cancelAtPeriodEnd && renewLabel
+                    ? `Renews ${renewLabel} · View your credit breakdown and Water BYOK usage`
+                    : "Go beyond or monitor your plan's included quota in the usage dashboard"}
+                </p>
+              </div>
+              <div className="mt-4">
+                <Link
+                  href="/app/usage"
+                  className="inline-flex h-8 items-center rounded-lg bg-neutral-900 px-3.5 text-[12px] font-medium text-white transition-colors hover:bg-neutral-800"
+                >
+                  View Usage
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

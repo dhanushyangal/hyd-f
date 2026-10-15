@@ -35,7 +35,7 @@ export function InspectorPanel({ onClose, overlay, kind, stats = null, badge = n
     <aside
       aria-label="Adjust"
       className={cn(
-        "flex h-full w-[288px] max-w-[85vw] shrink-0 flex-col overflow-hidden border-l border-neutral-200/80 bg-white pt-[env(safe-area-inset-top)] select-none",
+        "inspector-panel-in pointer-events-auto flex h-full w-[288px] max-w-[85vw] shrink-0 flex-col overflow-hidden border-l border-neutral-200/80 bg-white pt-[env(safe-area-inset-top)] select-none",
         overlay && "shadow-[-24px_0_60px_-30px_rgba(0,0,0,0.35)]"
       )}
     >

@@ -109,7 +109,7 @@ Emit from `JsonLd.tsx`. Homepage `@graph` today is only Organization + WebSite +
 | `/about` | `AboutPage` |
 | `/research` | `ResearchOrganization` (full) + `WebPage` + `BreadcrumbList` |
 | `/bluefox3d` | `SoftwareApplication` BlueFox 1 + `WebPage` + `BreadcrumbList` |
-| `/pricing` | `Offer` for Free / Creator / Studio (prices already on page: $0 / $9 / $25 monthly) |
+| `/pricing` | `Offer` for Free / Starter / Pro / Slot / Slot Pro (current prices: $0 / $5 / $12 / $3 / $8 monthly) |
 | `/faq` | `FAQPage` with **all** Q&A from `lib/faq.ts` (must match visible SSR text) |
 | `/docs` | `TechArticle` only once docs have real body; otherwise noindex and no schema |
 | `/team` | `Person` for each listed person (name, jobTitle, url, `sameAs` LinkedIn if present) |
@@ -396,7 +396,7 @@ Keep the six existing cards (text/image, segmentation, PBR, exports, preview, wo
 
 Add a short FAQ (also reuse on `/faq` where overlapping):
 
-- **What formats does Hydrilla export?** GLB, FBX, OBJ, and USDZ (GLB on Free; all formats on Creator and Studio).
+- **What formats does Hydrilla export?** GLB, FBX, OBJ, and USDZ (GLB on Free; all formats on Starter and Pro).
 - **Which engines and tools?** Unity, Unreal, Blender, and other DCCs that ingest those formats. Film vertical also names Maya, Cinema 4D, and Houdini as import targets, not plugins we ship.
 - **Text or image?** Both.
 
@@ -449,7 +449,7 @@ Emit `FAQPage` JSON-LD with these exact questions and answers.
 1. Create an account and open a workspace.  
 2. Start a generation with a text prompt or a reference image (BlueFox 1).  
 3. Wait for the mesh. Inspect parts, PBR, and silhouette in the browser preview.  
-4. Export GLB (Free) or GLB/FBX/OBJ/USDZ (Creator/Studio).  
+4. Export GLB (Free) or GLB/FBX/OBJ/USDZ (Starter/Pro).
 5. Import into Unity, Unreal, Blender, or your DCC.
 
 Link Features, Pricing, API, FAQ. If you cannot ship this much, `noindex` the current “Coming Soon” page and drop it from the sitemap.
@@ -459,14 +459,14 @@ Link Features, Pricing, API, FAQ. If you cannot ship this much, `noindex` the cu
 Replace “Coming soon” **or** noindex it. Preferred short page:
 
 **H1:** Hydrilla API  
-Studio plans include REST API access (10,000 calls/month on Studio). Programmatic generation for pipelines. Partner and volume access via [Contact](/contact). Email `founders@hydrilla.ai`.
+Pro plans include REST API access (10,000 calls/month on Pro). Programmatic generation for pipelines. Partner and volume access via [Contact](/contact). Email `founders@hydrilla.ai`.
 
-Do not claim a public OpenAPI if it does not exist. If there is no callable public API yet, say “API access is available on Studio and by partner arrangement” and keep a waitlist/contact CTA. That is still better than “Coming soon” in the sitemap.
+Do not claim a public OpenAPI if it does not exist. If there is no callable public API yet, say “API access is available on Pro and by partner arrangement” and keep a waitlist/contact CTA. That is still better than “Coming soon” in the sitemap.
 
 ### 4.9 Security `/security`
 
 **Title:** `Security | Hydrilla`  
-Short page: accounts via Clerk; generated assets and exports are private on Creator/Studio as stated on Pricing; contact for enterprise security review. No invented certifications (SOC2 etc.) unless you already have them.
+Short page: accounts via Clerk; generated assets and exports are private on Starter/Pro as stated on Pricing; contact for enterprise security review. No invented certifications (SOC2 etc.) unless you already have them.
 
 ### 4.10 Careers `/careers`
 
@@ -490,7 +490,7 @@ Keep existing capability blocks.
 
 ### 4.13 Pricing
 
-Keep Free $0 / Creator $9 / Studio $25 and the compare table. Add the free/cancel/formats FAQ from §4.6. Offer JSON-LD. Enterprise stays a contact block pointing at `/contact` (and `/security` once live).
+Keep the current monthly catalog: Free $0, Starter $5, Pro $12, Slot $3, and Slot Pro $8. Add the free/cancel/formats/Slot FAQ from §4.6. Offer JSON-LD. Enterprise stays a contact block pointing at `/contact` (and `/security` once live).
 
 ---
 
@@ -536,7 +536,7 @@ Only link `.md` files that you actually generate. If docs/api are noindex stubs,
 
 ### `public/llms-full.txt`
 
-Include: brand sentence; the three entities and URLs; BlueFox 1 inputs/outputs/exports/limits from the Research model card; four-step loop; plan prices and credits from live Pricing (Free 200 / Creator 1,000 / Studio 4,000; $0 / $9 / $25; formats and seats as on the page); public URL list; contact `founders@hydrilla.ai`; `sameAs` socials. Do not list `/brand`, app routes, Water, or Rigging.
+Include: brand sentence; the three entities and URLs; BlueFox 1 inputs/outputs/exports/limits from the Research model card; four-step loop; plan prices and credits from live Pricing (Free 100 / Starter and Slot 900 / Pro and Slot Pro 3,000; $0 / $5 / $3 / $12 / $8; formats, windows, and seats as on the page); public URL list; contact `founders@hydrilla.ai`; `sameAs` socials. Do not list `/brand`, app routes, Water, or Rigging.
 
 ---
 
@@ -590,7 +590,7 @@ Same for Blender (GLB/FBX/OBJ). No invented add-on. LinkedIn currently calls Hyd
 ### 6.8 `hydrilla-pricing-explained` — Plans
 
 **Title:** Hydrilla pricing explained  
-Prose version of Free / Creator / Studio: credits, formats, seats, API, when to upgrade. Link `/pricing`. No discounts that are not on the page (yearly −20% may be mentioned if the toggle is live).
+Prose version of Free / Starter / Pro / Slot / Slot Pro: credits, formats, scheduled windows, seats, API, and when to upgrade. Link `/pricing`. Do not mention annual discounts; the current catalog is monthly only.
 
 Blog index `/blog`: group the three clusters. No other posts in this PR.
 

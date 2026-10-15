@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 
 import { HERO_POSTER_URL } from "./cloudinary";
 import { FAQ_ITEMS } from "./faq";
-import { PRICING } from "./pricing";
+import {
+  PRICING,
+  PRICING_META_DESCRIPTION,
+  PRICING_PAGE,
+  SLOT_PRICING,
+} from "./pricing";
 import { TEAM_MEMBERS } from "./team";
 import {
   ABOUT_META,
@@ -412,6 +417,7 @@ export function getPricingJsonLd() {
             name: PRICING.free.label,
             price: String(PRICING.free.monthly),
             priceCurrency: "USD",
+            description: `${PRICING.free.creditsLabel}; ${PRICING.free.accessLabel}; ${PRICING.free.exports} export`,
             url,
           },
           {
@@ -419,6 +425,7 @@ export function getPricingJsonLd() {
             name: PRICING.starter.label,
             price: String(PRICING.starter.monthly),
             priceCurrency: "USD",
+            description: `${PRICING.starter.creditsLabel}; ${PRICING.starter.accessLabel}; ${PRICING.starter.exports}`,
             url,
           },
           {
@@ -426,6 +433,23 @@ export function getPricingJsonLd() {
             name: PRICING.pro.label,
             price: String(PRICING.pro.monthly),
             priceCurrency: "USD",
+            description: `${PRICING.pro.creditsLabel}; ${PRICING.pro.accessLabel}; ${PRICING.pro.exports}; REST API access`,
+            url,
+          },
+          {
+            "@type": "Offer",
+            name: SLOT_PRICING.slot.label,
+            price: String(SLOT_PRICING.slot.monthly),
+            priceCurrency: "USD",
+            description: `${SLOT_PRICING.slot.summary} ${SLOT_PRICING.slot.exports}.`,
+            url,
+          },
+          {
+            "@type": "Offer",
+            name: SLOT_PRICING.slot_pro.label,
+            price: String(SLOT_PRICING.slot_pro.monthly),
+            priceCurrency: "USD",
+            description: `${SLOT_PRICING.slot_pro.summary} ${SLOT_PRICING.slot_pro.exports}.`,
             url,
           },
         ],
@@ -434,9 +458,8 @@ export function getPricingJsonLd() {
         "@type": "WebPage",
         "@id": `${url}#webpage`,
         url,
-        name: `Pricing | ${SITE_NAME}`,
-        description:
-          "Free, Starter, and Pro plans for production-ready 3D generation.",
+        name: PRICING_PAGE.title,
+        description: PRICING_META_DESCRIPTION,
         isPartOf: { "@id": ENTITY_IDS.website },
         about: { "@id": ENTITY_IDS.product },
       },

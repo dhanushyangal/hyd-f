@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
-import { DISPLAY_FONT as DISPLAY, SANS_FONT as SANS } from "@/lib/glyphic";
+import { SANS_FONT as DISPLAY, GEIST_FONT as SANS } from "@/lib/fonts";
 
 const CLOUDINARY_LANDING_BASE =
   "https://res.cloudinary.com/dqizbxc9e/image/upload";
@@ -152,7 +152,7 @@ function CtaLink({ label, href, block = false }: { label: string; href: string; 
       className={`group inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[rgba(0,12,31,0.2)] bg-white px-5 text-sm font-medium text-[#000c1f] no-underline outline-none transition-[transform,background-color,color,border-color] duration-200 ease-out hover:border-[#000c1f] hover:bg-[#000c1f] hover:text-white focus-visible:ring-2 focus-visible:ring-[#000c1f] focus-visible:ring-offset-2 active:scale-[0.98] ${
         block ? "w-full" : "self-start"
       }`}
-      style={{ fontFamily: SANS, letterSpacing: "-0.01em" }}
+      style={{ fontFamily: DISPLAY, letterSpacing: "-0.01em" }}
     >
       {label}
       <span className="transition-transform duration-200 ease-out group-hover:translate-x-0.5">
@@ -173,7 +173,7 @@ function Features({ items }: { items: Industry["features"] }) {
         >
           <h4
             className="m-0 text-lg font-medium"
-            style={{ fontFamily: SANS, color: INK, letterSpacing: "-0.02em", lineHeight: 1.3 }}
+            style={{ fontFamily: DISPLAY, color: INK, letterSpacing: "-0.02em", lineHeight: 1.3 }}
           >
             {f.title}
           </h4>
@@ -253,7 +253,7 @@ export default function IndustrySection() {
         <header className="flex flex-col items-center gap-4 px-2 text-center">
           <p
             className="m-0 text-xs font-medium uppercase"
-            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: SANS }}
+            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: DISPLAY }}
           >
             Industries
           </p>
@@ -309,7 +309,7 @@ export default function IndustrySection() {
                   </span>
                   <span
                     className="min-w-0 flex-1 text-[1.0625rem] font-medium"
-                    style={{ fontFamily: SANS, color: INK, letterSpacing: "-0.02em", lineHeight: 1.3 }}
+                    style={{ fontFamily: DISPLAY, color: INK, letterSpacing: "-0.02em", lineHeight: 1.3 }}
                   >
                     {item.title}
                   </span>
@@ -414,7 +414,7 @@ export default function IndustrySection() {
                   <span
                     className="relative block w-full truncate text-center text-[0.9375rem] font-medium transition-colors duration-200"
                     style={{
-                      fontFamily: SANS,
+                      fontFamily: DISPLAY,
                       letterSpacing: "-0.015em",
                       color: on ? INK : INK_TERTIARY,
                     }}

@@ -54,7 +54,8 @@ function freeze(root: Object3D) {
  * Hero stage: the rounded 3D viewer card. The prompt sits on top of it.
  * The mesh is framed in the open area under the prompt.
  * It turntable-spins until a drag starts, then follows the pointer.
- * The next model is shown only after the stage sits untouched.
+ * A tap on the left or right side shows the other model.
+ * The next model is shown on its own only after the stage sits untouched.
  */
 export function HeroStage({
   reduceMotion,
@@ -81,6 +82,7 @@ export function HeroStage({
     let idleTimer = 0;
     let idleCallback = 0;
     let focusStage: (() => void) | null = null;
+    let detachSideTap: (() => void) | null = null;
     const roots: Group[] = [];
     let active = 0;
     let dragging = false;
@@ -244,6 +246,41 @@ export function HeroStage({
         renderer.render(scene, camera);
       };
 
+      const showOther = () => {
+        if (!roots[0] || !roots[1]) return;
+        const next = active === 0 ? 1 : 0;
+        clearSwap();
+        void show(next).then(() => {
+          if (!disposed) scheduleSwap();
+        });
+      };
+
+      let startX = 0;
+      let startY = 0;
+      let moved = false;
+      const onPointerDown = (event: PointerEvent) => {
+        startX = event.clientX;
+        startY = event.clientY;
+        moved = false;
+      };
+      const onPointerMove = (event: PointerEvent) => {
+        if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) moved = true;
+      };
+      const onPointerUp = (event: PointerEvent) => {
+        if (moved) return;
+        const bounds = canvas.getBoundingClientRect();
+        const x = (event.clientX - bounds.left) / bounds.width;
+        if (x < 0.3 || x > 0.7) showOther();
+      };
+      canvas.addEventListener("pointerdown", onPointerDown);
+      canvas.addEventListener("pointermove", onPointerMove);
+      canvas.addEventListener("pointerup", onPointerUp);
+      detachSideTap = () => {
+        canvas.removeEventListener("pointerdown", onPointerDown);
+        canvas.removeEventListener("pointermove", onPointerMove);
+        canvas.removeEventListener("pointerup", onPointerUp);
+      };
+
       const whenIdle = (work: () => void) => {
         const host = window as Window & {
           requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
@@ -336,6 +373,7 @@ export function HeroStage({
       }
       renderer?.setAnimationLoop(null);
       if (focusStage) canvas.removeEventListener("pointerdown", focusStage);
+      detachSideTap?.();
       orbit?.dispose();
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
@@ -353,7 +391,7 @@ export function HeroStage({
         ref={stageRef}
         tabIndex={0}
         role="img"
-        aria-label="Hero stage. Drag to rotate the model, or use the arrow keys."
+        aria-label="Hero stage. Drag to rotate the model, tap the left or right side for the next model, or use the arrow keys."
         className="relative h-[min(58dvh,520px)] min-h-[360px] outline-none focus-visible:ring-2 focus-visible:ring-[#000c1f]/25 sm:h-[460px] md:h-[440px] lg:h-[500px] xl:h-[540px]"
       >
         <canvas

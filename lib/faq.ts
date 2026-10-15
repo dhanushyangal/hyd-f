@@ -1,3 +1,5 @@
+import { PRICING, SLOT_PRICING } from "@/lib/pricing";
+
 export type FaqItem = {
   question: string;
   answer: string;
@@ -18,12 +20,22 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Is there a free plan available?",
     answer:
-      "Yes. The Free plan is $0/month with 100 credits and GLB export, so you can generate a limited number of models before upgrading.",
+      `Yes. Free is $${PRICING.free.monthly}/month with ${PRICING.free.credits.toLocaleString("en-US")} credits and GLB export. No card required.`,
   },
   {
     question: "Can I change or cancel my plan anytime?",
     answer:
-      "Yes. Plans can be upgraded, downgraded, or cancelled at any time from account settings.",
+      "Yes. Hydrilla plans are monthly. Manage changes and cancellation from account settings. Switching to or from a Slot plan requires cancelling the current paid plan first.",
+  },
+  {
+    question: "How many 3D models can I generate each month?",
+    answer:
+      "At default quality, Free covers about 2 models from text or 3 from uploaded images. Starter and Slot cover about 20 from text or 30 from images. Pro and Slot Pro cover about 66 from text or 100 from images. Actual usage depends on the generation steps and quality you choose.",
+  },
+  {
+    question: "What are Slot and Slot Pro?",
+    answer:
+      `Slot uses the Starter credit budget at $${SLOT_PRICING.slot.monthly}/month for one generation hour a day. Slot Pro uses the Pro credit budget at $${SLOT_PRICING.slot_pro.monthly}/month for two hours a day. You choose the window in Billing and see it in local time.`,
   },
   {
     question: "Is Hydrilla difficult to learn?",
@@ -58,7 +70,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "What formats does Hydrilla export?",
     answer:
-      "GLB, FBX, OBJ, and USDZ (GLB on Free; all formats on Starter and Pro).",
+      "GLB, FBX, OBJ, and USDZ. Free exports GLB. Starter, Pro, Slot, and Slot Pro export all four.",
   },
   {
     question: "Which engines and tools?",
