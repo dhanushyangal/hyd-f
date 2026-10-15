@@ -14,7 +14,7 @@ namespace Hydrilla
         const string PrefApiKey = "Hydrilla.ApiKey";
         const string PrefApiBase = "Hydrilla.ApiBase";
         const string PrefBridge = "Hydrilla.BridgeUrl";
-        const string DefaultApi = "https://api.hydrilla.ai";
+        const string DefaultApi = "https://hydrilla-backend.vercel.app";
         const string DefaultBridge = "http://127.0.0.1:7345";
 
         string apiKey = "";

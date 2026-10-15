@@ -35,7 +35,7 @@ except ImportError:
 
 _STATE = {
     "api_key": "",
-    "api_base": "https://api.hydrilla.ai",
+    "api_base": "https://hydrilla-backend.vercel.app",
     "bridge_url": "http://127.0.0.1:7345",
 }
 

@@ -16,7 +16,7 @@ placeholder_text = "hyd_live_…"
 secret = true
 
 [node name="ApiBase" type="LineEdit" parent="."]
-text = "https://api.hydrilla.ai"
+text = "https://hydrilla-backend.vercel.app"
 
 [node name="Prompt" type="LineEdit" parent="."]
 placeholder_text = "Text prompt"

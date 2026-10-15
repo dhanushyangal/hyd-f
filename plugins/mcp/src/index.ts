@@ -4,7 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 const API_KEY = (process.env.HYDRILLA_API_KEY || process.env.HYDRILLA_API_TOKEN || "").trim();
-const API_BASE = (process.env.HYDRILLA_API_BASE || "https://api.hydrilla.ai").replace(/\/$/, "");
+const API_BASE = (process.env.HYDRILLA_API_BASE || "https://hydrilla-backend.vercel.app").replace(/\/$/, "");
 
 async function api<T>(
   path: string,

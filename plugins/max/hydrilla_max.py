@@ -26,7 +26,7 @@ try:
 except ImportError:
     rt = None
 
-DEFAULT_API = "https://api.hydrilla.ai"
+DEFAULT_API = "https://hydrilla-backend.vercel.app"
 DEFAULT_BRIDGE = "http://127.0.0.1:7345"
 _STATE = {
     "api_key": "",

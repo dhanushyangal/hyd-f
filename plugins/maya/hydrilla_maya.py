@@ -31,7 +31,7 @@ from hydrilla_bridge_client import BridgeClient, BridgeError  # noqa: E402
 import bridge_server  # noqa: E402
 
 WINDOW = "HydrillaMayaWindow"
-DEFAULT_API = "https://api.hydrilla.ai"
+DEFAULT_API = "https://hydrilla-backend.vercel.app"
 DEFAULT_BRIDGE = "http://127.0.0.1:7345"
 DEFAULT_SITE = "https://hydrilla.ai"
 

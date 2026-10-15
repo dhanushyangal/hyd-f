@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Hydrilla",
     "author": "Hydrilla",
-    "version": (1, 3, 9),
+    "version": (1, 3, 10),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Hydrilla",
     "description": "Built-in Bridge, Clerk sign-in, and AI 3D generate/import",
@@ -30,7 +30,7 @@ from . import bridge_runtime
 
 BRIDGE_URL = f"http://127.0.0.1:{bridge_runtime.BRIDGE_PORT}"
 DEFAULT_SITE = "https://hydrilla.ai"
-DEFAULT_API_BASE = "https://api.hydrilla.ai"
+DEFAULT_API_BASE = "https://hydrilla-backend.vercel.app"
 DEFAULT_LOCAL_SITE = "http://localhost:3000"
 DEFAULT_LOCAL_API = "http://localhost:4000"
 ADDON_ID = __name__
@@ -93,10 +93,17 @@ def _looks_like_frontend_url(value: str) -> bool:
     port = _url_port(text)
     if port in {"3000", "3001", "5173", "8080"}:
         return True
-    # Production site (not api.hydrilla.ai)
-    if "hydrilla.ai" in text and "api." not in text:
+    # Production marketing site (not the Node API)
+    host = (urlparse(text).hostname or "").lower()
+    if host in {"hydrilla.ai", "www.hydrilla.ai"}:
         return True
     return False
+
+
+def _looks_like_gpu_gateway_url(value: str) -> bool:
+    """Old default pointed at the GPU host; DCC clients must use the Node backend."""
+    host = (urlparse((value or "").strip()).hostname or "").lower()
+    return host in {"api.hydrilla.ai", "api.hydrilla.co"}
 
 
 def _default_api_for_site(site_url: str) -> str:
@@ -117,6 +124,7 @@ def _normalize_api_base(raw: str, site_url: str = "") -> str:
     """
     Force a real API origin.
     Blender often pastes Site URL (:3000) or bpy.ops into the API field.
+    Also remaps legacy GPU gateway hosts (api.hydrilla.ai) to the Node backend.
     """
     site = _sanitize_http_url(site_url, DEFAULT_SITE)
     fallback = _default_api_for_site(site)
@@ -125,6 +133,8 @@ def _normalize_api_base(raw: str, site_url: str = "") -> str:
     if not _is_http_url(value):
         return fallback
     if _looks_like_frontend_url(value):
+        return fallback
+    if _looks_like_gpu_gateway_url(value):
         return fallback
     if site and value.lower() == site.lower():
         return fallback

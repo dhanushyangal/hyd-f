@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, Optional, Tuple
 
-DEFAULT_BASE_URL = "https://api.hydrilla.ai"
+DEFAULT_BASE_URL = "https://hydrilla-backend.vercel.app"
 DEFAULT_TIMEOUT_S = 120
 POLL_INTERVAL_S = 2.0
 MAX_POLL_S = 20 * 60
