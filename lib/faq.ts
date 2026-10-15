@@ -75,7 +75,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Which engines and tools?",
     answer:
-      "Native plugins and a local Bridge for Blender, Maya, 3ds Max, Unity, Unreal, and Godot, plus an MCP server and REST API. See https://hydrilla.ai/integrations.",
+      "Native Blender add-on and a local Bridge, plus Unity, Unreal, Godot, MCP, and REST API. See https://hydrilla.ai/integrations.",
   },
 ];
 

@@ -6,6 +6,13 @@ export type IntegrationCategory =
 
 export type IntegrationStatus = "available" | "bridge" | "coming_soon";
 
+export type IntegrationGuideStep = {
+  title: string;
+  body: string;
+  imageSrc?: string;
+  imageAlt?: string;
+};
+
 export type Integration = {
   slug: string;
   name: string;
@@ -17,6 +24,7 @@ export type Integration = {
   docsAnchor?: string;
   bridgeTarget: string;
   installSteps: string[];
+  guideSteps?: IntegrationGuideStep[];
 };
 
 export const BRIDGE_DEFAULT_PORT = 7345;
@@ -30,46 +38,34 @@ export const INTEGRATIONS: Integration[] = [
     status: "available",
     summary: "Generate text/image to 3D and import GLB in Blender.",
     description:
-      "The Hydrilla Blender add-on lets you sign in with your Studio account or an API key, generate meshes in the sidebar, and receive one-click Send from Studio through the local Bridge.",
+      "Install the Hydrilla Blender add-on, open the sidebar Hydrilla tab, sign in with your Studio account, and generate meshes in place — or receive one-click Send from Studio through the local Bridge.",
     downloadPath: "/plugins/hydrilla-blender.zip",
     bridgeTarget: "blender",
     installSteps: [
-      "Download hydrilla-blender.zip and install it in Blender (Edit → Preferences → Add-ons → Install…).",
-      "Open the Hydrilla sidebar and start the Bridge.",
-      "Click Sign in, finish login in the browser, then Sync. Keep the Connect tab open while generating.",
-      "Or set a hyd_live_ API key in Add-on Preferences if you prefer keys.",
+      "Download hydrilla-blender.zip.",
+      "In Blender: Edit → Preferences → Add-ons → dropdown → Install from Disk… and select the zip.",
+      "Enable the Hydrilla add-on, then press N (or the sidebar arrow) and open the Hydrilla tab.",
+      "Start the Bridge, Sign in, Sync, and keep the Connect tab open while generating.",
     ],
-  },
-  {
-    slug: "maya",
-    name: "Maya",
-    category: "modeling",
-    status: "available",
-    summary: "Generate and pull Hydrilla meshes into Maya scenes.",
-    description:
-      "The Hydrilla Maya shelf plugin generates via the developer API and receives Studio sends over the local Bridge. Jobs download as GLB and import with the bundled glTF helper when available.",
-    downloadPath: "/plugins/hydrilla-maya.zip",
-    bridgeTarget: "maya",
-    installSteps: [
-      "Download hydrilla-maya.zip and unzip into your Maya scripts path.",
-      "Run hydrilla_maya.show(), start the Bridge, then Sign in.",
-      "Sync pulls your Hydrilla session (or paste an API key).",
-    ],
-  },
-  {
-    slug: "3ds-max",
-    name: "3ds Max",
-    category: "modeling",
-    status: "available",
-    summary: "Import Hydrilla GLB into 3ds Max without manual downloads.",
-    description:
-      "Python panel for 3ds Max with API key auth, text/image generation, and Bridge import into the active scene.",
-    downloadPath: "/plugins/hydrilla-3dsmax.zip",
-    bridgeTarget: "3dsmax",
-    installSteps: [
-      "Download hydrilla-3dsmax.zip and place scripts on your Max Python path.",
-      "Run hydrilla_max.py from the MaxScript/Python listener.",
-      "Set your API key, generate, or enable Bridge listening.",
+    guideSteps: [
+      {
+        title: "Install from Disk",
+        body: "Open Edit → Preferences → Add-ons. Open the dropdown in the top-right and choose Install from Disk…. Select hydrilla-blender.zip, then enable the Hydrilla add-on.",
+        imageSrc: "/integrations/blender/01-install-from-disk.jpg",
+        imageAlt: "Blender Preferences Add-ons menu with Install from Disk highlighted",
+      },
+      {
+        title: "Open the sidebar",
+        body: "Back in the 3D Viewport, click the small arrow on the right edge of the viewport (or press N) to open the sidebar.",
+        imageSrc: "/integrations/blender/02-open-sidebar.jpg",
+        imageAlt: "Blender 3D Viewport with arrow pointing to the sidebar toggle",
+      },
+      {
+        title: "Open the Hydrilla tab",
+        body: "In the sidebar tabs, click Hydrilla. Start the Bridge, Sign in with your Hydrilla account, Sync, then Generate. Keep the Connect browser tab open while you work.",
+        imageSrc: "/integrations/blender/03-hydrilla-tab.jpg",
+        imageAlt: "Blender sidebar showing the Hydrilla tab",
+      },
     ],
   },
   {
@@ -152,21 +148,6 @@ export const INTEGRATIONS: Integration[] = [
       "Poll GET /v1/3d/tasks/:id until SUCCEEDED, then download result.mesh_url.",
     ],
   },
-  {
-    slug: "omniverse",
-    name: "Omniverse",
-    category: "modeling",
-    status: "coming_soon",
-    summary: "OpenUSD handoff to Omniverse — on the roadmap.",
-    description:
-      "Planned OpenUSD / Omniverse connector for sim-ready stages. Until then, export GLB from Studio or the REST API and convert in your Omniverse pipeline.",
-    bridgeTarget: "omniverse",
-    installSteps: [
-      "Use Studio Export GLB or the REST API today.",
-      "Convert to USD in your Omniverse toolchain.",
-      "Watch this page for the native Omniverse connector.",
-    ],
-  },
 ];
 
 export const INTEGRATION_CATEGORIES: Array<{
@@ -177,7 +158,7 @@ export const INTEGRATION_CATEGORIES: Array<{
   {
     id: "modeling",
     title: "3D Modeling",
-    description: "Generate and import meshes inside your DCC.",
+    description: "Generate and import meshes inside Blender.",
   },
   {
     id: "engines",
@@ -195,6 +176,7 @@ export const INTEGRATION_CATEGORIES: Array<{
     description: "REST API for custom studio and pipeline tooling.",
   },
 ];
+
 export function getIntegration(slug: string): Integration | undefined {
   return INTEGRATIONS.find((item) => item.slug === slug);
 }

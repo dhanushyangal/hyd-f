@@ -10,13 +10,12 @@ import {
 import { createPageMetadata, getWebPageJsonLd } from "@/lib/seo";
 
 export const metadata = createPageMetadata({
-  title: "Integrations — Blender, Maya, Unity, Unreal, MCP",
+  title: "Integrations — Blender, Unity, Unreal, MCP",
   description:
-    "Install Hydrilla plugins for Blender, Maya, 3ds Max, Unity, Unreal, and Godot. Generate in-app, or send meshes from Studio through the local Bridge. MCP and REST API included.",
+    "Install the Hydrilla Blender add-on, plus Unity, Unreal, Godot, MCP, and REST API connectors. Generate in-app or send meshes from Studio through the local Bridge.",
   path: "/integrations",
   keywords: [
     "Hydrilla Blender plugin",
-    "Hydrilla Maya plugin",
     "Unity 3D integration",
     "Unreal Engine AI 3D",
     "MCP 3D generation",
@@ -34,14 +33,14 @@ export default function IntegrationsPage() {
         data={getWebPageJsonLd({
           name: "Hydrilla Integrations",
           description:
-            "Connect Hydrilla to Blender, Maya, Unity, Unreal, Godot, MCP agents, and the REST API.",
+            "Connect Hydrilla to Blender, Unity, Unreal, Godot, MCP agents, and the REST API.",
           path: "/integrations",
         })}
       />
       <MarketingPage
         eyebrow="Integrations"
         title="Your tools, Hydrilla inside"
-        description="Native plugins for DCCs and game engines, a local Bridge for Studio → app send, plus MCP and REST for custom pipelines."
+        description="Native Blender add-on, game-engine plugins, a local Bridge for Studio → app send, plus MCP and REST for custom pipelines."
         formats={false}
         heroRule={false}
         related={[
@@ -71,7 +70,7 @@ export default function IntegrationsPage() {
               <span>
                 <span className="font-semibold text-neutral-950">Install a plugin</span>
                 {" "}
-                for your app (Blender, Maya, Unity, and more), then start the built-in Bridge so Studio can reach it.
+                for Blender (or a game engine), then start the built-in Bridge so Studio can reach it.
               </span>
             </li>
             <li className="flex gap-4">
@@ -140,7 +139,13 @@ export default function IntegrationsPage() {
               <p className="mt-2 text-[15px] leading-6 text-neutral-600">
                 {category.description}
               </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div
+                className={
+                  items.length === 1
+                    ? "mt-6 grid gap-3"
+                    : "mt-6 grid gap-3 sm:grid-cols-2"
+                }
+              >
                 {items.map((item) => (
                   <IntegrationCard key={item.slug} item={item} />
                 ))}
@@ -194,8 +199,8 @@ export default function IntegrationsPage() {
                 How many integrations are available?
               </dt>
               <dd className="mt-2 text-[16px] leading-7 text-neutral-700">
-                {AVAILABLE_COUNT} connectors ship today. Omniverse and other roadmap items are
-                marked Coming soon on this page.
+                {AVAILABLE_COUNT} connectors ship today — Blender for modeling, plus game engines,
+                MCP, and the REST API.
               </dd>
             </div>
           </dl>
