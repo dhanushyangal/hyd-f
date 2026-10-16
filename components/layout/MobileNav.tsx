@@ -269,13 +269,13 @@ export function MobileNav({
       <div className="px-3 py-3">
         <SignedIn>
           <Link
-            href="/generate"
+            href="/app/studio"
             onClick={onClose}
             className={`flex min-h-11 cursor-pointer items-center justify-center rounded-full px-4 py-3 text-[14px] font-semibold tracking-[-0.02em] transition-transform duration-300 active:scale-[0.98] ${
               sheetDark ? "bg-white text-black" : "bg-[#141414] text-white"
             }`}
           >
-            Generate
+            App
           </Link>
         </SignedIn>
         <SignedOut>

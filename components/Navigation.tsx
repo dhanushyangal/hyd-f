@@ -55,10 +55,10 @@ export function Navigation() {
         <nav className="hidden md:flex items-center gap-6">
           <SignedIn>
             <a
-              href="/generate"
+              href="/app/studio"
               className="text-sm font-medium text-neutral-600 hover:text-black transition-colors"
             >
-              Generate
+              App
             </a>
             <a
               href="/library"
@@ -132,11 +132,11 @@ export function Navigation() {
           <div className="px-4 py-4 space-y-1">
             <SignedIn>
               <a
-                href="/generate"
+                href="/app/studio"
                 className="block px-4 py-3 text-base font-medium text-black hover:bg-neutral-50 rounded-xl transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Generate
+                App
               </a>
               <a
                 href="/library"

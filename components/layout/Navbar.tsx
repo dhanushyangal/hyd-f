@@ -504,14 +504,14 @@ export default function Navbar({ variant = "hero", pathname = "/" }: NavbarProps
           <div className={`relative z-10 flex shrink-0 items-center ${v2 ? "gap-2 lg:justify-self-end" : "gap-2 md:gap-4"}`}>
             <SignedIn>
               <Link
-                href="/generate"
+                href="/app/studio"
                 className={`hidden md:flex ${generateButtonClasses} font-dm-sans overflow-hidden transition-[max-width,opacity,padding,margin] ${BAR_EASE} ${
                   shouldShrink
                     ? "pointer-events-none max-w-0 opacity-0 px-0 mr-0 border-0"
                     : "max-w-[9rem] opacity-100"
                 }`}
               >
-                Generate
+                App
               </Link>
               <UserButton
                 afterSignOutUrl="/"

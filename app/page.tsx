@@ -2,7 +2,6 @@ import dynamic from "next/dynamic";
 import Hero from "../components/sections/Hero";
 import HomeBelowFold from "../components/sections/HomeBelowFold";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { HomeAuthRedirect } from "@/components/HomeAuthRedirect";
 import { HOME_TITLE, createPageMetadata, getHomepageJsonLd } from "@/lib/seo";
 const Footer = dynamic(() => import("../components/layout/Footer"), {
   loading: () => <div className="min-h-[280px] w-full bg-white" aria-hidden />,
@@ -21,7 +20,6 @@ export default function Home() {
   return (
     <>
       <JsonLd data={getHomepageJsonLd()} />
-      <HomeAuthRedirect />
       <Hero />
       {/* Text sections SSR for crawlers; Showcase / AppShowcase stay client-only. */}
       <HomeBelowFold />

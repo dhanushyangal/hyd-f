@@ -2,9 +2,18 @@ import { SignIn } from "@clerk/nextjs";
 
 type Props = { searchParams: Promise<{ redirect_url?: string }> };
 
+const DEFAULT_AFTER_AUTH = "/app/studio";
+
+function safeAppRedirect(raw: string | undefined): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) {
+    return DEFAULT_AFTER_AUTH;
+  }
+  return raw;
+}
+
 export default async function SignInPage({ searchParams }: Props) {
   const params = await searchParams;
-  const redirectUrl = params.redirect_url && params.redirect_url.startsWith("/") ? params.redirect_url : undefined;
+  const redirectUrl = safeAppRedirect(params.redirect_url);
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-8 sm:py-12 pt-24 sm:pt-28">
       <div className="w-full max-w-md">
@@ -37,4 +46,3 @@ export default async function SignInPage({ searchParams }: Props) {
     </div>
   );
 }
-

@@ -48,9 +48,15 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   if (isProtectedRoute(req)) {
-    // Always send expired/missing sessions to /sign-in (not marketing home).
+    // Always send expired/missing sessions to /sign-in (not marketing home),
+    // and preserve the intended destination so post-login lands in the app.
+    const signInUrl = new URL("/sign-in", req.url);
+    const returnTo = `${req.nextUrl.pathname}${req.nextUrl.search}`;
+    if (returnTo.startsWith("/") && !returnTo.startsWith("//")) {
+      signInUrl.searchParams.set("redirect_url", returnTo);
+    }
     await auth.protect({
-      unauthenticatedUrl: new URL("/sign-in", req.url).toString(),
+      unauthenticatedUrl: signInUrl.toString(),
     });
     // Skew pin only for app shells — avoid Set-Cookie on marketing `/` (CDN/TTFB).
     return withSkewProtectionCookie(req, NextResponse.next());

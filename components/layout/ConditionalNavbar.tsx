@@ -7,14 +7,13 @@ import Navbar from "./Navbar";
 export function ConditionalNavbar() {
   const pathname = usePathname();
 
-  // Don't show navbar on app shell, auth gates, or minimal utility pages
+  // Don't show marketing navbar on app shell / workspace (auth pages keep it so
+  // Hydrilla → home and the post-login App button stay available).
   if (
     pathname?.startsWith("/app") ||
     pathname === "/generate" ||
     pathname?.startsWith("/workspace") ||
-    pathname === "/generations" ||
-    pathname?.startsWith("/sign-in") ||
-    pathname?.startsWith("/sign-up")
+    pathname === "/generations"
   ) {
     return null;
   }
@@ -34,7 +33,9 @@ export function ConditionalNavbar() {
     pathname === "/blog" ||
     pathname?.startsWith("/blog/") ||
     pathname === "/integrations" ||
-    pathname?.startsWith("/integrations/")
+    pathname?.startsWith("/integrations/") ||
+    pathname?.startsWith("/sign-in") ||
+    pathname?.startsWith("/sign-up")
       ? "default"
       : "hero";
 
