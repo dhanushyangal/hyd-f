@@ -200,6 +200,65 @@ class HydrillaClient:
             return self._request("GET", "/api/3d/me")
         return self._request("GET", "/v1/user/me")
 
+    def list_user_jobs(self, limit: int = 40) -> list:
+        """
+        Jobs for the signed-in creator (Clerk Studio history).
+        Returns a list of dicts with id, status, prompt, mesh_url, generate_type.
+        """
+        if self.mode != "clerk":
+            raise HydrillaApiError(
+                "Your Jobs needs Sign in with Hydrilla (Clerk). "
+                "API keys cannot list account history yet."
+            )
+        data = self._request("GET", "/api/3d/history")
+        raw = data.get("jobs") if isinstance(data, dict) else data
+        if not isinstance(raw, list):
+            return []
+
+        skip_types = {
+            "TextToImage",
+            "EditImage",
+            "Combined",
+            "Water",
+            "CodeSculpt",
+        }
+        skip_engines = {"water", "code_sculpt"}
+        jobs: list = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            generate_type = str(
+                item.get("generateType") or item.get("generate_type") or ""
+            )
+            engine = str(item.get("engine") or "").lower()
+            if generate_type in skip_types or engine in skip_engines:
+                continue
+            status = str(item.get("status") or "").upper()
+            job_id = str(item.get("id") or item.get("jobId") or item.get("job_id") or "")
+            if not job_id:
+                continue
+            mesh = (
+                item.get("resultGlbUrl")
+                or item.get("result_glb_url")
+                or item.get("mesh_url")
+            )
+            if not mesh and status in {"DONE", "SUCCEEDED", "SUCCESS", "COMPLETED"}:
+                mesh = f"{self.base_url}/api/3d/glb/{urllib.parse.quote(job_id, safe='')}"
+            prompt = str(item.get("prompt") or item.get("name") or "").strip()
+            jobs.append(
+                {
+                    "id": job_id,
+                    "status": status,
+                    "prompt": prompt,
+                    "mesh_url": mesh or "",
+                    "generate_type": generate_type,
+                    "created_at": item.get("createdAt") or item.get("created_at") or "",
+                }
+            )
+            if len(jobs) >= limit:
+                break
+        return jobs
+
     def text_to_image(self, prompt: str, **kwargs: Any) -> Dict[str, Any]:
         """Studio preview image step (Clerk). Caller should refresh token before /generate."""
         if self.mode != "clerk":

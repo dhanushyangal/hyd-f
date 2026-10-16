@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Hydrilla",
     "author": "Hydrilla",
-    "version": (1, 3, 12),
+    "version": (1, 3, 13),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Hydrilla",
     "description": "Built-in Bridge, Clerk sign-in, and AI 3D generate/import",
@@ -22,12 +22,13 @@ from urllib.parse import urlparse
 import bpy
 from bpy.props import (
     BoolProperty,
+    CollectionProperty,
     EnumProperty,
     IntProperty,
     PointerProperty,
     StringProperty,
 )
-from bpy.types import AddonPreferences, Operator, Panel
+from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup
 from bpy_extras.io_utils import ImportHelper
 
 from . import api_client
@@ -222,6 +223,59 @@ _JOB: dict = {
     "started_at": 0.0,
     "mode": "",
 }
+
+# Account job list (creator history from /api/3d/history)
+_JOBS_UI: dict = {
+    "fetching": False,
+    "events": Queue(),
+    "auto": False,
+}
+
+ACTIVE_JOB_STATUSES = {
+    "WAIT",
+    "RUN",
+    "PENDING",
+    "QUEUED",
+    "IN_PROGRESS",
+    "RUNNING",
+    "PROCESSING",
+}
+
+
+def _job_status_label(status: str) -> str:
+    code = (status or "").upper()
+    if code in {"WAIT", "PENDING", "QUEUED"}:
+        return "Pending"
+    if code in {"RUN", "IN_PROGRESS", "RUNNING", "PROCESSING"}:
+        return "Running"
+    if code in {"DONE", "SUCCEEDED", "SUCCESS", "COMPLETED"}:
+        return "Done"
+    if code in {"FAIL", "FAILED", "ERROR"}:
+        return "Failed"
+    if code in {"CANCELLED", "CANCELED"}:
+        return "Cancelled"
+    return code or "Unknown"
+
+
+def _job_status_icon(status: str) -> str:
+    label = _job_status_label(status)
+    if label == "Pending":
+        return "TIME"
+    if label == "Running":
+        return "SORTTIME"
+    if label == "Done":
+        return "CHECKMARK"
+    if label == "Failed":
+        return "ERROR"
+    return "INFO"
+
+
+def _truncate(text: str, width: int = 28) -> str:
+    value = (text or "").replace("\n", " ").strip()
+    if len(value) <= width:
+        return value or "(no prompt)"
+    return value[: width - 1] + "…"
+
 
 
 def _tag_hydrilla_redraw() -> None:
@@ -484,6 +538,112 @@ def _start_background_job(worker, *, mode: str = "") -> bool:
     return True
 
 
+def _apply_jobs_to_scene(scene, jobs: list) -> None:
+    scene.hydrilla_jobs.clear()
+    for item in jobs:
+        entry = scene.hydrilla_jobs.add()
+        entry.job_id = str(item.get("id") or "")
+        entry.status = str(item.get("status") or "")
+        entry.prompt = str(item.get("prompt") or "")
+        entry.mesh_url = str(item.get("mesh_url") or "")
+        entry.generate_type = str(item.get("generate_type") or "")
+    active = sum(
+        1
+        for item in jobs
+        if str(item.get("status") or "").upper() in ACTIVE_JOB_STATUSES
+    )
+    scene.hydrilla_jobs_active = active
+    scene.hydrilla_jobs_fetched_at = time.strftime("%H:%M:%S")
+
+
+def _jobs_timer() -> Optional[float]:
+    scene = getattr(bpy.context, "scene", None)
+    try:
+        while True:
+            event = _JOBS_UI["events"].get_nowait()
+            kind = event.get("kind")
+            if scene is None:
+                continue
+            if kind == "error":
+                _JOBS_UI["fetching"] = False
+                message = str(event.get("text") or "Could not load jobs")
+                status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+                _set_scene_status(scene, message, kind=status_kind)
+                _tag_hydrilla_redraw()
+            elif kind == "ok":
+                _JOBS_UI["fetching"] = False
+                jobs = event.get("jobs") or []
+                _apply_jobs_to_scene(scene, jobs)
+                active = int(getattr(scene, "hydrilla_jobs_active", 0) or 0)
+                if active > 0:
+                    _set_scene_status(
+                        scene,
+                        f"{active} pending/running job(s) for your account",
+                        kind="RUNNING",
+                        phase="Account jobs",
+                        busy=bool(scene.hydrilla_busy) or bool(_JOB["busy"]),
+                    )
+                _tag_hydrilla_redraw()
+    except Empty:
+        pass
+
+    if scene is not None and int(getattr(scene, "hydrilla_jobs_active", 0) or 0) > 0:
+        _JOBS_UI["auto"] = True
+        if not _JOBS_UI["fetching"]:
+            _start_jobs_fetch(bpy.context, quiet=True)
+        return 8.0
+
+    _JOBS_UI["auto"] = False
+    return None
+
+
+def _start_jobs_fetch(context, *, quiet: bool = False) -> bool:
+    if _JOBS_UI["fetching"]:
+        return False
+    scene = context.scene
+    try:
+        client = _resolve_client(context)
+        if client.mode != "clerk":
+            if not quiet:
+                _set_scene_status(
+                    scene,
+                    "Your Jobs needs Sign in with Hydrilla (not API key alone).",
+                    kind="SESSION",
+                    phase="Session",
+                )
+            return False
+        _ensure_fresh_clerk_token(client.token, client.mode)
+    except Exception as error:
+        if not quiet:
+            message = _user_error(error)
+            status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+            _set_scene_status(scene, message, kind=status_kind)
+        return False
+
+    token = client.token
+    base_url = client.base_url
+    mode = client.mode
+    _JOBS_UI["fetching"] = True
+
+    def worker():
+        try:
+            job_client = api_client.HydrillaClient(
+                token,
+                base_url=base_url,
+                mode=mode,
+                token_provider=_bridge_token_provider() if mode == "clerk" else None,
+            )
+            jobs = job_client.list_user_jobs(limit=30)
+            _JOBS_UI["events"].put({"kind": "ok", "jobs": jobs})
+        except Exception as error:
+            _JOBS_UI["events"].put({"kind": "error", "text": _user_error(error)})
+
+    threading.Thread(target=worker, name="hydrilla-jobs", daemon=True).start()
+    if not bpy.app.timers.is_registered(_jobs_timer):
+        bpy.app.timers.register(_jobs_timer, first_interval=0.1)
+    return True
+
+
 def _wait_task_cancellable(client, task_id: str) -> dict:
     started = time.time()
     while True:
@@ -634,6 +794,14 @@ def _resolve_client(context):
     raise api_client.HydrillaApiError(
         "Not signed in. Click Sign in, finish in the browser, then Sync — or set an API key."
     )
+
+
+class HydrillaJobItem(PropertyGroup):
+    job_id: StringProperty(name="Job ID", default="")
+    status: StringProperty(name="Status", default="")
+    prompt: StringProperty(name="Prompt", default="")
+    mesh_url: StringProperty(name="Mesh URL", default="")
+    generate_type: StringProperty(name="Type", default="")
 
 
 class HydrillaPreferences(AddonPreferences):
@@ -816,6 +984,7 @@ class HYDRILLA_OT_sync_account(Operator):
                     busy=False,
                 )
                 self.report({"INFO"}, f"Signed in as {email} — keep Connect tab open")
+            _start_jobs_fetch(context, quiet=True)
             return {"FINISHED"}
         except Exception as error:
             message = _user_error(error)
@@ -966,8 +1135,10 @@ class HYDRILLA_OT_text_to_3d(Operator):
             self.report({"WARNING"}, "Already generating")
             return {"CANCELLED"}
 
-        self.report({"INFO"}, "Generating — watch Status panel (keep Connect tab open)")
+        _start_jobs_fetch(context, quiet=True)
+        self.report({"INFO"}, "Generating — watch Status + Your jobs")
         return {"FINISHED"}
+
 
 class HYDRILLA_OT_pick_image(Operator, ImportHelper):
     bl_idname = "hydrilla.pick_image"
@@ -1122,7 +1293,8 @@ class HYDRILLA_OT_image_to_3d(Operator):
             self.report({"WARNING"}, "Already generating")
             return {"CANCELLED"}
 
-        self.report({"INFO"}, "Generating — watch Status panel")
+        _start_jobs_fetch(context, quiet=True)
+        self.report({"INFO"}, "Generating — watch Status + Your jobs")
         return {"FINISHED"}
 
 
@@ -1217,6 +1389,111 @@ class HYDRILLA_OT_resume_job(Operator):
             return {"CANCELLED"}
 
         self.report({"INFO"}, "Resumed — watch Status panel")
+        return {"FINISHED"}
+
+
+class HYDRILLA_OT_refresh_jobs(Operator):
+    bl_idname = "hydrilla.refresh_jobs"
+    bl_label = "Refresh jobs"
+    bl_description = "Load pending and running jobs for your Hydrilla account"
+
+    def execute(self, context):
+        if _start_jobs_fetch(context, quiet=False):
+            self.report({"INFO"}, "Loading your jobs…")
+            return {"FINISHED"}
+        if _JOBS_UI["fetching"]:
+            self.report({"INFO"}, "Already refreshing jobs")
+            return {"FINISHED"}
+        self.report({"ERROR"}, context.scene.hydrilla_status or "Could not refresh jobs")
+        return {"CANCELLED"}
+
+
+class HYDRILLA_OT_import_account_job(Operator):
+    bl_idname = "hydrilla.import_account_job"
+    bl_label = "Import job"
+    bl_options = {"REGISTER", "UNDO"}
+
+    index: IntProperty(default=0)
+
+    def execute(self, context):
+        scene = context.scene
+        jobs = scene.hydrilla_jobs
+        if self.index < 0 or self.index >= len(jobs):
+            self.report({"ERROR"}, "Invalid job")
+            return {"CANCELLED"}
+        item = jobs[self.index]
+        job_id = (item.job_id or "").strip()
+        if not job_id:
+            self.report({"ERROR"}, "Job has no id")
+            return {"CANCELLED"}
+
+        label = _job_status_label(item.status)
+        if label not in {"Done"}:
+            self.report({"WARNING"}, f"Job is {label} — wait until Done to import")
+            return {"CANCELLED"}
+
+        if scene.hydrilla_busy or _JOB["busy"]:
+            self.report({"WARNING"}, "Another generate is running")
+            return {"CANCELLED"}
+
+        try:
+            client = _resolve_client(context)
+            _ensure_fresh_clerk_token(client.token, client.mode)
+        except Exception as error:
+            message = _user_error(error)
+            _set_scene_status(
+                scene,
+                message,
+                kind="SESSION" if _is_session_error(message) else "ERROR",
+            )
+            self.report({"ERROR"}, message)
+            return {"CANCELLED"}
+
+        token = client.token
+        base_url = client.base_url
+        mode = client.mode
+        mesh_url = (item.mesh_url or "").strip()
+        _set_scene_status(
+            scene,
+            f"Importing job {job_id[:8]}…",
+            kind="RUNNING",
+            phase="Import",
+            busy=True,
+            task_id=job_id,
+        )
+
+        def worker():
+            try:
+                job_client = api_client.HydrillaClient(
+                    token,
+                    base_url=base_url,
+                    mode=mode,
+                    token_provider=_bridge_token_provider() if mode == "clerk" else None,
+                )
+                url = mesh_url
+                if not url:
+                    task = job_client.get_task(job_id)
+                    url = ((task.get("result") or {}).get("mesh_url") or "").strip()
+                if not url:
+                    url = f"{base_url}/api/3d/glb/{job_id}"
+                _job_emit(
+                    "status",
+                    text="Downloading mesh…",
+                    phase="Download",
+                    progress=95,
+                    task_id=job_id,
+                )
+                path = api_client.download_to_temp(job_client, url, job_id)
+                _job_emit("done", path=path)
+            except Exception as error:
+                _job_emit("error", text=_user_error(error))
+
+        if not _start_background_job(worker, mode=mode):
+            scene.hydrilla_busy = False
+            self.report({"WARNING"}, "Already generating")
+            return {"CANCELLED"}
+
+        self.report({"INFO"}, "Importing — watch Status")
         return {"FINISHED"}
 
 
@@ -1344,6 +1621,77 @@ class HYDRILLA_PT_status(Panel):
         _draw_status_block(self.layout, context.scene)
 
 
+class HYDRILLA_PT_jobs(Panel):
+    bl_label = "Your jobs"
+    bl_idname = "HYDRILLA_PT_jobs"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Hydrilla"
+    bl_parent_id = "HYDRILLA_PT_main"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        box = layout.box()
+        header = box.row()
+        active = int(getattr(scene, "hydrilla_jobs_active", 0) or 0)
+        if active > 0:
+            header.label(text=f"{active} pending / running", icon="SORTTIME")
+        else:
+            header.label(text="Account jobs", icon="LONGDISPLAY")
+        refresh = header.row()
+        refresh.enabled = not _JOBS_UI["fetching"]
+        refresh.operator(
+            "hydrilla.refresh_jobs",
+            text="" if not _JOBS_UI["fetching"] else "",
+            icon="FILE_REFRESH",
+        )
+
+        mode = scene.hydrilla_auth_mode or "NONE"
+        if mode != "CLERK":
+            box.label(text="Sign in + Sync to see your jobs", icon="INFO")
+            return
+
+        fetched = getattr(scene, "hydrilla_jobs_fetched_at", "") or ""
+        if fetched:
+            box.label(text=f"Updated {fetched}")
+
+        show_all = bool(scene.hydrilla_jobs_show_all)
+        box.prop(scene, "hydrilla_jobs_show_all", text="Show completed too")
+
+        jobs = list(scene.hydrilla_jobs)
+        visible = []
+        for index, item in enumerate(jobs):
+            status = (item.status or "").upper()
+            if show_all or status in ACTIVE_JOB_STATUSES:
+                visible.append((index, item))
+
+        if _JOBS_UI["fetching"] and not visible:
+            box.label(text="Loading…", icon="SORTTIME")
+            return
+
+        if not visible:
+            box.label(text="No pending or running jobs", icon="CHECKMARK")
+            box.label(text="Click refresh after Generate")
+            return
+
+        for index, item in visible[:12]:
+            row = box.column(align=True)
+            status_label = _job_status_label(item.status)
+            top = row.row(align=True)
+            top.label(text=status_label, icon=_job_status_icon(item.status))
+            top.label(text=str(item.job_id or "")[:8])
+            row.label(text=_truncate(item.prompt, 32))
+            if status_label == "Done":
+                op = row.operator(
+                    "hydrilla.import_account_job",
+                    text="Import mesh",
+                    icon="IMPORT",
+                )
+                op.index = index
+            row.separator()
+
+
 class HYDRILLA_PT_generate(Panel):
     bl_label = "Generate"
     bl_idname = "HYDRILLA_PT_generate"
@@ -1386,7 +1734,7 @@ class HYDRILLA_PT_generate(Panel):
             op.operator("hydrilla.image_to_3d", text="Generate mesh", icon="MESH_CUBE")
 
         if busy:
-            box.label(text="Job running — see Status above", icon="SORTTIME")
+            box.label(text="Job running — see Status + Your jobs", icon="SORTTIME")
 
 
 class HYDRILLA_PT_studio(Panel):
@@ -1412,6 +1760,7 @@ class HYDRILLA_PT_studio(Panel):
 
 
 classes = (
+    HydrillaJobItem,
     HydrillaPreferences,
     HYDRILLA_OT_prefs_local,
     HYDRILLA_OT_prefs_production,
@@ -1423,11 +1772,14 @@ classes = (
     HYDRILLA_OT_image_to_3d,
     HYDRILLA_OT_cancel_generate,
     HYDRILLA_OT_resume_job,
+    HYDRILLA_OT_refresh_jobs,
+    HYDRILLA_OT_import_account_job,
     HYDRILLA_OT_poll_bridge,
     HYDRILLA_PT_main,
     HYDRILLA_PT_bridge,
     HYDRILLA_PT_account,
     HYDRILLA_PT_status,
+    HYDRILLA_PT_jobs,
     HYDRILLA_PT_generate,
     HYDRILLA_PT_studio,
 )
@@ -1501,13 +1853,24 @@ def register():
         ),
         default="TEXT",
     )
+    bpy.types.Scene.hydrilla_jobs = CollectionProperty(type=HydrillaJobItem)
+    bpy.types.Scene.hydrilla_jobs_active = IntProperty(name="Active jobs", default=0)
+    bpy.types.Scene.hydrilla_jobs_fetched_at = StringProperty(name="Jobs fetched", default="")
+    bpy.types.Scene.hydrilla_jobs_show_all = BoolProperty(
+        name="Show completed",
+        description="Also list recent Done/Failed jobs for this account",
+        default=False,
+    )
 
 
 def unregister():
     _JOB["cancel"] = True
     _JOB["busy"] = False
+    _JOBS_UI["fetching"] = False
     if bpy.app.timers.is_registered(_job_timer):
         bpy.app.timers.unregister(_job_timer)
+    if bpy.app.timers.is_registered(_jobs_timer):
+        bpy.app.timers.unregister(_jobs_timer)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     bridge_runtime.unregister_runtime()
@@ -1524,3 +1887,7 @@ def unregister():
     del bpy.types.Scene.hydrilla_account
     del bpy.types.Scene.hydrilla_auth_mode
     del bpy.types.Scene.hydrilla_gen_mode
+    del bpy.types.Scene.hydrilla_jobs
+    del bpy.types.Scene.hydrilla_jobs_active
+    del bpy.types.Scene.hydrilla_jobs_fetched_at
+    del bpy.types.Scene.hydrilla_jobs_show_all
