@@ -607,6 +607,7 @@ function WorkspacePage() {
   // Credits (from /api/payments/credits) – header + cost line (image 2, 3D 10)
   const [creditsTotal, setCreditsTotal] = useState<number>(0);
   const [creditsUsed, setCreditsUsed] = useState<number>(0);
+  const [creditsBonus, setCreditsBonus] = useState<number>(0);
   const [creditsLoading, setCreditsLoading] = useState(false);
   const [clientMounted, setClientMounted] = useState(false);
   const [activeSection, setActiveSection] = useState<WorkspaceSection>("model");
@@ -669,6 +670,7 @@ function WorkspacePage() {
         const c = data.credits || {};
         setCreditsUsed(c.used ?? 0);
         setCreditsTotal(c.total ?? 0);
+        setCreditsBonus(typeof c.bonus === "number" ? c.bonus : 0);
       }
     } catch {
       // ignore
@@ -3926,7 +3928,9 @@ function WorkspacePage() {
   );
   const accountBar = (
     <WorkspaceAccountBar
-      creditsRemaining={Math.max(0, creditsTotal - creditsUsed)}
+      creditsRemaining={
+        Math.max(0, creditsTotal - creditsUsed) + Math.max(0, creditsBonus)
+      }
       creditsLoading={creditsLoading}
       clientMounted={clientMounted}
     />

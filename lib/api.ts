@@ -686,6 +686,7 @@ export interface CreditsInfo {
   used: number;
   total: number;
   remaining: number;
+  bonus?: number;
   plan: string | null;
   resetAt?: string | null;
 }
@@ -700,14 +701,17 @@ function normalizeCreditsPayload(raw: unknown): CreditsInfo | null {
   if (!Number.isFinite(used) || !Number.isFinite(total)) {
     return null;
   }
+  const bonusRaw = Number(c.bonus);
+  const bonus = Number.isFinite(bonusRaw) ? Math.max(0, bonusRaw) : 0;
   const remainingRaw = Number(c.remaining);
   const remaining = Number.isFinite(remainingRaw)
     ? Math.max(0, remainingRaw)
-    : Math.max(0, total - used);
+    : Math.max(0, total - used) + bonus;
   return {
     used,
     total,
     remaining,
+    bonus,
     plan: typeof c.plan === "string" ? c.plan : null,
     resetAt:
       typeof c.resetAt === "string" || c.resetAt === null

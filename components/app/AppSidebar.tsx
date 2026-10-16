@@ -302,13 +302,14 @@ export function AppSidebar() {
           const nextUsed = c?.used ?? 0;
           const nextTotal = c?.total ?? 0;
           const resolvedPlan = c?.plan || subPlan || null;
+          const nextBonus = typeof c?.bonus === "number" ? c.bonus : 0;
           setCredits({
             used: nextUsed,
             total: nextTotal,
             remaining:
               typeof c?.remaining === "number"
                 ? c.remaining
-                : Math.max(0, nextTotal - nextUsed),
+                : Math.max(0, nextTotal - nextUsed) + Math.max(0, nextBonus),
             plan: resolvedPlan,
             resetAt: c?.resetAt ?? null,
             loading: false,
@@ -376,13 +377,15 @@ export function AppSidebar() {
           style={{ borderColor: sidebarBorder }}
         >
           <Link
-            href="/app/studio"
+            href="/"
             prefetch
             onClick={closeMobileSidebar}
             className={cn(
               "flex items-center min-w-0 flex-1 font-dm-sans text-[22px] font-semibold tracking-[-0.04em] text-neutral-900 hover:opacity-80 transition-opacity",
               collapsed && "md:w-0 md:overflow-hidden md:min-w-0"
             )}
+            aria-label="Hydrilla home"
+            title="Home"
           >
             <span className={cn("truncate", collapsed && "md:hidden")}>Hydrilla</span>
           </Link>

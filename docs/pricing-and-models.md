@@ -2,7 +2,7 @@
 
 How a month of credits turns into models. How money, plans, and Slot hours are stored is in [PAYMENTS.md](./PAYMENTS.md).
 
-Monthly plans. Counts below are whole models one month of credits can finish. Leftover credits stay on the account. Slot uses the Starter credit budget. Slot Pro uses the Pro credit budget. The hour limit is extra and does not change these costs.
+Monthly plans. Counts below are whole models one month of credits can finish. Unused period credits do not roll into the next month — each period refreshes to the plan allotment. Bonus or promo credits carry across renewals until spent. Slot uses the Starter credit budget. Slot Pro uses the Pro credit budget. The hour limit is extra and does not change these costs.
 
 | Plan | Price | Credits / month |
 | --- | --- | --- |

@@ -78,7 +78,7 @@ export const CREDIT_MATH = {
   textDefault: GENERATION_CREDITS.promptImage + GENERATION_CREDITS.modelFromImage,
   imageDefault: GENERATION_CREDITS.modelFromImage,
   copy:
-    "A default model costs 30 credits from an uploaded image. A text prompt also creates the source image, bringing the default total to 45 credits. These are whole-model estimates. Leftover credits stay on the account.",
+    "A default model costs 30 credits from an uploaded image. A text prompt also creates the source image, bringing the default total to 45 credits. These are whole-model estimates. Unused period credits do not roll into the next month — each billing period refreshes to the plan allotment (100 free / 900 Starter / 3,000 Pro). Bonus or promo credits carry across renewals until spent.",
 } as const;
 
 export type PricingCatalogId = PlanId | SlotPlanId;

@@ -54,6 +54,7 @@ type CreditsData = {
   used: number;
   total: number;
   remaining: number;
+  bonus?: number;
   plan: string | null;
   resetAt?: string | null;
 };
@@ -316,9 +317,14 @@ export default function UsagePage() {
                 </p>
               )}
               <p className="mt-2 text-sm text-neutral-500">
-                Credits used
-                {resetStr && <> · Resets {resetStr}</>}
+                Period credits used
+                {resetStr ? <> · Next renewal {resetStr}</> : null}
               </p>
+              {!loading && (credits?.bonus ?? 0) > 0 ? (
+                <p className="mt-1 text-sm text-neutral-500 tabular-nums">
+                  {(credits?.bonus ?? 0).toLocaleString()} bonus credits (carry across renewals)
+                </p>
+              ) : null}
             </div>
             <div className="text-right shrink-0">
               <p className="text-[22px] font-semibold tracking-tight text-neutral-900 tabular-nums">
