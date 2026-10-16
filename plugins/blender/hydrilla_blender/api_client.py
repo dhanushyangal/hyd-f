@@ -244,14 +244,26 @@ class HydrillaClient:
                 or job_id.startswith("cs_")
             ):
                 continue
-            status = str(item.get("status") or "").upper()
+            raw_status = str(item.get("status") or "").upper()
             mesh = (
                 item.get("resultGlbUrl")
                 or item.get("result_glb_url")
                 or item.get("mesh_url")
             )
-            if not mesh and status in {"DONE", "SUCCEEDED", "SUCCESS", "COMPLETED"}:
+            # If a GLB exists, treat as complete even when status lags on WAIT/RUN
+            if mesh:
+                status = "DONE"
+            elif raw_status in {"DONE", "SUCCEEDED", "SUCCESS", "COMPLETED"}:
+                status = "DONE"
                 mesh = f"{self.base_url}/api/3d/glb/{urllib.parse.quote(job_id, safe='')}"
+            elif raw_status in {"FAIL", "FAILED", "ERROR"}:
+                status = "FAILED"
+            elif raw_status in {"WAIT", "PENDING", "QUEUED"}:
+                status = "PENDING"
+            elif raw_status in {"RUN", "IN_PROGRESS", "RUNNING", "PROCESSING"}:
+                status = "RUNNING"
+            else:
+                status = raw_status or "UNKNOWN"
             prompt = str(item.get("prompt") or item.get("name") or "").strip()
             if not prompt:
                 prompt = generate_type or "3D job"

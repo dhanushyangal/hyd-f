@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Hydrilla",
     "author": "Hydrilla",
-    "version": (1, 3, 14),
+    "version": (1, 3, 15),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Hydrilla",
     "description": "Built-in Bridge, Clerk sign-in, and AI 3D generate/import",
@@ -240,25 +240,46 @@ ACTIVE_JOB_STATUSES = {
     "RUNNING",
     "PROCESSING",
 }
+DONE_JOB_STATUSES = {"DONE", "SUCCEEDED", "SUCCESS", "COMPLETED"}
+FAILED_JOB_STATUSES = {"FAIL", "FAILED", "ERROR"}
+CANCELLED_JOB_STATUSES = {"CANCELLED", "CANCELED"}
 
 
-def _job_status_label(status: str) -> str:
-    code = (status or "").upper()
+def _normalize_job_status(status: str, *, has_mesh: bool = False) -> str:
+    """Canonical status. Mesh URL means Done even if the server still says RUN."""
+    code = (status or "").strip().upper()
+    if has_mesh and code in ACTIVE_JOB_STATUSES | {""}:
+        return "DONE"
+    if code in DONE_JOB_STATUSES:
+        return "DONE"
+    if code in FAILED_JOB_STATUSES:
+        return "FAILED"
+    if code in CANCELLED_JOB_STATUSES:
+        return "CANCELLED"
     if code in {"WAIT", "PENDING", "QUEUED"}:
-        return "Pending"
+        return "PENDING"
     if code in {"RUN", "IN_PROGRESS", "RUNNING", "PROCESSING"}:
+        return "RUNNING"
+    return code or "UNKNOWN"
+
+
+def _job_status_label(status: str, *, has_mesh: bool = False) -> str:
+    code = _normalize_job_status(status, has_mesh=has_mesh)
+    if code == "PENDING":
+        return "Pending"
+    if code == "RUNNING":
         return "Running"
-    if code in {"DONE", "SUCCEEDED", "SUCCESS", "COMPLETED"}:
+    if code == "DONE":
         return "Done"
-    if code in {"FAIL", "FAILED", "ERROR"}:
+    if code == "FAILED":
         return "Failed"
-    if code in {"CANCELLED", "CANCELED"}:
+    if code == "CANCELLED":
         return "Cancelled"
-    return code or "Unknown"
+    return code.title() if code else "Unknown"
 
 
-def _job_status_icon(status: str) -> str:
-    label = _job_status_label(status)
+def _job_status_icon(status: str, *, has_mesh: bool = False) -> str:
+    label = _job_status_label(status, has_mesh=has_mesh)
     if label == "Pending":
         return "TIME"
     if label == "Running":
@@ -268,6 +289,15 @@ def _job_status_icon(status: str) -> str:
     if label == "Failed":
         return "ERROR"
     return "INFO"
+
+
+def _job_sort_key(item: dict) -> tuple:
+    code = _normalize_job_status(
+        str(item.get("status") or ""),
+        has_mesh=bool(item.get("mesh_url")),
+    )
+    order = {"RUNNING": 0, "PENDING": 1, "DONE": 2, "FAILED": 3, "CANCELLED": 4}
+    return (order.get(code, 9), str(item.get("created_at") or ""), str(item.get("id") or ""))
 
 
 def _truncate(text: str, width: int = 28) -> str:
@@ -331,8 +361,17 @@ def _set_scene_status(
         scene.hydrilla_job_task_id = task_id
 
 
+def _local_job_busy(scene=None) -> bool:
+    """True only while THIS Blender session is actively generating/importing."""
+    if _JOB["busy"]:
+        return True
+    if scene is not None and bool(getattr(scene, "hydrilla_busy", False)):
+        return True
+    return False
+
+
 def _status_icon(kind: str, busy: bool) -> str:
-    if busy or kind == "RUNNING":
+    if busy:
         return "SORTTIME"
     if kind == "ERROR" or kind == "SESSION":
         return "ERROR"
@@ -342,28 +381,32 @@ def _status_icon(kind: str, busy: bool) -> str:
 
 
 def _status_headline(scene) -> str:
-    busy = bool(scene.hydrilla_busy) or bool(_JOB["busy"])
+    busy = _local_job_busy(scene)
     kind = scene.hydrilla_status_kind or "INFO"
     phase = (scene.hydrilla_job_phase or "").strip()
     progress = int(getattr(scene, "hydrilla_job_progress", 0) or 0)
     if busy:
         if phase and progress > 0:
-            return f"Running · {phase} · {progress}%"
+            return f"Generating · {phase} · {progress}%"
         if phase:
-            return f"Running · {phase}"
-        return "Running…"
+            return f"Generating · {phase}"
+        return "Generating…"
     if kind == "SESSION":
         return "Session issue"
     if kind == "ERROR":
         return "Failed"
     if kind == "DONE":
         return "Done"
-    return "Status"
+    pending = int(getattr(scene, "hydrilla_jobs_pending", 0) or 0)
+    running = int(getattr(scene, "hydrilla_jobs_running", 0) or 0)
+    if pending or running:
+        return f"Account · {running} running · {pending} pending"
+    return "Ready"
 
 
 def _draw_status_block(layout, scene) -> None:
-    """Always-visible status: running state, progress, Clerk/session errors."""
-    busy = bool(scene.hydrilla_busy) or bool(_JOB["busy"])
+    """Always-visible status: local generate vs account job summary."""
+    busy = _local_job_busy(scene)
     kind = scene.hydrilla_status_kind or "INFO"
     box = layout.box()
     header = box.row()
@@ -459,9 +502,11 @@ def _job_timer() -> Optional[float]:
                     phase="Failed" if status_kind == "ERROR" else "Session",
                     progress=0,
                     busy=False,
+                    task_id=scene.hydrilla_job_task_id or "",
                 )
                 _JOB["busy"] = False
                 _JOB["cancel"] = False
+                scene.hydrilla_busy = False
                 _tag_hydrilla_redraw()
                 popup_title = (
                     "Hydrilla — Session expired"
@@ -469,7 +514,11 @@ def _job_timer() -> Optional[float]:
                     else "Hydrilla — Failed"
                 )
                 _show_hydrilla_popup(message, title=popup_title, icon="ERROR")
-                return None
+                try:
+                    _start_jobs_fetch(bpy.context, quiet=True)
+                except Exception:
+                    pass
+                return 0.5
             elif kind == "done":
                 path = event.get("path") or ""
                 try:
@@ -498,21 +547,26 @@ def _job_timer() -> Optional[float]:
                         kind=status_kind,
                         phase="Import failed",
                         busy=False,
+                        task_id="",
                     )
                     _show_hydrilla_popup(message, title="Hydrilla — Failed", icon="ERROR")
                 _JOB["busy"] = False
                 _JOB["cancel"] = False
+                scene.hydrilla_busy = False
                 _tag_hydrilla_redraw()
-                return None
+                # Refresh account job list so completed jobs show as Done
+                try:
+                    _start_jobs_fetch(bpy.context, quiet=True)
+                except Exception:
+                    pass
+                return 0.5
             _tag_hydrilla_redraw()
     except Empty:
         pass
 
     if not _JOB["busy"]:
-        # Keep last durable status; only clear busy if scene still thinks it is busy
-        # without a live job (e.g. after reconnect).
-        if scene.hydrilla_busy and not (scene.hydrilla_job_task_id or "").strip():
-            scene.hydrilla_busy = False
+        # Clear sticky busy once the background worker has finished
+        scene.hydrilla_busy = False
         return None
     _tag_hydrilla_redraw()
     return 0.2
@@ -539,20 +593,50 @@ def _start_background_job(worker, *, mode: str = "") -> bool:
 
 
 def _apply_jobs_to_scene(scene, jobs: list) -> None:
-    scene.hydrilla_jobs.clear()
+    normalized: list = []
     for item in jobs:
+        mesh = str(item.get("mesh_url") or "").strip()
+        raw_status = str(item.get("status") or "")
+        status = _normalize_job_status(raw_status, has_mesh=bool(mesh))
+        normalized.append(
+            {
+                "id": str(item.get("id") or ""),
+                "status": status,
+                "prompt": str(item.get("prompt") or ""),
+                "mesh_url": mesh,
+                "generate_type": str(item.get("generate_type") or ""),
+                "created_at": str(item.get("created_at") or ""),
+            }
+        )
+    normalized.sort(key=_job_sort_key)
+
+    scene.hydrilla_jobs.clear()
+    pending = 0
+    running = 0
+    done = 0
+    failed = 0
+    for item in normalized:
         entry = scene.hydrilla_jobs.add()
-        entry.job_id = str(item.get("id") or "")
-        entry.status = str(item.get("status") or "")
-        entry.prompt = str(item.get("prompt") or "")
-        entry.mesh_url = str(item.get("mesh_url") or "")
-        entry.generate_type = str(item.get("generate_type") or "")
-    active = sum(
-        1
-        for item in jobs
-        if str(item.get("status") or "").upper() in ACTIVE_JOB_STATUSES
-    )
+        entry.job_id = item["id"]
+        entry.status = item["status"]
+        entry.prompt = item["prompt"]
+        entry.mesh_url = item["mesh_url"]
+        entry.generate_type = item["generate_type"]
+        if item["status"] == "PENDING":
+            pending += 1
+        elif item["status"] == "RUNNING":
+            running += 1
+        elif item["status"] == "DONE":
+            done += 1
+        elif item["status"] == "FAILED":
+            failed += 1
+
+    active = pending + running
     scene.hydrilla_jobs_active = active
+    scene.hydrilla_jobs_pending = pending
+    scene.hydrilla_jobs_running = running
+    scene.hydrilla_jobs_done = done
+    scene.hydrilla_jobs_failed = failed
     scene.hydrilla_jobs_fetched_at = time.strftime("%H:%M:%S")
 
 
@@ -562,7 +646,6 @@ def _jobs_timer() -> Optional[float]:
         while True:
             event = _JOBS_UI["events"].get_nowait()
             if scene is None:
-                # Put back — timer will retry when a scene context exists
                 _JOBS_UI["events"].put(event)
                 return 0.25
             kind = event.get("kind")
@@ -570,7 +653,13 @@ def _jobs_timer() -> Optional[float]:
                 _JOBS_UI["fetching"] = False
                 message = str(event.get("text") or "Could not load jobs")
                 status_kind = "SESSION" if _is_session_error(message) else "ERROR"
-                _set_scene_status(scene, message, kind=status_kind)
+                # Never mark local generate busy from a jobs-list error
+                _set_scene_status(
+                    scene,
+                    message,
+                    kind=status_kind,
+                    busy=_JOB["busy"],
+                )
                 scene.hydrilla_jobs_error = message
                 _tag_hydrilla_redraw()
             elif kind == "ok":
@@ -578,29 +667,40 @@ def _jobs_timer() -> Optional[float]:
                 jobs = event.get("jobs") or []
                 scene.hydrilla_jobs_error = ""
                 _apply_jobs_to_scene(scene, jobs)
-                active = int(getattr(scene, "hydrilla_jobs_active", 0) or 0)
+                pending = int(getattr(scene, "hydrilla_jobs_pending", 0) or 0)
+                running = int(getattr(scene, "hydrilla_jobs_running", 0) or 0)
+                done = int(getattr(scene, "hydrilla_jobs_done", 0) or 0)
+                failed = int(getattr(scene, "hydrilla_jobs_failed", 0) or 0)
                 total = len(jobs)
-                if active > 0:
+                local_busy = bool(_JOB["busy"])
+                # If nothing local is generating, clear sticky busy from older runs
+                if not local_busy:
+                    scene.hydrilla_busy = False
+                summary = (
+                    f"{running} running · {pending} pending · "
+                    f"{done} done · {failed} failed ({total} total)"
+                )
+                if running or pending:
                     _set_scene_status(
                         scene,
-                        f"{active} pending/running · {total} recent job(s)",
-                        kind="RUNNING",
+                        summary,
+                        kind="INFO",
                         phase="Account jobs",
-                        busy=bool(scene.hydrilla_busy) or bool(_JOB["busy"]),
+                        busy=local_busy,
                     )
                 else:
                     _set_scene_status(
                         scene,
-                        f"Loaded {total} recent job(s) for your account",
-                        kind="INFO",
-                        phase="Account jobs",
-                        busy=bool(scene.hydrilla_busy) or bool(_JOB["busy"]),
+                        summary if total else "No jobs for this account yet",
+                        kind="DONE" if done and not local_busy else "INFO",
+                        phase="Ready" if not local_busy else scene.hydrilla_job_phase,
+                        progress=100 if done and not local_busy else -1,
+                        busy=local_busy,
                     )
                 _tag_hydrilla_redraw()
     except Empty:
         pass
 
-    # Keep timer alive while a fetch is in flight (prevents stuck "Loading…")
     if _JOBS_UI["fetching"]:
         return 0.25
 
@@ -1670,15 +1770,22 @@ class HYDRILLA_PT_jobs(Panel):
         layout = self.layout
         scene = context.scene
         box = layout.box()
+
+        pending = int(getattr(scene, "hydrilla_jobs_pending", 0) or 0)
+        running = int(getattr(scene, "hydrilla_jobs_running", 0) or 0)
+        done = int(getattr(scene, "hydrilla_jobs_done", 0) or 0)
+        failed = int(getattr(scene, "hydrilla_jobs_failed", 0) or 0)
+
         header = box.row()
-        active = int(getattr(scene, "hydrilla_jobs_active", 0) or 0)
-        total = len(scene.hydrilla_jobs)
         if _JOBS_UI["fetching"]:
             header.label(text="Loading jobs…", icon="SORTTIME")
-        elif active > 0:
-            header.label(text=f"{active} active · {total} listed", icon="SORTTIME")
+        elif running or pending:
+            header.label(
+                text=f"{running} running · {pending} pending",
+                icon="SORTTIME",
+            )
         else:
-            header.label(text=f"{total} job(s)", icon="LONGDISPLAY")
+            header.label(text=f"{done} done · {failed} failed", icon="CHECKMARK")
         refresh = header.row()
         refresh.enabled = not _JOBS_UI["fetching"]
         refresh.operator("hydrilla.refresh_jobs", text="", icon="FILE_REFRESH")
@@ -1692,40 +1799,43 @@ class HYDRILLA_PT_jobs(Panel):
         if error:
             for line in _wrap_status_lines(error, width=32):
                 box.label(text=line, icon="ERROR")
-            box.operator("hydrilla.sign_in", text="Sign in again", icon="URL")
-            box.operator("hydrilla.sync_account", text="Sync", icon="FILE_REFRESH")
+            row = box.row(align=True)
+            row.operator("hydrilla.sign_in", text="Sign in", icon="URL")
+            row.operator("hydrilla.sync_account", text="Sync", icon="FILE_REFRESH")
 
         fetched = getattr(scene, "hydrilla_jobs_fetched_at", "") or ""
         if fetched:
             box.label(text=f"Updated {fetched}")
 
-        box.prop(scene, "hydrilla_jobs_show_all", text="Show completed too")
+        counts = box.row(align=True)
+        counts.label(text=f"R {running}")
+        counts.label(text=f"P {pending}")
+        counts.label(text=f"D {done}")
+        counts.label(text=f"F {failed}")
+
+        box.prop(scene, "hydrilla_jobs_show_all", text="Show completed / failed")
 
         jobs = list(scene.hydrilla_jobs)
         show_all = bool(scene.hydrilla_jobs_show_all)
         visible = []
         for index, item in enumerate(jobs):
-            status = (item.status or "").upper()
-            if show_all or status in ACTIVE_JOB_STATUSES or status in {
-                "DONE",
-                "SUCCEEDED",
-                "FAIL",
-                "FAILED",
-            }:
-                # Default list: active first, then recent done/failed (always show something)
-                visible.append((index, item))
+            status = _normalize_job_status(
+                item.status or "",
+                has_mesh=bool((item.mesh_url or "").strip()),
+            )
+            if status in {"RUNNING", "PENDING"}:
+                visible.append((index, item, status))
+            elif show_all and status in {"DONE", "FAILED", "CANCELLED"}:
+                visible.append((index, item, status))
 
-        if not show_all:
-            # Prefer active; if none, still show recent completed so the panel isn't empty
-            active_only = [
-                pair
-                for pair in visible
-                if (pair[1].status or "").upper() in ACTIVE_JOB_STATUSES
-            ]
-            if active_only:
-                visible = active_only
-            else:
-                visible = visible[:8]
+        # If nothing active, still show recent completed so the list is useful
+        if not visible and jobs:
+            for index, item in enumerate(jobs[:10]):
+                status = _normalize_job_status(
+                    item.status or "",
+                    has_mesh=bool((item.mesh_url or "").strip()),
+                )
+                visible.append((index, item, status))
 
         if _JOBS_UI["fetching"] and not visible:
             box.label(text="Fetching from Hydrilla…", icon="SORTTIME")
@@ -1736,23 +1846,27 @@ class HYDRILLA_PT_jobs(Panel):
             box.label(text="Generate once, then Refresh")
             return
 
-        for index, item in visible[:15]:
-            col = box.column(align=True)
-            status_label = _job_status_label(item.status)
+        last_group = ""
+        for index, item, status in visible[:16]:
+            label = _job_status_label(status, has_mesh=bool(item.mesh_url))
+            if label != last_group:
+                box.label(text=label.upper(), icon=_job_status_icon(status, has_mesh=bool(item.mesh_url)))
+                last_group = label
+            col = box.box()
             top = col.row(align=True)
-            top.label(text=status_label, icon=_job_status_icon(item.status))
-            top.label(text=str(item.job_id or "")[:10])
-            col.label(text=_truncate(item.prompt, 34))
+            top.label(text=_truncate(item.prompt, 28))
+            top.label(text=str(item.job_id or "")[:8])
+            meta = col.row(align=True)
+            meta.label(text=label)
             if item.generate_type:
-                col.label(text=str(item.generate_type))
-            if status_label == "Done":
+                meta.label(text=str(item.generate_type)[:14])
+            if label == "Done":
                 op = col.operator(
                     "hydrilla.import_account_job",
                     text="Import mesh",
                     icon="IMPORT",
                 )
                 op.index = index
-            col.separator()
 
 
 class HYDRILLA_PT_generate(Panel):
@@ -1769,7 +1883,7 @@ class HYDRILLA_PT_generate(Panel):
 
         layout.prop(scene, "hydrilla_gen_mode", expand=True)
 
-        busy = bool(scene.hydrilla_busy) or bool(_JOB["busy"])
+        busy = _local_job_busy(scene)
         box = layout.box()
         if scene.hydrilla_gen_mode == "TEXT":
             box.label(text="Text to 3D", icon="FONT_DATA")
@@ -1797,7 +1911,9 @@ class HYDRILLA_PT_generate(Panel):
             op.operator("hydrilla.image_to_3d", text="Generate mesh", icon="MESH_CUBE")
 
         if busy:
-            box.label(text="Job running — see Status + Your jobs", icon="SORTTIME")
+            box.label(text="Generating — see Status + Your jobs", icon="SORTTIME")
+        elif int(getattr(scene, "hydrilla_jobs_done", 0) or 0) > 0:
+            box.label(text="Finished jobs are under Your jobs → Done", icon="CHECKMARK")
 
 
 class HYDRILLA_PT_studio(Panel):
@@ -1918,6 +2034,10 @@ def register():
     )
     bpy.types.Scene.hydrilla_jobs = CollectionProperty(type=HydrillaJobItem)
     bpy.types.Scene.hydrilla_jobs_active = IntProperty(name="Active jobs", default=0)
+    bpy.types.Scene.hydrilla_jobs_pending = IntProperty(name="Pending jobs", default=0)
+    bpy.types.Scene.hydrilla_jobs_running = IntProperty(name="Running jobs", default=0)
+    bpy.types.Scene.hydrilla_jobs_done = IntProperty(name="Done jobs", default=0)
+    bpy.types.Scene.hydrilla_jobs_failed = IntProperty(name="Failed jobs", default=0)
     bpy.types.Scene.hydrilla_jobs_fetched_at = StringProperty(name="Jobs fetched", default="")
     bpy.types.Scene.hydrilla_jobs_error = StringProperty(name="Jobs error", default="")
     bpy.types.Scene.hydrilla_jobs_show_all = BoolProperty(
@@ -1953,6 +2073,10 @@ def unregister():
     del bpy.types.Scene.hydrilla_gen_mode
     del bpy.types.Scene.hydrilla_jobs
     del bpy.types.Scene.hydrilla_jobs_active
+    del bpy.types.Scene.hydrilla_jobs_pending
+    del bpy.types.Scene.hydrilla_jobs_running
+    del bpy.types.Scene.hydrilla_jobs_done
+    del bpy.types.Scene.hydrilla_jobs_failed
     del bpy.types.Scene.hydrilla_jobs_fetched_at
     del bpy.types.Scene.hydrilla_jobs_error
     del bpy.types.Scene.hydrilla_jobs_show_all
