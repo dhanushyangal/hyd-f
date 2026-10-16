@@ -2073,7 +2073,7 @@ function WorkspacePage() {
         const userFacing = toUserFacingGpuError(msg);
         await waitMobileGpuOfflineMinimum(msg, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing, refunded: true });
+        setCenterView({ type: "error", message: userFacing, refunded: !isPaywallError(msg) });
         removePendingJob(pendingId);
         refreshCredits();
         refreshLibrary();
@@ -2223,7 +2223,11 @@ function WorkspacePage() {
         const userFacing = err?.message || "Failed to generate image";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing, refunded: true });
+        setCenterView({
+          type: "error",
+          message: userFacing,
+          refunded: !isPaywallError(err?.message),
+        });
         setGeneratingPreview(false);
         removePendingJob(pendingTextImageId);
         refreshCredits();
@@ -2403,7 +2407,11 @@ function WorkspacePage() {
         const userFacing = err?.message || "Failed to edit image";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing, refunded: true });
+        setCenterView({
+          type: "error",
+          message: userFacing,
+          refunded: !isPaywallError(err?.message),
+        });
         setGeneratingPreview(false);
         removePendingJob(pendingEditId);
         refreshCredits();
@@ -2610,7 +2618,11 @@ function WorkspacePage() {
         const userFacing = err?.message || "Failed to modify 3D model";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing, refunded: true });
+        setCenterView({
+          type: "error",
+          message: userFacing,
+          refunded: !isPaywallError(err?.message),
+        });
         setGeneratingPreview(false);
         removePendingJob(pendingEditId);
         refreshCredits();
@@ -2722,7 +2734,11 @@ function WorkspacePage() {
         const userFacing = err?.message || "Failed to generate concept from prompt";
         await waitMobileGpuOfflineMinimum(err.message, userFacing);
         mobileGenStartedAtRef.current = null;
-        setCenterView({ type: "error", message: userFacing, refunded: true });
+        setCenterView({
+          type: "error",
+          message: userFacing,
+          refunded: !isPaywallError(err?.message),
+        });
         setGeneratingPreview(false);
         removePendingJob(pendingTextImageId);
         refreshCredits();

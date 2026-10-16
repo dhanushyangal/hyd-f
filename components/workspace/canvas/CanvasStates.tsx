@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, Coins } from "lucide-react";
 import { ThinkingOrb } from "thinking-orbs";
 import { Progress } from "@/components/ui/progress";
 import { WaterPassRail } from "@/components/water/WaterPassRail";
 import type { QueueInfo } from "@/lib/api";
 import type { QualityTier } from "@/lib/waterSkills";
+import { isPaywallError, track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { displayImageUrl, EASE, FOCUS } from "../composer-parts";
 import type { ComposerMode } from "../types";
@@ -187,6 +188,39 @@ export function CanvasError({
             className="inline-flex h-11 items-center rounded-full bg-neutral-900 px-5 text-sm font-medium text-white hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2"
           >
             Choose hour
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (isPaywallError(message)) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-6 pb-56 text-center font-dm-sans" role="status">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-900">
+          <Coins className="h-5 w-5" strokeWidth={1.75} />
+        </div>
+        <h3 className="mt-5 text-[28px] font-semibold tracking-[-0.03em] text-neutral-900">Out of credits</h3>
+        <p className="mt-2 max-w-sm text-[15px] leading-6 text-neutral-600">
+          {message.trim() || "You don't have enough credits for this generation."}
+        </p>
+        <p className="mt-1 text-[14px] leading-6 text-neutral-800">Credits were not used.</p>
+        <div className="mt-6 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="h-11 rounded-full px-4 text-sm font-medium text-neutral-600 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2"
+          >
+            Dismiss
+          </button>
+          <Link
+            href="/app/pricing"
+            onClick={() => {
+              track("upgrade_clicked", { source: "canvas_insufficient_credits" });
+            }}
+            className="inline-flex h-11 items-center rounded-full bg-neutral-900 px-5 text-sm font-medium text-white hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2"
+          >
+            Upgrade
           </Link>
         </div>
       </div>
