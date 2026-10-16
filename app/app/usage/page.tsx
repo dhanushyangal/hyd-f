@@ -24,7 +24,31 @@ import {
 import { cn } from "@/lib/utils";
 import { planDisplayLabel } from "@/lib/pricing";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
+const BACKEND_URL = (
+  process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app"
+).replace(/\/+$/, "");
+
+/** reset_at is the next reset (period end). Chart from period start, not near the end. */
+function billingPeriodStartMs(resetAt: string | null | undefined, nowMs: number): number {
+  const fallback = nowMs - 30 * 86400000;
+  if (!resetAt) {
+    return fallback;
+  }
+  const resetMs = new Date(resetAt).getTime();
+  if (Number.isNaN(resetMs)) {
+    return fallback;
+  }
+  // Period end in the future → approximate start (~monthly). Never use resetAt-1d
+  // (that left the window in the future and wiped the chart in production).
+  if (resetMs > nowMs) {
+    const periodStart = resetMs - 31 * 86400000;
+    if (periodStart >= nowMs) {
+      return fallback;
+    }
+    return periodStart;
+  }
+  return resetMs;
+}
 
 type CreditsData = {
   used: number;
@@ -121,6 +145,7 @@ export default function UsagePage() {
   const [waterLoading, setWaterLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [range, setRange] = useState<"1d" | "7d" | "30d">("30d");
 
   useEffect(() => {
@@ -132,6 +157,7 @@ export default function UsagePage() {
     }
     (async () => {
       try {
+        setLoadError(null);
         const token = await getToken();
         const headers = (token ? { Authorization: `Bearer ${token}` } : {}) as HeadersInit;
         const [creditsRes, usageRes, historyRes, waterRes] = await Promise.all([
@@ -151,13 +177,17 @@ export default function UsagePage() {
         if (historyRes.ok) {
           const data = await historyRes.json();
           setUsageHistory(data.usage ?? []);
+        } else if (historyRes.status === 401 || historyRes.status === 403) {
+          setLoadError("Sign in again to load usage history.");
+        } else if (!historyRes.ok) {
+          setLoadError("Could not load usage history. Try refreshing.");
         }
         if (waterRes.ok) {
           const data = await waterRes.json();
           setWaterUsage((data.jobs ?? []) as WaterUsageRow[]);
         }
       } catch {
-        // ignore
+        setLoadError("Could not reach the usage API. Try refreshing.");
       } finally {
         setLoading(false);
         setHistoryLoading(false);
@@ -189,14 +219,10 @@ export default function UsagePage() {
     return `${from.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${to.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
   }, [cutoff]);
 
-  const chartStart = useMemo(() => {
-    if (credits?.resetAt) {
-      const r = new Date(credits.resetAt);
-      r.setDate(r.getDate() - 1);
-      return r.getTime();
-    }
-    return now - 30 * 86400000;
-  }, [credits?.resetAt, now]);
+  const chartStart = useMemo(
+    () => billingPeriodStartMs(credits?.resetAt, now),
+    [credits?.resetAt, now]
+  );
 
   const chartData = useMemo(() => {
     const byDay: Record<string, Record<string, number>> = {};
@@ -253,6 +279,9 @@ export default function UsagePage() {
                 ? "Loading your usage…"
                 : `${planLabel} plan · ${remaining.toLocaleString()} credits remaining`}
             </p>
+            {loadError ? (
+              <p className="mt-2 text-sm text-amber-700">{loadError}</p>
+            ) : null}
           </div>
           <Link
             href="/app/settings?section=billing"
