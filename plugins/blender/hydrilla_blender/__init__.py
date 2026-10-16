@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Hydrilla",
     "author": "Hydrilla",
-    "version": (1, 3, 13),
+    "version": (1, 3, 14),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Hydrilla",
     "description": "Built-in Bridge, Clerk sign-in, and AI 3D generate/import",
@@ -48,10 +48,10 @@ SESSION_REAUTH = (
     "KEEP the Connect tab open, then Sync and Generate again."
 )
 SESSION_KEEP_TAB = (
-    "Keep the browser Connect tab open while generating "
-    "(it refreshes your login every ~20s)."
+    "Keep the browser Connect tab open and visible — "
+    "it refreshes your login every ~10s."
 )
-MIN_TOKEN_SECONDS = 20
+MIN_TOKEN_SECONDS = 5
 
 
 def _prefs(context):
@@ -561,31 +561,48 @@ def _jobs_timer() -> Optional[float]:
     try:
         while True:
             event = _JOBS_UI["events"].get_nowait()
-            kind = event.get("kind")
             if scene is None:
-                continue
+                # Put back — timer will retry when a scene context exists
+                _JOBS_UI["events"].put(event)
+                return 0.25
+            kind = event.get("kind")
             if kind == "error":
                 _JOBS_UI["fetching"] = False
                 message = str(event.get("text") or "Could not load jobs")
                 status_kind = "SESSION" if _is_session_error(message) else "ERROR"
                 _set_scene_status(scene, message, kind=status_kind)
+                scene.hydrilla_jobs_error = message
                 _tag_hydrilla_redraw()
             elif kind == "ok":
                 _JOBS_UI["fetching"] = False
                 jobs = event.get("jobs") or []
+                scene.hydrilla_jobs_error = ""
                 _apply_jobs_to_scene(scene, jobs)
                 active = int(getattr(scene, "hydrilla_jobs_active", 0) or 0)
+                total = len(jobs)
                 if active > 0:
                     _set_scene_status(
                         scene,
-                        f"{active} pending/running job(s) for your account",
+                        f"{active} pending/running · {total} recent job(s)",
                         kind="RUNNING",
+                        phase="Account jobs",
+                        busy=bool(scene.hydrilla_busy) or bool(_JOB["busy"]),
+                    )
+                else:
+                    _set_scene_status(
+                        scene,
+                        f"Loaded {total} recent job(s) for your account",
+                        kind="INFO",
                         phase="Account jobs",
                         busy=bool(scene.hydrilla_busy) or bool(_JOB["busy"]),
                     )
                 _tag_hydrilla_redraw()
     except Empty:
         pass
+
+    # Keep timer alive while a fetch is in flight (prevents stuck "Loading…")
+    if _JOBS_UI["fetching"]:
+        return 0.25
 
     if scene is not None and int(getattr(scene, "hydrilla_jobs_active", 0) or 0) > 0:
         _JOBS_UI["auto"] = True
@@ -600,30 +617,41 @@ def _jobs_timer() -> Optional[float]:
 def _start_jobs_fetch(context, *, quiet: bool = False) -> bool:
     if _JOBS_UI["fetching"]:
         return False
-    scene = context.scene
+    scene = getattr(context, "scene", None)
+    if scene is None:
+        return False
     try:
         client = _resolve_client(context)
         if client.mode != "clerk":
             if not quiet:
-                _set_scene_status(
-                    scene,
-                    "Your Jobs needs Sign in with Hydrilla (not API key alone).",
-                    kind="SESSION",
-                    phase="Session",
-                )
+                message = "Your Jobs needs Sign in with Hydrilla (not API key alone)."
+                _set_scene_status(scene, message, kind="SESSION", phase="Session")
+                scene.hydrilla_jobs_error = message
             return False
+        # Prefer Bridge-refreshed token; only fail hard when truly expired
         _ensure_fresh_clerk_token(client.token, client.mode)
     except Exception as error:
+        message = _user_error(error)
+        status_kind = "SESSION" if _is_session_error(message) else "ERROR"
+        scene.hydrilla_jobs_error = message
         if not quiet:
-            message = _user_error(error)
-            status_kind = "SESSION" if _is_session_error(message) else "ERROR"
             _set_scene_status(scene, message, kind=status_kind)
+        # Still allow timer to clear loading state
+        _JOBS_UI["fetching"] = False
         return False
 
+    # Capture a fresh token right before the request (Bridge may have newer JWT)
     token = client.token
+    try:
+        fresh = _bridge_token_provider()()
+        if fresh:
+            token = str(fresh).strip() or token
+    except Exception:
+        pass
     base_url = client.base_url
     mode = client.mode
     _JOBS_UI["fetching"] = True
+    scene.hydrilla_jobs_error = ""
 
     def worker():
         try:
@@ -633,14 +661,14 @@ def _start_jobs_fetch(context, *, quiet: bool = False) -> bool:
                 mode=mode,
                 token_provider=_bridge_token_provider() if mode == "clerk" else None,
             )
-            jobs = job_client.list_user_jobs(limit=30)
+            jobs = job_client.list_user_jobs(limit=40)
             _JOBS_UI["events"].put({"kind": "ok", "jobs": jobs})
         except Exception as error:
             _JOBS_UI["events"].put({"kind": "error", "text": _user_error(error)})
 
     threading.Thread(target=worker, name="hydrilla-jobs", daemon=True).start()
     if not bpy.app.timers.is_registered(_jobs_timer):
-        bpy.app.timers.register(_jobs_timer, first_interval=0.1)
+        bpy.app.timers.register(_jobs_timer, first_interval=0.05)
     return True
 
 
@@ -751,7 +779,16 @@ def _ensure_fresh_clerk_token(token: str, mode: str) -> None:
         raise api_client.HydrillaApiError(SESSION_REAUTH)
     left = _jwt_seconds_left(check)
     if left is not None and left < MIN_TOKEN_SECONDS:
-        raise api_client.HydrillaApiError(SESSION_REAUTH)
+        # One more Bridge pull — Connect may have just refreshed
+        time.sleep(0.35)
+        try:
+            again = _bridge_token_provider()()
+        except Exception:
+            again = None
+        check2 = (again or "").strip()
+        left2 = _jwt_seconds_left(check2) if check2 else None
+        if not check2 or (left2 is not None and left2 < MIN_TOKEN_SECONDS):
+            raise api_client.HydrillaApiError(SESSION_REAUTH)
 
 
 def _resolve_client(context):
@@ -1635,61 +1672,87 @@ class HYDRILLA_PT_jobs(Panel):
         box = layout.box()
         header = box.row()
         active = int(getattr(scene, "hydrilla_jobs_active", 0) or 0)
-        if active > 0:
-            header.label(text=f"{active} pending / running", icon="SORTTIME")
+        total = len(scene.hydrilla_jobs)
+        if _JOBS_UI["fetching"]:
+            header.label(text="Loading jobs…", icon="SORTTIME")
+        elif active > 0:
+            header.label(text=f"{active} active · {total} listed", icon="SORTTIME")
         else:
-            header.label(text="Account jobs", icon="LONGDISPLAY")
+            header.label(text=f"{total} job(s)", icon="LONGDISPLAY")
         refresh = header.row()
         refresh.enabled = not _JOBS_UI["fetching"]
-        refresh.operator(
-            "hydrilla.refresh_jobs",
-            text="" if not _JOBS_UI["fetching"] else "",
-            icon="FILE_REFRESH",
-        )
+        refresh.operator("hydrilla.refresh_jobs", text="", icon="FILE_REFRESH")
 
         mode = scene.hydrilla_auth_mode or "NONE"
         if mode != "CLERK":
             box.label(text="Sign in + Sync to see your jobs", icon="INFO")
             return
 
+        error = (getattr(scene, "hydrilla_jobs_error", "") or "").strip()
+        if error:
+            for line in _wrap_status_lines(error, width=32):
+                box.label(text=line, icon="ERROR")
+            box.operator("hydrilla.sign_in", text="Sign in again", icon="URL")
+            box.operator("hydrilla.sync_account", text="Sync", icon="FILE_REFRESH")
+
         fetched = getattr(scene, "hydrilla_jobs_fetched_at", "") or ""
         if fetched:
             box.label(text=f"Updated {fetched}")
 
-        show_all = bool(scene.hydrilla_jobs_show_all)
         box.prop(scene, "hydrilla_jobs_show_all", text="Show completed too")
 
         jobs = list(scene.hydrilla_jobs)
+        show_all = bool(scene.hydrilla_jobs_show_all)
         visible = []
         for index, item in enumerate(jobs):
             status = (item.status or "").upper()
-            if show_all or status in ACTIVE_JOB_STATUSES:
+            if show_all or status in ACTIVE_JOB_STATUSES or status in {
+                "DONE",
+                "SUCCEEDED",
+                "FAIL",
+                "FAILED",
+            }:
+                # Default list: active first, then recent done/failed (always show something)
                 visible.append((index, item))
 
+        if not show_all:
+            # Prefer active; if none, still show recent completed so the panel isn't empty
+            active_only = [
+                pair
+                for pair in visible
+                if (pair[1].status or "").upper() in ACTIVE_JOB_STATUSES
+            ]
+            if active_only:
+                visible = active_only
+            else:
+                visible = visible[:8]
+
         if _JOBS_UI["fetching"] and not visible:
-            box.label(text="Loading…", icon="SORTTIME")
+            box.label(text="Fetching from Hydrilla…", icon="SORTTIME")
             return
 
-        if not visible:
-            box.label(text="No pending or running jobs", icon="CHECKMARK")
-            box.label(text="Click refresh after Generate")
+        if not visible and not error:
+            box.label(text="No jobs yet for this account", icon="INFO")
+            box.label(text="Generate once, then Refresh")
             return
 
-        for index, item in visible[:12]:
-            row = box.column(align=True)
+        for index, item in visible[:15]:
+            col = box.column(align=True)
             status_label = _job_status_label(item.status)
-            top = row.row(align=True)
+            top = col.row(align=True)
             top.label(text=status_label, icon=_job_status_icon(item.status))
-            top.label(text=str(item.job_id or "")[:8])
-            row.label(text=_truncate(item.prompt, 32))
+            top.label(text=str(item.job_id or "")[:10])
+            col.label(text=_truncate(item.prompt, 34))
+            if item.generate_type:
+                col.label(text=str(item.generate_type))
             if status_label == "Done":
-                op = row.operator(
+                op = col.operator(
                     "hydrilla.import_account_job",
                     text="Import mesh",
                     icon="IMPORT",
                 )
                 op.index = index
-            row.separator()
+            col.separator()
 
 
 class HYDRILLA_PT_generate(Panel):
@@ -1856,10 +1919,11 @@ def register():
     bpy.types.Scene.hydrilla_jobs = CollectionProperty(type=HydrillaJobItem)
     bpy.types.Scene.hydrilla_jobs_active = IntProperty(name="Active jobs", default=0)
     bpy.types.Scene.hydrilla_jobs_fetched_at = StringProperty(name="Jobs fetched", default="")
+    bpy.types.Scene.hydrilla_jobs_error = StringProperty(name="Jobs error", default="")
     bpy.types.Scene.hydrilla_jobs_show_all = BoolProperty(
         name="Show completed",
         description="Also list recent Done/Failed jobs for this account",
-        default=False,
+        default=True,
     )
 
 
@@ -1890,4 +1954,5 @@ def unregister():
     del bpy.types.Scene.hydrilla_jobs
     del bpy.types.Scene.hydrilla_jobs_active
     del bpy.types.Scene.hydrilla_jobs_fetched_at
+    del bpy.types.Scene.hydrilla_jobs_error
     del bpy.types.Scene.hydrilla_jobs_show_all

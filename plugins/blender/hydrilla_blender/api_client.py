@@ -231,12 +231,20 @@ class HydrillaClient:
                 item.get("generateType") or item.get("generate_type") or ""
             )
             engine = str(item.get("engine") or "").lower()
-            if generate_type in skip_types or engine in skip_engines:
-                continue
-            status = str(item.get("status") or "").upper()
+            result_kind = str(item.get("resultKind") or item.get("result_kind") or "")
             job_id = str(item.get("id") or item.get("jobId") or item.get("job_id") or "")
             if not job_id:
                 continue
+            # Skip Water / 2D-only rows; keep mesh jobs even if generateType is empty
+            if (
+                generate_type in skip_types
+                or engine in skip_engines
+                or result_kind == "three_factory"
+                or job_id.startswith("wt_")
+                or job_id.startswith("cs_")
+            ):
+                continue
+            status = str(item.get("status") or "").upper()
             mesh = (
                 item.get("resultGlbUrl")
                 or item.get("result_glb_url")
@@ -245,6 +253,8 @@ class HydrillaClient:
             if not mesh and status in {"DONE", "SUCCEEDED", "SUCCESS", "COMPLETED"}:
                 mesh = f"{self.base_url}/api/3d/glb/{urllib.parse.quote(job_id, safe='')}"
             prompt = str(item.get("prompt") or item.get("name") or "").strip()
+            if not prompt:
+                prompt = generate_type or "3D job"
             jobs.append(
                 {
                     "id": job_id,

@@ -51,6 +51,8 @@ def get_auth_session() -> Dict[str, Any]:
             "token": _auth.get("token"),
             "email": _auth.get("email"),
             "user_id": _auth.get("user_id"),
+            "expires_at": _auth.get("expires_at"),
+            "updated_at": _auth.get("updated_at"),
         }
 
 
@@ -186,6 +188,11 @@ class HydrillaBridgeHandler(BaseHTTPRequestHandler):
             if not token:
                 self._json(400, {"error": "token is required"})
                 return
+            expires_at = payload.get("expires_at")
+            try:
+                expires_val = float(expires_at) if expires_at is not None else None
+            except Exception:
+                expires_val = None
             with _auth_lock:
                 _auth.clear()
                 _auth.update(
@@ -194,6 +201,7 @@ class HydrillaBridgeHandler(BaseHTTPRequestHandler):
                         "email": payload.get("email"),
                         "user_id": payload.get("user_id"),
                         "updated_at": time.time(),
+                        "expires_at": expires_val,
                     }
                 )
                 public = _auth_public()

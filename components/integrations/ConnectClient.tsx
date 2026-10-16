@@ -3,7 +3,7 @@
 import { SignInButton, SignedIn, SignedOut, useAuth, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BRIDGE_DEFAULT_URL } from "@/lib/integrations";
 
 type BridgeState = "checking" | "offline" | "online" | "pushed" | "error";
@@ -18,6 +18,9 @@ const APP_LABELS: Record<string, string> = {
   plugin: "your plugin",
 };
 
+/** Clerk session JWTs are short (~60s). Refresh often + on tab focus. */
+const REFRESH_MS = 10_000;
+
 export function ConnectClient() {
   const { getToken, isSignedIn } = useAuth();
   const { user } = useUser();
@@ -25,17 +28,41 @@ export function ConnectClient() {
   const app = (params.get("app") || "plugin").toLowerCase();
   const appLabel = APP_LABELS[app] || "your plugin";
   const returnPath = `/integrations/connect?app=${encodeURIComponent(app)}`;
+  const pushInFlight = useRef(false);
 
   const [bridgeState, setBridgeState] = useState<BridgeState>("checking");
   const [message, setMessage] = useState("Checking local Bridge…");
   const [lastPush, setLastPush] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tokenLeft, setTokenLeft] = useState<number | null>(null);
 
   const email = useMemo(() => {
     return user?.primaryEmailAddress?.emailAddress || user?.username || null;
   }, [user]);
 
+  const readTokenExpiry = useCallback((token: string) => {
+    try {
+      const parts = token.split(".");
+      if (parts.length < 2) {
+        return null;
+      }
+      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const pad = payload + "=".repeat((4 - (payload.length % 4)) % 4);
+      const data = JSON.parse(atob(pad)) as { exp?: number };
+      if (typeof data.exp !== "number") {
+        return null;
+      }
+      return Math.max(0, Math.floor(data.exp - Date.now() / 1000));
+    } catch {
+      return null;
+    }
+  }, []);
+
   const pushSession = useCallback(async () => {
+    if (pushInFlight.current) {
+      return;
+    }
+    pushInFlight.current = true;
     setBusy(true);
     try {
       const health = await fetch(`${BRIDGE_DEFAULT_URL}/health`, {
@@ -46,12 +73,17 @@ export function ConnectClient() {
       }
       setBridgeState("online");
 
-      const token = await getToken();
+      // Force a fresh JWT — cached tokens can already be near expiry
+      const token = await getToken({ skipCache: true });
       if (!token) {
         setBridgeState("error");
         setMessage("Could not read your Hydrilla session. Try signing out and back in.");
+        setTokenLeft(null);
         return;
       }
+
+      const left = readTokenExpiry(token);
+      setTokenLeft(left);
 
       const response = await fetch(`${BRIDGE_DEFAULT_URL}/auth`, {
         method: "POST",
@@ -60,6 +92,7 @@ export function ConnectClient() {
           token,
           email,
           user_id: user?.id,
+          expires_at: left != null ? Date.now() / 1000 + left : undefined,
         }),
       });
       if (!response.ok) {
@@ -68,33 +101,48 @@ export function ConnectClient() {
       setBridgeState("pushed");
       setLastPush(new Date().toLocaleTimeString());
       setMessage(
-        `Connected. Keep this tab open. Return to ${appLabel}, click Sync, then Generate — closing this tab expires the session in about a minute.`
+        `Connected to ${appLabel}. Keep this tab open and in the foreground while generating — tokens refresh every ${REFRESH_MS / 1000}s.`
       );
     } catch {
       setBridgeState("offline");
+      setTokenLeft(null);
       setMessage(
         `Bridge offline. In ${appLabel}, click Run Bridge, then Retry here.`
       );
     } finally {
       setBusy(false);
+      pushInFlight.current = false;
     }
-  }, [appLabel, email, getToken, user?.id]);
+  }, [appLabel, email, getToken, readTokenExpiry, user?.id]);
 
   useEffect(() => {
     if (!isSignedIn) {
       setBridgeState("checking");
       setMessage("Sign in to connect your account to the local Bridge.");
+      setTokenLeft(null);
       return;
     }
 
     void pushSession();
-    // Clerk session JWTs expire in ~60s; refresh often while this tab stays open
     const timer = window.setInterval(() => {
       void pushSession();
-    }, 20_000);
+    }, REFRESH_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void pushSession();
+      }
+    };
+    const onFocus = () => {
+      void pushSession();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
 
     return () => {
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
     };
   }, [isSignedIn, pushSession]);
 
@@ -114,8 +162,8 @@ export function ConnectClient() {
           Sign in for {appLabel}
         </h1>
         <p className="mt-3 text-[15px] leading-6 text-neutral-600">
-          Use your normal Hydrilla account. Keep this tab open while generating — Clerk sessions
-          expire in about a minute and this page refreshes them into the local Bridge.
+          Use your Hydrilla account. Leave this tab open (and visible) while you generate so
+          your session stays fresh in the local Bridge.
         </p>
 
         <SignedOut>
@@ -149,7 +197,10 @@ export function ConnectClient() {
               <p className="font-semibold text-neutral-950">{email || "Signed in"}</p>
               <p className="mt-1">{message}</p>
               {lastPush ? (
-                <p className="mt-2 text-[12px] text-neutral-500">Last sync {lastPush}</p>
+                <p className="mt-2 text-[12px] text-neutral-500">
+                  Last sync {lastPush}
+                  {tokenLeft != null ? ` · token ~${tokenLeft}s left` : ""}
+                </p>
               ) : null}
             </div>
 
@@ -195,14 +246,15 @@ export function ConnectClient() {
                 In {appLabel}, click <span className="font-semibold">Run Bridge</span>.
               </li>
               <li>
-                Keep this tab open while you generate (auto-refresh every 20s). Closing it causes
-                “Session expired” mid-job.
+                Keep this tab open and visible (auto-refresh every {REFRESH_MS / 1000}s). Switching
+                away for a long time can expire the session.
               </li>
               <li>
-                In {appLabel}, click <span className="font-semibold">Sync</span>.
+                In {appLabel}, click <span className="font-semibold">Sync</span>, then open{" "}
+                <span className="font-semibold">Your jobs</span> to see pending/running work.
               </li>
               <li>
-                Generate — preview takes ~20–40s, then 3D. For long sessions, use an{" "}
+                For long sessions, use an{" "}
                 <Link href="/app/api-keys" className="font-semibold underline">
                   API key
                 </Link>
