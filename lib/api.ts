@@ -1717,6 +1717,10 @@ export async function fetchWorkspaces(
     const data = await response.json();
     return data.workspaces || [];
   } catch (err: any) {
+    if (isApiUnavailableError(err)) {
+      console.warn("Failed to fetch workspaces (backend unavailable):", err.message);
+      return [];
+    }
     console.error("Failed to fetch workspaces:", err);
     return [];
   }
@@ -1790,13 +1794,19 @@ export async function fetchWorkspace(
     );
 
     if (!response.ok) {
-      if (response.status === 404) return null;
+      if (response.status === 404) {
+        return null;
+      }
       throw new Error(`Failed to fetch workspace: ${response.statusText}`);
     }
 
     const data = await response.json();
     return data.workspace || null;
   } catch (err: any) {
+    if (isApiUnavailableError(err)) {
+      console.warn("Failed to fetch workspace (backend unavailable):", err.message);
+      return null;
+    }
     console.error("Failed to fetch workspace:", err);
     return null;
   }
@@ -1828,13 +1838,19 @@ export async function fetchWorkspaceJobs(
     );
 
     if (!response.ok) {
-      if (response.status === 404) return [];
+      if (response.status === 404) {
+        return [];
+      }
       throw new Error(`Failed to fetch workspace jobs: ${response.statusText}`);
     }
 
     const data = await response.json();
     return data.jobs || [];
   } catch (err: any) {
+    if (isApiUnavailableError(err)) {
+      console.warn("Failed to fetch workspace jobs (backend unavailable):", err.message);
+      return [];
+    }
     console.error("Failed to fetch workspace jobs:", err);
     return [];
   }
