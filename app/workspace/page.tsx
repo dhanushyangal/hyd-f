@@ -101,6 +101,7 @@ import {
 } from "../../lib/api";
 import { setCurrentWorkspaceId, getCurrentWorkspaceId, clearCurrentWorkspaceId, cn } from "../../lib/utils";
 import { track, isPaywallError } from "../../lib/analytics";
+import { GEN_MSG, threeDQueueMessage, threeDStageMessage } from "../../lib/generationMessages";
 import {
   consumeWorkspaceBootstrap,
   consumeWorkspacePrefill,
@@ -1297,15 +1298,15 @@ function WorkspacePage() {
             const waitSec = status.queue.estimated_wait_seconds ?? 0;
             const waitMin = Math.round(waitSec / 60);
             const waitProgress = waitSec > 0 ? Math.min(45, (elapsedSeconds / waitSec) * 45) : 20;
-            const msg = jobsAhead > 0
-              ? `Waiting in queue (${jobsAhead} user${jobsAhead !== 1 ? "s" : ""} ahead${waitMin > 0 ? `, ~${waitMin} min` : ""})...`
-              : "Starting soon...";
+            const msg = threeDQueueMessage(jobsAhead, waitMin);
             setCenterView((prev) => {
               const followsCurrentJob =
                 prev.type === "generating" ||
                 (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
                 (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
-              if (!followsCurrentJob) return prev;
+              if (!followsCurrentJob) {
+                return prev;
+              }
               return { type: "generating", progress: waitProgress, message: msg };
             });
             setCurrentGenerating((prev) =>
@@ -1321,13 +1322,15 @@ function WorkspacePage() {
             const progress = gpuProgress != null
               ? Math.max(gpuProgress, Math.min(95, timeProgress))
               : Math.max(50, Math.min(95, timeProgress));
-            const msg = status.message || "Generating 3D model...";
+            const msg = threeDStageMessage(progress);
             setCenterView((prev) => {
               const followsCurrentJob =
                 prev.type === "generating" ||
                 (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
                 (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
-              if (!followsCurrentJob) return prev;
+              if (!followsCurrentJob) {
+                return prev;
+              }
               return {
                 type: "generating",
                 progress,
@@ -1340,13 +1343,15 @@ function WorkspacePage() {
           }
         } else if (typeof status.progress === "number") {
           const progress = Math.min(95, Math.max(5, status.progress));
-          const msg = status.message || "Generating 3D model...";
+          const msg = threeDStageMessage(progress);
           setCenterView((prev) => {
             const followsCurrentJob =
               prev.type === "generating" ||
               (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
               (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
-            if (!followsCurrentJob) return prev;
+            if (!followsCurrentJob) {
+              return prev;
+            }
             return { type: "generating", progress, message: msg };
           });
           setCurrentGenerating((prev) =>
@@ -1362,11 +1367,13 @@ function WorkspacePage() {
               prev.type === "generating" ||
               (prev.type === "preview" && prev.previewId === currentGenerating.jobId) ||
               (prev.type === "3d" && prev.jobId === currentGenerating.jobId);
-            if (!followsCurrentJob) return prev;
+            if (!followsCurrentJob) {
+              return prev;
+            }
             return {
               type: "generating",
               progress,
-              message: status.message || "Generating 3D model...",
+              message: threeDStageMessage(progress),
             };
           });
           setCurrentGenerating((prev) =>
@@ -1968,7 +1975,7 @@ function WorkspacePage() {
       setLeftLibraryTab("3d"); // Switch to 3D tab so result will show in 3D section below search
       markMobileGenerationStart();
       setLoading(true);
-      setCenterView({ type: "generating", progress: 0, message: "Generating 3D model..." });
+      setCenterView({ type: "generating", progress: 0, message: threeDStageMessage(0) });
 
       // Optimistic pending entry so the 3D library shows a loader immediately
       // (before the API returns) and the user sees progress without delay.
@@ -2138,7 +2145,7 @@ function WorkspacePage() {
       });
       setGeneratingPreview(true);
       markMobileGenerationStart();
-      setCenterView({ type: "generating", progress: 0, message: "Generating image from text..." });
+      setCenterView({ type: "generating", progress: 0, message: GEN_MSG.imageFromText });
       promptHistory.record(trimmedPrompt, "cloud");
       clearComposerDraft();
 
@@ -2172,7 +2179,7 @@ function WorkspacePage() {
       progressIntervalRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTime) / 1000;
         const progress = Math.min(90, (elapsed / estimatedTime) * 95);
-        setCenterView({ type: "generating", progress, message: "Generating image from text..." });
+        setCenterView({ type: "generating", progress, message: GEN_MSG.imageFromText });
       }, 200);
 
       try {
@@ -2300,7 +2307,7 @@ function WorkspacePage() {
 
       setGeneratingPreview(true);
       markMobileGenerationStart();
-      setCenterView({ type: "generating", progress: 0, message: "Editing image..." });
+      setCenterView({ type: "generating", progress: 0, message: GEN_MSG.editingImage });
       promptHistory.record(prompt.trim(), "cloud");
       clearComposerDraft();
       track("image_edit_started", {
@@ -2342,7 +2349,7 @@ function WorkspacePage() {
       progressIntervalRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTime) / 1000;
         const progress = Math.min(90, (elapsed / estimatedTime) * 95);
-        setCenterView({ type: "generating", progress, message: "Editing image..." });
+        setCenterView({ type: "generating", progress, message: GEN_MSG.editingImage });
       }, 200);
 
       try {
@@ -2467,7 +2474,7 @@ function WorkspacePage() {
       });
       setGeneratingPreview(true);
       markMobileGenerationStart();
-      setCenterView({ type: "generating", progress: 0, message: "Modifying 3D model..." });
+      setCenterView({ type: "generating", progress: 0, message: GEN_MSG.modifying3d });
       promptHistory.record(effectivePrompt, "cloud");
       clearComposerDraft();
 
@@ -2488,7 +2495,7 @@ function WorkspacePage() {
       progressIntervalRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTime) / 1000;
         const progress = Math.min(90, (elapsed / estimatedTime) * 95);
-        setCenterView({ type: "generating", progress, message: "Applying 3D model modifications..." });
+        setCenterView({ type: "generating", progress, message: GEN_MSG.applying3d });
       }, 200);
 
       try {
@@ -2657,7 +2664,7 @@ function WorkspacePage() {
       });
       setGeneratingPreview(true);
       markMobileGenerationStart();
-      setCenterView({ type: "generating", progress: 0, message: "Synthesizing concept art from prompt..." });
+      setCenterView({ type: "generating", progress: 0, message: GEN_MSG.conceptArt });
       promptHistory.record(effectivePrompt, "cloud");
       clearComposerDraft();
 
@@ -2674,7 +2681,7 @@ function WorkspacePage() {
       progressIntervalRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTime) / 1000;
         const progress = Math.min(90, (elapsed / estimatedTime) * 95);
-        setCenterView({ type: "generating", progress, message: "Synthesizing concept art from prompt..." });
+        setCenterView({ type: "generating", progress, message: GEN_MSG.conceptArt });
       }, 200);
 
       try {
@@ -2698,7 +2705,7 @@ function WorkspacePage() {
         setCenterView({
           type: "generating",
           progress: 10,
-          message: "Starting 3D model generation...",
+          message: GEN_MSG.starting3d,
         });
         setGeneratingPreview(false);
         mobileGenStartedAtRef.current = null;
@@ -2888,7 +2895,7 @@ function WorkspacePage() {
       setCenterView({
         type: "generating",
         progress: 10,
-        message: job.generateType === "EditImage" ? "Editing base image..." : "Generating concept art...",
+        message: job.generateType === "EditImage" ? GEN_MSG.editingBaseImage : GEN_MSG.conceptArt,
       });
       loadJobInfo(job);
       return;
@@ -2912,7 +2919,7 @@ function WorkspacePage() {
       setCenterView({
         type: "generating",
         progress: job.status === "WAIT" ? 5 : 15,
-        message: job.status === "WAIT" ? "Queued for 3D generation..." : "Generating 3D model...",
+        message: job.status === "WAIT" ? GEN_MSG.queued3d : threeDStageMessage(50),
       });
       setLastPreviewImageUrl(imageUrl);
       setLastPreviewId(job.id);
@@ -3144,7 +3151,7 @@ function WorkspacePage() {
       setCenterView({
         type: "generating",
         progress: 10,
-        message: "Generating 3D model...",
+        message: threeDStageMessage(50),
       });
       loadJobInfo(job);
       return;
@@ -3162,7 +3169,7 @@ function WorkspacePage() {
       setCenterView({
         type: "generating",
         progress: job.status === "WAIT" ? 5 : 15,
-        message: job.status === "WAIT" ? "Queued for 3D generation..." : "Generating 3D model...",
+        message: job.status === "WAIT" ? GEN_MSG.queued3d : threeDStageMessage(50),
       });
       if (job.previewImageUrl || job.imageUrl) {
         setLastPreviewImageUrl(job.previewImageUrl || job.imageUrl);
@@ -4087,7 +4094,7 @@ function WorkspacePage() {
 
           {canvasGenerating && (
             <CanvasGeneratingOverlay
-              message={centerView.type === "generating" ? centerView.message : "Generating 3D model…"}
+              message={centerView.type === "generating" ? centerView.message : GEN_MSG.fallback3d}
               progress={generatingProgress}
               water={showWaterPassRail ? { tier: waterQualityTier, pass: codeSculptPass } : null}
               queueInfo={currentGenerating?.status === "generating" ? currentGenerating.queueInfo ?? null : null}
