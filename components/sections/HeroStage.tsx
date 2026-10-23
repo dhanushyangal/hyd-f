@@ -293,7 +293,7 @@ export function HeroStage({
         idleCallback = window.setTimeout(work, 400);
       };
 
-      const count = MODELS.length;
+      const count: number = MODELS.length;
       const pending = new Map<number, Promise<Group | null>>();
 
       const releaseExcept = (keep: number[]) => {
