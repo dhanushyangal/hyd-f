@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion, useReducedMotion } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { cloudinaryImage } from "@/lib/cloudinary";
-import { SANS_FONT as DISPLAY, GEIST_FONT as SANS } from "@/lib/fonts";
+import { DESCRIPTION_WEIGHT, GEIST_FONT, SANS_FONT, SECTION_WEIGHT } from "@/lib/fonts";
 
 /** Explicit WebP + width — avoids Next Image Optimizer timeouts on large f_auto PNGs. */
 const workflowStepImage = (id: string) =>
@@ -13,7 +13,6 @@ const workflowStepImage = (id: string) =>
 
 type Step = {
   id: string;
-  number: string;
   title: string;
   body: string;
   image: string;
@@ -23,7 +22,6 @@ type Step = {
 const STEPS: Step[] = [
   {
     id: "describe",
-    number: "01",
     title: "Describe your asset.",
     body: "Type a prompt or drop a reference image. BlueFox 1 takes either.",
     image: workflowStepImage("describe"),
@@ -31,7 +29,6 @@ const STEPS: Step[] = [
   },
   {
     id: "generate",
-    number: "02",
     title: "Generate with BlueFox 1.",
     body: "BlueFox 1 produces a segmented mesh with PBR maps — base color, metalness, roughness, and normals.",
     image: workflowStepImage("generated-model1"),
@@ -39,7 +36,6 @@ const STEPS: Step[] = [
   },
   {
     id: "refine",
-    number: "03",
     title: "Refine and export.",
     body: "Inspect materials in the browser, then export GLB, FBX, OBJ, or USDZ into your engine or DCC.",
     image: workflowStepImage("refine"),
@@ -151,17 +147,11 @@ function StepRow({ step }: { step: Step }) {
       {/* Copy */}
       <div className="flex min-w-0 flex-col justify-center px-6 md:col-span-4 md:col-start-8 md:px-0 lg:col-span-3 lg:col-start-8">
         <div className="mx-auto flex w-full max-w-md flex-col gap-4 md:mx-0 md:max-w-xs lg:max-w-sm">
-          <span
-            className="text-xs font-medium uppercase"
-            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: DISPLAY }}
-          >
-            Step {step.number}
-          </span>
           <h3
             className="m-0"
             style={{
-              fontFamily: DISPLAY,
-              fontWeight: 400,
+              fontFamily: SANS_FONT,
+              fontWeight: SECTION_WEIGHT,
               color: INK,
               fontSize: "clamp(2rem, 1.6rem + 1.6vw, 2.75rem)",
               lineHeight: 1.05,
@@ -174,11 +164,12 @@ function StepRow({ step }: { step: Step }) {
           <p
             className="m-0"
             style={{
-              fontFamily: SANS,
+              fontFamily: GEIST_FONT,
+              fontWeight: DESCRIPTION_WEIGHT,
               color: INK_SECONDARY,
               fontSize: "clamp(1.125rem, 1.05rem + 0.3vw, 1.25rem)",
-              lineHeight: 1.5,
-              letterSpacing: "-0.02em",
+              lineHeight: 1.55,
+              letterSpacing: "-0.011em",
               textWrap: "pretty",
             }}
           >
@@ -211,7 +202,7 @@ export default function HowItWorks() {
         <header className="flex flex-col items-center gap-3 px-6 text-center">
           <p
             className="m-0 text-xs font-medium uppercase"
-            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: DISPLAY }}
+            style={{ color: INK_TERTIARY, letterSpacing: "0.1em", fontFamily: SANS_FONT }}
           >
             Process
           </p>
@@ -220,9 +211,9 @@ export default function HowItWorks() {
             id="howitworks-heading"
             style={{
               margin: 0,
-              fontFamily: DISPLAY,
+              fontFamily: SANS_FONT,
               fontSize: "clamp(2.25rem, 1.7rem + 2.4vw, 3.75rem)",
-              fontWeight: 400,
+              fontWeight: SECTION_WEIGHT,
               color: INK,
               letterSpacing: "-0.035em",
               lineHeight: 1.05,

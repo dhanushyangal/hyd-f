@@ -6,7 +6,7 @@ import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Plus } from "lucide-react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { FAQ_ITEMS } from "@/lib/faq";
-import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
+import { DESCRIPTION_WEIGHT, GEIST_FONT, SANS_FONT, SECTION_WEIGHT } from "@/lib/fonts";
 
 interface FAQItemProps {
   question: string;
@@ -130,7 +130,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
           margin: 0 0 0.875rem;
           font-family: ${SANS_FONT};
           font-size: 0.75rem;
-          font-weight: 700;
+          font-weight: ${SECTION_WEIGHT};
           letter-spacing: 0.12em;
           text-transform: uppercase;
           color: #64748b;
@@ -139,7 +139,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
           margin: 0;
           font-family: ${SANS_FONT};
           font-size: clamp(2rem, 4.5vw, 3.25rem);
-          font-weight: 700;
+          font-weight: ${SECTION_WEIGHT};
           color: #111827;
           letter-spacing: -0.04em;
           line-height: 1.15;
@@ -200,7 +200,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
           color: #fff;
           font-family: ${SANS_FONT};
           font-size: 1rem;
-          font-weight: 500;
+          font-weight: ${SECTION_WEIGHT};
           line-height: 1.55;
           margin: 0;
           max-width: 500px;
@@ -255,6 +255,7 @@ export default function FAQSection({ hideHeader = false }: { hideHeader?: boolea
           border: 1px solid rgba(148, 163, 184, 0.24);
           box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
           font-family: ${GEIST_FONT};
+          font-weight: ${DESCRIPTION_WEIGHT};
           font-size: 0.98rem;
           color: #334155;
           line-height: 1.7;

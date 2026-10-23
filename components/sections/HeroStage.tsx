@@ -83,9 +83,11 @@ export function HeroStage({
     let idleCallback = 0;
     let focusStage: (() => void) | null = null;
     let detachSideTap: (() => void) | null = null;
-    const roots: Group[] = [];
+    const roots: Array<Group | undefined> = [];
     let active = 0;
     let dragging = false;
+    let swapping = false;
+    let showNext = () => {};
 
     const boot = async () => {
       const THREE = await import("three");
@@ -96,22 +98,23 @@ export function HeroStage({
       if (disposed) return;
 
       const coarse = window.matchMedia("(pointer: coarse)").matches;
+      const compactScreen = () =>
+        coarse || window.matchMedia("(max-width: 1023px)").matches;
       const scene = new THREE.Scene();
       scene.background = new THREE.Color("#f1f5fb");
 
       const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
       renderer = new THREE.WebGLRenderer({
         canvas,
-        antialias: !coarse,
+        antialias: true,
         alpha: false,
         stencil: false,
-        powerPreference: "high-performance",
-        precision: coarse ? "mediump" : "highp",
+        powerPreference: compactScreen() ? "default" : "high-performance",
+        precision: "highp",
       });
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.08;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1 : 2));
 
       scene.add(new THREE.HemisphereLight(0xffffff, 0xd5e2f4, 1.05));
       const key = new THREE.DirectionalLight(0xfff8f2, 2.85);
@@ -129,6 +132,14 @@ export function HeroStage({
         const width = stage.clientWidth;
         const height = stage.clientHeight;
         if (width < 2 || height < 2) return;
+        const dpr = window.devicePixelRatio || 1;
+        const pixelCap = compactScreen() ? 1_150_000 : 2_600_000;
+        let ratio = Math.min(dpr, 2);
+        const area = width * height;
+        if (area * ratio * ratio > pixelCap) {
+          ratio = Math.sqrt(pixelCap / area);
+        }
+        renderer.setPixelRatio(Math.max(1, Math.min(ratio, dpr)));
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height, false);
@@ -181,12 +192,10 @@ export function HeroStage({
 
       const scheduleSwap = () => {
         clearSwap();
-        if (reduceRef.current || dragging || !roots[0] || !roots[1]) return;
+        if (reduceRef.current || dragging || MODELS.length < 2) return;
         idleTimer = window.setTimeout(() => {
           if (disposed || dragging) return;
-          const next = active === 0 ? 1 : 0;
-          if (!roots[next]) return;
-          void show(next).then(scheduleSwap);
+          showNext();
         }, IDLE_SWAP_MS);
       };
 
@@ -246,15 +255,6 @@ export function HeroStage({
         renderer.render(scene, camera);
       };
 
-      const showOther = () => {
-        if (!roots[0] || !roots[1]) return;
-        const next = active === 0 ? 1 : 0;
-        clearSwap();
-        void show(next).then(() => {
-          if (!disposed) scheduleSwap();
-        });
-      };
-
       let startX = 0;
       let startY = 0;
       let moved = false;
@@ -270,7 +270,7 @@ export function HeroStage({
         if (moved) return;
         const bounds = canvas.getBoundingClientRect();
         const x = (event.clientX - bounds.left) / bounds.width;
-        if (x < 0.3 || x > 0.7) showOther();
+        if (x < 0.3 || x > 0.7) showNext();
       };
       canvas.addEventListener("pointerdown", onPointerDown);
       canvas.addEventListener("pointermove", onPointerMove);
@@ -293,69 +293,96 @@ export function HeroStage({
         idleCallback = window.setTimeout(work, 400);
       };
 
-      try {
-        const firstUrl = MODELS?.[0];
-        const secondUrl = MODELS?.[1];
-        if (!firstUrl) {
-          return;
-        }
+      const count = MODELS.length;
+      const pending = new Map<number, Promise<Group | null>>();
 
-        const first = await parse(await loadBuffer(firstUrl));
-        if (disposed || !renderer) {
-          disposeObject(first);
-          return;
-        }
-        roots[0] = first;
+      const releaseExcept = (keep: number[]) => {
+        roots.forEach((root, index) => {
+          if (!root || keep.includes(index)) return;
+          if (root.parent) scene.remove(root);
+          disposeObject(root);
+          roots[index] = undefined;
+        });
+      };
+
+      const ensure = (index: number) => {
+        if (count === 0) return Promise.resolve(null);
+        const slot = ((index % count) + count) % count;
+        const ready = roots[slot];
+        if (ready) return Promise.resolve(ready);
+        const inflight = pending.get(slot);
+        if (inflight) return inflight;
+        const job = loadBuffer(MODELS[slot])
+          .then((buffer) => (disposed ? null : parse(buffer)))
+          .then((root) => {
+            if (!root) return null;
+            if (disposed) {
+              disposeObject(root);
+              return null;
+            }
+            roots[slot] = root;
+            return root;
+          })
+          .finally(() => pending.delete(slot));
+        pending.set(slot, job);
+        return job;
+      };
+
+      showNext = () => {
+        if (swapping || count < 2) return;
+        const next = (active + 1) % count;
+        swapping = true;
+        clearSwap();
+        void ensure(next)
+          .then((root) => {
+            if (!root || disposed) return;
+            return show(next);
+          })
+          .then(() => {
+            if (disposed) return;
+            const upcoming = (active + 1) % count;
+            releaseExcept([active, upcoming]);
+            if (!reduceRef.current) void ensure(upcoming);
+            scheduleSwap();
+          })
+          .catch((error) => {
+            console.error("Hero model failed to load", error);
+          })
+          .finally(() => {
+            swapping = false;
+          });
+      };
+
+      try {
+        if (!MODELS[0]) return;
+        const first = await ensure(0);
+        if (!first || disposed || !renderer) return;
         await show(0);
 
         const saveData = (
           navigator as Navigator & { connection?: { saveData?: boolean } }
         ).connection?.saveData;
-        if (reduceRef.current || saveData || !secondUrl) {
-          return;
-        }
+        if (reduceRef.current || saveData || count < 2) return;
 
-        const secondBuffer = await loadBuffer(secondUrl);
-        if (disposed) {
-          return;
-        }
-
-        const mountSecond = () => {
+        const prefetch = () => {
           if (disposed) return;
           if (dragging) {
-            window.setTimeout(mountSecond, 700);
+            window.setTimeout(prefetch, 700);
             return;
           }
           whenIdle(() => {
-            if (disposed) return;
-            if (dragging) {
-              window.setTimeout(mountSecond, 700);
-              return;
-            }
-            try {
-              loader.parse(
-                secondBuffer,
-                "",
-                (gltf) => {
-                  if (disposed || !renderer) {
-                    disposeObject(gltf.scene);
-                    return;
-                  }
-                  roots[1] = gltf.scene;
-                  void renderer.compileAsync(gltf.scene, camera, scene).then(() => {
-                    if (!disposed) scheduleSwap();
-                  });
-                },
-                (error) => {
-                  console.error("Hero model failed to load", error);
-                }
-              );
-            } catch (error) {
-              console.error("Hero model failed to load", error);
-            }
+            void ensure(1)
+              .then((root) => {
+                if (!root || !renderer || disposed) return;
+                return renderer.compileAsync(root, camera, scene);
+              })
+              .then(() => {
+                if (!disposed) scheduleSwap();
+              });
           });
         };
-        mountSecond();
+        if (compactScreen()) window.setTimeout(prefetch, 1400);
+        else prefetch();
       } catch (error) {
         console.error("Hero model failed to load", error);
       }
@@ -377,7 +404,7 @@ export function HeroStage({
       orbit?.dispose();
       resizeObserver?.disconnect();
       intersectionObserver?.disconnect();
-      for (const root of roots) disposeObject(root);
+      for (const root of roots) if (root) disposeObject(root);
       renderer?.dispose();
       renderer?.forceContextLoss();
     };
@@ -385,14 +412,14 @@ export function HeroStage({
 
   return (
     <div
-      className="relative isolate w-full overflow-hidden rounded-[40px] bg-[#f1f5fb] shadow-[0_10px_28px_rgba(1,14,36,0.07)] ring-1 ring-[#000c1f]/6 sm:rounded-[40px] md:rounded-[48px] md:shadow-[0_18px_44px_rgba(1,14,36,0.09)] lg:rounded-[64px]"
+      className="relative isolate flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[40px] bg-[#f1f5fb] shadow-[0_10px_28px_rgba(1,14,36,0.07)] ring-1 ring-[#000c1f]/6 sm:rounded-[40px] md:rounded-[48px] md:shadow-[0_18px_44px_rgba(1,14,36,0.09)] lg:h-auto lg:flex-none lg:rounded-[64px]"
     >
       <div
         ref={stageRef}
         tabIndex={0}
         role="img"
         aria-label="Hero stage. Drag to rotate the model, tap the left or right side for the next model, or use the arrow keys."
-        className="relative h-[min(58dvh,520px)] min-h-[360px] outline-none focus-visible:ring-2 focus-visible:ring-[#000c1f]/25 sm:h-[460px] md:h-[440px] lg:h-[500px] xl:h-[540px]"
+        className="relative h-full min-h-0 flex-1 outline-none focus-visible:ring-2 focus-visible:ring-[#000c1f]/25 lg:h-[500px] lg:flex-none xl:h-[540px]"
       >
         <canvas
           ref={canvasRef}

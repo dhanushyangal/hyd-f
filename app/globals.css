@@ -841,13 +841,1027 @@ input.range-minimal::-moz-range-track {
   }
 }
 
-/* Public article pages. Reading column + figure, DM Sans headings, Geist body. */
+/* Pickle editorial & research typography (ABC Diatype + Suisse Intl) */
+@font-face {
+  font-family: "ABC Diatype Unlicensed Trial";
+  src: url("/fonts/ABCDiatypeVariable-Trial.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("/fonts/SuisseIntl-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("/fonts/SuisseIntl-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Suisse Intl";
+  src: url("/fonts/SuisseIntl-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ============================================================================
+ * PICKLE DESIGN SYSTEM — Article (how-we-make-critter-act-in-real-time)
+ * & Research Index (pickle.com/research) + Legal Shell
+ * ============================================================================ */
+.pickle-shell {
+  --viewport-height: 958px;
+  --shell-topbar-height: 77px;
+  --shell-topbar-offset: var(--shell-topbar-height);
+  --travel: 590px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  background: #ffffff;
+  color: #000000;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flow-root;
+  width: 100%;
+  min-height: 100svh;
+}
+
+/* 1. Pickle Article Page (how-we-make-critter-act-in-real-time) */
+.pickle-article {
+  --viewport-height: 958px;
+  --shell-topbar-height: 77px;
+  --shell-topbar-offset: var(--shell-topbar-height);
+  --travel: 590px;
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  background: #ffffff;
+  color: #000000;
+  padding-top: var(--shell-topbar-height, 77px);
+  padding-bottom: 170px;
+  display: flow-root;
+  width: 100%;
+}
+
+.pickle-article-header {
+  --viewport-height: 958px;
+  -webkit-font-smoothing: antialiased;
+  --shell-topbar-height: 77px;
+  --shell-topbar-offset: var(--shell-topbar-height);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  --travel: 590px;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  text-align: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: clamp(600px, 100% - 80px, 980px);
+  margin: 105px auto 0;
+  display: flex;
+}
+
+.pickle-article-kicker {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.15px;
+  color: rgba(0, 0, 0, 0.5);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pickle-article-kicker a {
+  color: inherit;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.pickle-article-kicker a:hover {
+  opacity: 0.65;
+}
+
+.pickle-article-title {
+  letter-spacing: -0.6px;
+  color: #000000;
+  max-width: min(680px, 100%);
+  margin: 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 60px;
+  font-weight: 566;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.pickle-article-title[data-wide="true"] {
+  max-width: min(820px, 100%);
+}
+
+.pickle-article-subtitle {
+  letter-spacing: -0.18px;
+  color: #000000;
+  opacity: 0.5;
+  max-width: min(620px, 100%);
+  margin: 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 18px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.pickle-article-meta {
+  letter-spacing: -0.18px;
+  color: #000000;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.4;
+  display: flex;
+}
+
+.pickle-meta-divider {
+  background: rgba(0, 0, 0, 0.2);
+  width: 1px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.pickle-article-column {
+  --viewport-height: 958px;
+  -webkit-font-smoothing: antialiased;
+  --shell-topbar-height: 77px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  --shell-topbar-offset: 0px;
+  --travel: 590px;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  flex-direction: column;
+  align-items: center;
+  gap: 72px;
+  width: clamp(600px, 100% - 80px, 980px);
+  margin: 61px auto 0;
+  display: flex;
+}
+
+.pickle-hero-group {
+  flex-direction: column;
+  align-items: center;
+  gap: 60px;
+  width: 100%;
+  display: flex;
+}
+
+.pickle-player-frame {
+  padding-top: 56.25%;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  border-radius: 58px;
+  background: #0a0a0c;
+  box-shadow:
+    0 1px 1.5px rgba(0, 0, 0, 0.05),
+    0 6px 3px rgba(0, 0, 0, 0.04),
+    0 13px 4px rgba(0, 0, 0, 0.03),
+    0 23px 4.5px rgba(0, 0, 0, 0.012);
+}
+
+.pickle-player-frame[data-variant="inline"] {
+  border-radius: 42px;
+}
+
+.pickle-player-frame[data-variant="light"] {
+  background: #f5f5f7;
+}
+
+.pickle-player-media {
+  --viewport-height: 958px;
+  -webkit-font-smoothing: antialiased;
+  --shell-topbar-height: 77px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  --shell-topbar-offset: 0px;
+  --travel: 590px;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", sans-serif;
+  line-height: 0;
+  --media-control-background: transparent;
+  --media-control-hover-background: transparent;
+  --media-text-color: #fff;
+  --media-font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", sans-serif;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.pickle-player-gradient {
+  pointer-events: none;
+  background: linear-gradient(rgba(0, 0, 0, 0) 68.75%, rgba(0, 0, 0, 0.28) 100%);
+  transition: opacity 0.3s ease;
+  position: absolute;
+  inset: 0;
+}
+
+.pickle-player-bar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  padding: 0 44px;
+  transition: opacity 0.3s ease;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  color: #ffffff;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), sans-serif;
+}
+
+.pickle-player-btn {
+  color: #ffffff;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.16s ease;
+}
+
+.pickle-player-btn:hover {
+  opacity: 0.8;
+}
+
+.pickle-player-btn:active {
+  opacity: 0.6;
+}
+
+.pickle-player-btn svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pickle-player-progress-group {
+  flex: 1 0 0;
+  align-items: center;
+  gap: 15px;
+  min-width: 1px;
+  display: flex;
+}
+
+.pickle-player-time {
+  padding: 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+}
+
+.pickle-player-duration {
+  opacity: 0.5;
+}
+
+.pickle-player-track {
+  position: relative;
+  flex: 1 0 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.pickle-player-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: #ffffff;
+}
+
+/* Pickle 600px reading text & sections inside the 980px column */
+.pickle-text {
+  letter-spacing: -0.18px;
+  color: #000000;
+  width: 600px;
+  max-width: 100%;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.pickle-text p {
+  margin: 0;
+}
+
+.pickle-text p + p {
+  margin-top: 1.45em;
+}
+
+.pickle-text ul,
+.pickle-text ol {
+  margin: 1.1em 0 0;
+  padding-left: 1.35em;
+}
+
+.pickle-text li {
+  margin-top: 0.45em;
+  line-height: 1.45;
+}
+
+.pickle-text strong {
+  font-weight: 566;
+  color: #000000;
+}
+
+.pickle-text a,
+.pickle-license a {
+  color: inherit;
+  text-underline-position: from-font;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  transition: opacity 0.1s ease;
+}
+
+.pickle-text a:hover,
+.pickle-license a:hover {
+  opacity: 0.6;
+}
+
+.pickle-h2 {
+  letter-spacing: -0.32px;
+  color: #000000;
+  width: 600px;
+  max-width: 100%;
+  margin: 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 32px;
+  font-weight: 566;
+  line-height: 1.4;
+}
+
+.pickle-h3 {
+  letter-spacing: -0.24px;
+  color: #000000;
+  width: 600px;
+  max-width: 100%;
+  margin: 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 24px;
+  font-weight: 566;
+  line-height: 1.4;
+}
+
+.pickle-section {
+  flex-direction: column;
+  align-items: center;
+  gap: 36px;
+  width: 100%;
+  display: flex;
+}
+
+.pickle-section-wide {
+  flex-direction: column;
+  align-items: center;
+  gap: 60px;
+  width: 100%;
+  display: flex;
+}
+
+.pickle-head-block {
+  flex-direction: column;
+  gap: 24px;
+  width: 600px;
+  max-width: 100%;
+  display: flex;
+}
+
+.pickle-head-block .pickle-text,
+.pickle-head-block .pickle-h2,
+.pickle-head-block .pickle-h3 {
+  width: 100%;
+}
+
+.pickle-subsections {
+  flex-direction: column;
+  gap: 60px;
+  width: 100%;
+  display: flex;
+}
+
+.pickle-subsection {
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  display: flex;
+}
+
+.pickle-sub-body {
+  flex-direction: column;
+  align-items: center;
+  gap: 36px;
+  width: 100%;
+  display: flex;
+}
+
+.pickle-figure {
+  width: 100%;
+  margin: 0;
+}
+
+.pickle-card-surface {
+  box-sizing: border-box;
+  width: 100%;
+  background: #fafafa;
+  border-radius: 36px;
+  padding: 36px 40px;
+  overflow-x: auto;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.pickle-caption {
+  letter-spacing: -0.15px;
+  text-align: center;
+  color: #000000;
+  opacity: 0.4;
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+/* Pickle Comparison & Spec Table inside figure */
+.pickle-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  letter-spacing: -0.16px;
+  color: #000000;
+}
+
+.pickle-table th,
+.pickle-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.pickle-table tr:last-child th,
+.pickle-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.pickle-table thead th {
+  font-weight: 566;
+  color: #000000;
+  padding-top: 6px;
+  padding-bottom: 16px;
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.12);
+}
+
+.pickle-table tbody th {
+  font-weight: 566;
+  color: #000000;
+  width: 28%;
+}
+
+.pickle-table tbody td {
+  color: rgba(0, 0, 0, 0.78);
+}
+
+/* Pickle Closing Block */
+.pickle-closing {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 48px;
+  width: 600px;
+  max-width: 100%;
+  display: flex;
+}
+
+.pickle-glass-pill {
+  -webkit-backdrop-filter: blur(12px) saturate(1.7);
+  backdrop-filter: blur(12px) saturate(1.7);
+  color: #000000;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 90px;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
+  display: inline-flex;
+  height: 58px;
+  padding: 0 28px;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.4),
+    inset 1px 2px 4px rgba(255, 255, 255, 0.7);
+}
+
+.pickle-glass-pill:hover {
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.98),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.5),
+    inset 1px 2px 4px rgba(255, 255, 255, 0.78);
+}
+
+.pickle-glass-pill:active {
+  background: rgba(255, 255, 255, 0.24);
+  transition-duration: 80ms;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 2px rgba(0, 0, 0, 0.09),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.3);
+}
+
+.pickle-pill-solid {
+  box-sizing: border-box;
+  height: 48px;
+  letter-spacing: -0.34px;
+  color: #ffffff;
+  white-space: nowrap;
+  cursor: pointer;
+  background: #000000;
+  border: 0;
+  border-radius: 90px;
+  padding: 0 22px;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), sans-serif;
+  font-size: 17px;
+  font-weight: 510;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pickle-pill-solid:hover {
+  background: #2c2c2e;
+}
+
+.pickle-pill-solid:active {
+  background: #3a3a3c;
+}
+
+.pickle-license {
+  letter-spacing: -0.14px;
+  color: #000000;
+  opacity: 0.4;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+/* 2. Pickle Research / Grid Index Layout (https://pickle.com/research) */
+.pickle-research-page {
+  --viewport-height: 958px;
+  --shell-topbar-height: 77px;
+  --shell-topbar-offset: var(--shell-topbar-height);
+  --travel: 590px;
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  background: #ffffff;
+  color: #000000;
+  padding: calc(var(--shell-topbar-height, 77px) + 96px) 0 160px;
+  display: flow-root;
+  width: 100%;
+}
+
+.pickle-research-hero,
+.pickle-research-grid,
+.pickle-research-container {
+  box-sizing: border-box;
+  width: min(980px, 100% - 80px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.pickle-research-title {
+  letter-spacing: -0.6px;
+  color: #000000;
+  margin: 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 60px;
+  font-weight: 566;
+  line-height: 1.2;
+}
+
+.pickle-research-description {
+  letter-spacing: -0.2px;
+  color: #6e6e73;
+  max-width: 640px;
+  margin: 16px 0 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.pickle-research-grid {
+  --viewport-height: 958px;
+  -webkit-font-smoothing: antialiased;
+  --shell-topbar-height: 77px;
+  --shell-topbar-offset: var(--shell-topbar-height);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  --travel: 590px;
+  box-sizing: border-box;
+  width: min(980px, 100% - 80px);
+  margin-left: auto;
+  margin-right: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 56px 24px;
+  margin-top: 64px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+
+.pickle-research-card {
+  color: #000000;
+  flex-direction: column;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  text-decoration: none;
+  display: flex;
+}
+
+.pickle-research-card:focus-visible {
+  outline-offset: 6px;
+  border-radius: 20px;
+  outline: 2px solid #000000;
+}
+
+.pickle-research-thumbnail {
+  aspect-ratio: 16 / 10;
+  background: #f5f5f7;
+  border-radius: 20px;
+  display: block;
+  overflow: hidden;
+  position: relative;
+}
+
+.pickle-research-thumbnail img,
+.pickle-research-thumbnail video,
+.pickle-research-thumbnail > .pickle-thumb-inner {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  display: block;
+}
+
+.pickle-research-card:hover .pickle-research-thumbnail img,
+.pickle-research-card:hover .pickle-research-thumbnail video,
+.pickle-research-card:hover .pickle-research-thumbnail > .pickle-thumb-inner {
+  transform: scale(1.03);
+}
+
+.pickle-research-card-title {
+  letter-spacing: -0.26px;
+  margin: 20px 0 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 26px;
+  font-weight: 566;
+  line-height: 1.3;
+  color: #000000;
+}
+
+.pickle-research-card-subtitle {
+  letter-spacing: -0.17px;
+  color: #000000;
+  opacity: 0.5;
+  margin: 8px 0 0;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.pickle-research-card-meta {
+  letter-spacing: -0.15px;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.4;
+  display: flex;
+  color: #000000;
+}
+
+.pickle-research-card-divider {
+  background: rgba(0, 0, 0, 0.2);
+  width: 1px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* 3. Pickle Markdown Prose inside Article Column (for Compare / Blog / Legal / Docs) */
+.pickle-prose {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -0.18px;
+  color: #000000;
+}
+
+.pickle-prose > p,
+.pickle-prose > ul,
+.pickle-prose > ol,
+.pickle-prose > blockquote,
+.pickle-prose > h1,
+.pickle-prose > h2,
+.pickle-prose > h3,
+.pickle-prose > h4 {
+  width: min(600px, 100%);
+  margin: 0;
+}
+
+.pickle-prose > h2 {
+  margin-top: 48px;
+  font-size: 32px;
+  font-weight: 566;
+  line-height: 1.4;
+  letter-spacing: -0.32px;
+  color: #000000;
+}
+
+.pickle-prose > h2:first-child {
+  margin-top: 0;
+}
+
+.pickle-prose > h3 {
+  margin-top: 28px;
+  font-size: 24px;
+  font-weight: 566;
+  line-height: 1.4;
+  letter-spacing: -0.24px;
+  color: #000000;
+}
+
+.pickle-prose > ul,
+.pickle-prose > ol {
+  padding-left: 1.35em;
+}
+
+.pickle-prose li + li {
+  margin-top: 0.45em;
+}
+
+.pickle-prose strong {
+  font-weight: 566;
+  color: #000000;
+}
+
+.pickle-prose a {
+  color: inherit;
+  text-underline-position: from-font;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  transition: opacity 0.1s ease;
+}
+
+.pickle-prose a:hover {
+  opacity: 0.6;
+}
+
+.pickle-prose > table {
+  width: 100%;
+  margin: 18px 0;
+  background: #fafafa;
+  border-radius: 32px;
+  border-collapse: separate;
+  border-spacing: 0;
+  padding: 24px 28px;
+  font-size: 16px;
+  line-height: 1.45;
+  letter-spacing: -0.16px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.pickle-prose > table th,
+.pickle-prose > table td {
+  padding: 15px 18px;
+  text-align: left;
+  vertical-align: top;
+  border: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+}
+
+.pickle-prose > table tr:last-child th,
+.pickle-prose > table tr:last-child td {
+  border-bottom: 0;
+}
+
+.pickle-prose > table thead th {
+  font-weight: 566;
+  color: #000000;
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.12);
+}
+
+.pickle-prose > table tbody td:first-child {
+  font-weight: 566;
+  color: #000000;
+}
+
+.pickle-prose > img,
+.pickle-prose > figure {
+  width: 100%;
+  margin: 18px 0;
+  border-radius: 32px;
+  overflow: hidden;
+}
+
+/* Responsive Mobile rules matching Pickle mobile-uUEXX5RG.css & research-BxwUQPWn.css */
+@media (max-width: 700px) {
+  .pickle-article {
+    padding: calc(env(safe-area-inset-top, 0px) + 68px + 42px) 24px 96px;
+  }
+
+  .pickle-article-header {
+    width: 100%;
+    margin: 0;
+    gap: 16px;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .pickle-article-title {
+    font-size: 36px;
+    letter-spacing: -0.36px;
+    max-width: none;
+  }
+
+  .pickle-article-subtitle,
+  .pickle-article-meta {
+    font-size: 16px;
+    letter-spacing: -0.16px;
+    justify-content: flex-start;
+  }
+
+  .pickle-article-meta {
+    gap: 12px;
+  }
+
+  .pickle-article-column {
+    width: 100%;
+    margin: 48px 0 0;
+    gap: 48px;
+  }
+
+  .pickle-hero-group {
+    gap: 36px;
+  }
+
+  .pickle-player-frame,
+  .pickle-player-frame[data-variant="inline"] {
+    border-radius: 24px;
+  }
+
+  .pickle-player-bar {
+    padding: 0 16px;
+    gap: 8px;
+  }
+
+  .pickle-player-time {
+    font-size: 14px;
+  }
+
+  .pickle-text,
+  .pickle-prose {
+    width: 100%;
+    font-size: 16px;
+    letter-spacing: -0.16px;
+  }
+
+  .pickle-h2,
+  .pickle-prose > h2 {
+    width: 100%;
+    font-size: 24px;
+    letter-spacing: -0.24px;
+  }
+
+  .pickle-h3,
+  .pickle-prose > h3 {
+    width: 100%;
+    font-size: 20px;
+    letter-spacing: -0.2px;
+  }
+
+  .pickle-head-block,
+  .pickle-closing {
+    width: 100%;
+    gap: 20px;
+  }
+
+  .pickle-card-surface,
+  .pickle-prose > table {
+    border-radius: 24px;
+    padding: 20px 18px;
+  }
+
+  .pickle-caption {
+    font-size: 13px;
+    letter-spacing: -0.13px;
+  }
+
+  .pickle-research-page {
+    padding: calc(var(--shell-topbar-height, 68px) + 48px) 0 96px;
+  }
+
+  .pickle-research-hero,
+  .pickle-research-grid,
+  .pickle-research-container {
+    width: auto;
+    margin-left: 24px;
+    margin-right: 24px;
+  }
+
+  .pickle-research-title {
+    font-size: 40px;
+    letter-spacing: -0.4px;
+  }
+
+  .pickle-research-description {
+    margin-top: 10px;
+    font-size: 17px;
+  }
+
+  .pickle-research-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    margin-top: 40px;
+  }
+
+  .pickle-research-thumbnail {
+    border-radius: 16px;
+  }
+
+  .pickle-research-card-title {
+    margin-top: 16px;
+    font-size: 22px;
+  }
+
+  .pickle-research-card-subtitle {
+    font-size: 16px;
+  }
+}
+
+/* Public article pages. Reading column + figure, ABC Diatype / Suisse Intl. */
 .article-page {
   width: 100%;
   background: #fff;
-  color: #000c1f;
+  color: #000000;
   -webkit-font-smoothing: antialiased;
-  font-family: var(--font-geist-sans), "Geist", sans-serif;
+  font-family: "ABC Diatype Unlicensed Trial", "Suisse Intl", var(--font-dm-sans), "DM Sans", sans-serif;
 }
 
 .article-page[data-pad="page"] {
@@ -1444,7 +2458,8 @@ input.range-minimal::-moz-range-track {
   color: var(--mp-text);
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
-  font-family: var(--font-geist-sans), "Geist", sans-serif;
+  font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
+  font-weight: 500;
 }
 
 .mob-pricing[data-pad="page"] {
@@ -1477,7 +2492,7 @@ input.range-minimal::-moz-range-track {
   margin: 0;
   font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
   font-size: 48px;
-  font-weight: 566;
+  font-weight: 500;
   line-height: 1.1;
   letter-spacing: -0.03em;
   color: var(--mp-text);
@@ -1490,8 +2505,11 @@ input.range-minimal::-moz-range-track {
 .mob-pricing-subtitle {
   margin: 0;
   max-width: 36rem;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 18px;
-  line-height: 1.45;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: -0.011em;
   color: var(--mp-text-2);
 }
 
@@ -1558,14 +2576,16 @@ input.range-minimal::-moz-range-track {
 
 .mob-pricing-save {
   margin: 12px 0 0;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 14px;
-  line-height: 1.4;
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--mp-text-2);
 }
 
 .mob-pricing-save strong {
   color: var(--mp-blue);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .mob-pricing-grid {
@@ -1605,7 +2625,7 @@ input.range-minimal::-moz-range-track {
   margin: 0;
   font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
   font-size: 24px;
-  font-weight: 566;
+  font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.02em;
 }
@@ -1625,22 +2645,30 @@ input.range-minimal::-moz-range-track {
 
 .mob-pricing-audience {
   margin: 8px 0 0;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 14px;
-  line-height: 1.4;
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--mp-text-2);
+}
+
+@media (min-width: 720px) {
+  .mob-pricing-audience {
+    min-height: 42px;
+  }
 }
 
 .mob-pricing-price {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin: 28px 0 0;
+  margin: 24px 0 0;
   font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
 }
 
 .mob-pricing-price-value {
   font-size: 48px;
-  font-weight: 566;
+  font-weight: 500;
   line-height: 1;
   letter-spacing: -0.04em;
   tabular-nums: true;
@@ -1652,13 +2680,55 @@ input.range-minimal::-moz-range-track {
   color: var(--mp-text-3);
 }
 
+.mob-pricing-trial {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  height: 24px;
+  margin-top: 12px;
+}
+
+.mob-pricing-trial-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: rgba(26, 86, 219, 0.08);
+  color: var(--mp-blue);
+  font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mob-pricing-trial-free {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mp-text-3);
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mob-pricing-trial-placeholder {
+  display: block;
+  height: 100%;
+}
+
 .mob-pricing-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-height: 44px;
-  margin-top: 24px;
+  margin-top: 14px;
   padding: 0 18px;
   border: 0;
   border-radius: 9999px;
@@ -1705,7 +2775,10 @@ input.range-minimal::-moz-range-track {
 
 .mob-pricing-access {
   margin: 16px 0 0;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--mp-text-3);
 }
 
@@ -1716,8 +2789,10 @@ input.range-minimal::-moz-range-track {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 14px;
-  line-height: 1.4;
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--mp-text);
 }
 
@@ -1764,7 +2839,7 @@ input.range-minimal::-moz-range-track {
 
 .mob-pricing-compare th {
   font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
-  font-weight: 566;
+  font-weight: 500;
   color: var(--mp-text);
 }
 
@@ -1776,7 +2851,10 @@ input.range-minimal::-moz-range-track {
   caption-side: bottom;
   padding: 14px 20px 18px;
   text-align: left;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--mp-text-3);
 }
 
@@ -1789,7 +2867,7 @@ input.range-minimal::-moz-range-track {
   margin: 0 0 8px;
   font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
   font-size: 24px;
-  font-weight: 566;
+  font-weight: 500;
 }
 
 .mob-pricing-faq dl > div {
@@ -1800,20 +2878,25 @@ input.range-minimal::-moz-range-track {
 .mob-pricing-faq dt {
   font-family: var(--font-dm-sans), "DM Sans", Arial, Helvetica, sans-serif;
   font-size: 16px;
-  font-weight: 566;
+  font-weight: 500;
 }
 
 .mob-pricing-faq dd {
   margin: 8px 0 0;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 15px;
-  line-height: 1.5;
+  font-weight: 400;
+  line-height: 1.55;
   color: var(--mp-text-2);
 }
 
 .mob-pricing-foot {
   margin-top: 48px;
   text-align: center;
+  font-family: var(--font-geist-sans), "Geist", sans-serif;
   font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--mp-text-2);
 }
 

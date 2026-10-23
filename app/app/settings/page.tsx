@@ -219,8 +219,8 @@ type BillingPayment = {
 function receiptPlan(plan: string | null): string {
   if (plan === "starter") return "Starter";
   if (plan === "pro") return "Pro";
-  if (plan === "slot") return "Slot";
-  if (plan === "slot_pro") return "Slot Pro";
+  if (plan === "slot" || plan === "hourly") return "Hourly";
+  if (plan === "slot_pro" || plan === "hourly_pro") return "Hourly Pro";
   if (plan === "creator") return "Starter";
   if (plan === "studio") return "Pro";
   return "Subscription";
@@ -291,39 +291,39 @@ function getCurrentPlanDetails(canonical: "free" | CheckoutPlanId): {
         name: PRICING.starter.label,
         priceLabel: `$${PRICING.starter.monthly} /mo.`,
         description:
-          "Entry-level paid plan with 900 monthly credits (~30 3D models), commercial use, and 24/7 generation.",
-        quotaTitle: "900 Monthly Credits Included",
+          "30 model generations each month (900 credits), premium plugins included, and 24/7 generation.",
+        quotaTitle: "30 Model Generations · 900 Credits",
       };
     case "pro":
       return {
         name: PRICING.pro.label,
         priceLabel: `$${PRICING.pro.monthly} /mo.`,
         description:
-          "High-volume plan with 3,000 monthly credits (~100 3D models), commercial use, and priority scale.",
-        quotaTitle: "3,000 Monthly Credits Included",
+          "100 model generations per month (3,000 credits), full plugin suite, and priority studio access.",
+        quotaTitle: "100 Model Generations · 3,000 Credits",
       };
     case "slot":
       return {
         name: SLOT_PRICING.slot.label,
         priceLabel: `$${SLOT_PRICING.slot.monthly} /mo.`,
         description:
-          "900 monthly credits with 1 dedicated daily generation hour (up to 2 seats per hour).",
-        quotaTitle: "900 Credits · 1h Daily Window",
+          "30 model generations each month (900 credits) and premium plugins with a 1-hour daily generation window.",
+        quotaTitle: "30 Models · 1h Daily Window",
       };
     case "slot_pro":
       return {
         name: SLOT_PRICING.slot_pro.label,
         priceLabel: `$${SLOT_PRICING.slot_pro.monthly} /mo.`,
         description:
-          "3,000 monthly credits with 2 dedicated daily generation hours (up to 4 seats per window).",
-        quotaTitle: "3,000 Credits · 2h Daily Window",
+          "100 model generations per month (3,000 credits) and full plugin suite with a 2-hour daily generation window.",
+        quotaTitle: "100 Models · 2h Daily Window",
       };
     default:
       return {
         name: PRICING.free.label,
         priceLabel: `$${PRICING.free.monthly} /mo.`,
         description:
-          "Free access with 100 monthly credits for exploring image and 3D model generation.",
+          "Free access with 100 monthly credits (3 model generations) for exploring image and 3D generation.",
         quotaTitle: "100 Monthly Credits Included",
       };
   }
@@ -335,7 +335,7 @@ function getUpgradeOptions(canonical: "free" | CheckoutPlanId): CompactPlanOptio
     name: PRICING.pro.label,
     priceLabel: `$${PRICING.pro.monthly} /mo.`,
     description:
-      "3,000 monthly credits, about 100 default models from uploaded images, and generation at any time.",
+      "100 model generations per month (3,000 credits), full plugin suite, and 14-day free trial.",
     cta: "Upgrade to Pro",
     href: checkoutHref("pro"),
   };
@@ -344,7 +344,7 @@ function getUpgradeOptions(canonical: "free" | CheckoutPlanId): CompactPlanOptio
     name: PRICING.starter.label,
     priceLabel: `$${PRICING.starter.monthly} /mo.`,
     description:
-      "900 monthly credits, about 30 default models from uploaded images, and generation at any time.",
+      "30 model generations each month (900 credits), premium plugins included, and 14-day free trial.",
     cta: canonical === "pro" || canonical === "slot_pro" ? "Switch to Starter" : "Upgrade to Starter",
     href: checkoutHref("starter"),
   };
@@ -353,8 +353,8 @@ function getUpgradeOptions(canonical: "free" | CheckoutPlanId): CompactPlanOptio
     name: SLOT_PRICING.slot_pro.label,
     priceLabel: `$${SLOT_PRICING.slot_pro.monthly} /mo.`,
     description:
-      "Get 3,000 monthly credits with a 2-hour daily generation window at a lower monthly rate.",
-    cta: canonical === "pro" ? "Switch to Slot Pro" : "Upgrade to Slot Pro",
+      "100 model generations per month, full plugin suite, and a 2-hour daily generation window.",
+    cta: canonical === "pro" ? "Switch to Hourly Pro" : "Upgrade to Hourly Pro",
     href: checkoutHref("slot_pro"),
   };
 
@@ -379,6 +379,9 @@ function BillingSection() {
   const [renewsAt, setRenewsAt] = useState<string | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [accessUntil, setAccessUntil] = useState<string | null>(null);
+  const [isTrial, setIsTrial] = useState(false);
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [pastPlan, setPastPlan] = useState<string | null>(null);
   const [payments, setPayments] = useState<BillingPayment[]>([]);
   const [credits, setCredits] = useState<CreditsInfo | null>(null);
   const [rewards, setRewards] = useState<CreditRewardRow[]>([]);
@@ -410,6 +413,9 @@ function BillingSection() {
       setRenewsAt(body.renewsAt ?? null);
       setCancelAtPeriodEnd(Boolean(body.cancelAtPeriodEnd));
       setAccessUntil(body.accessUntil ?? null);
+      setIsTrial(Boolean(body.isTrial));
+      setTrialEndsAt(body.trialEndsAt ?? null);
+      setPastPlan(body.pastPlan ?? null);
       setPayments(Array.isArray(body.payments) ? body.payments : []);
       setCredits(creditsInfo);
       setRewards(rewardsHistory);
@@ -436,7 +442,10 @@ function BillingSection() {
       return;
     }
     const until = accessLabel ? ` You keep ${planDisplayLabel(plan)} until ${accessLabel}.` : "";
-    if (!window.confirm(`Cancel renewal?${until} It will not charge again after that.`)) {
+    const confirmMsg = isTrial
+      ? `Cancel your 14-day free trial? You keep full access until ${accessLabel || "the trial ends"}, and you will not be charged.`
+      : `Cancel renewal?${until} It will not charge again after that.`;
+    if (!window.confirm(confirmMsg)) {
       return;
     }
     setCancelling(true);
@@ -616,20 +625,28 @@ function BillingSection() {
                   <span
                     className={cn(
                       "rounded-md px-2 py-0.5 text-[11px] font-medium",
-                      plan && cancelAtPeriodEnd
-                        ? "bg-amber-50 text-amber-700"
+                      isTrial
+                        ? "bg-amber-500/10 text-amber-700 border border-amber-500/20"
+                        : plan && cancelAtPeriodEnd
+                        ? "bg-amber-50 text-amber-700 border border-amber-200"
                         : "bg-neutral-100 text-neutral-600"
                     )}
                   >
-                    {plan && cancelAtPeriodEnd ? "Ending" : "Current"}
+                    {isTrial ? (cancelAtPeriodEnd ? "Trial Ending" : "14-Day Free Trial") : plan && cancelAtPeriodEnd ? "Ending" : "Current"}
                   </span>
                   <span className="text-[13px] font-medium text-neutral-400 tabular-nums">
                     {currentPlanMeta.priceLabel}
                   </span>
                 </div>
                 <p className="mt-2 text-[13px] leading-relaxed text-neutral-500">
-                  {plan && cancelAtPeriodEnd
+                  {isTrial && cancelAtPeriodEnd
+                    ? `Your 14-day free trial will end on ${accessLabel || "the end of the trial period"}. You will not be charged.`
+                    : isTrial
+                    ? `You are currently on a 14-day free trial. Your first billing of ${currentPlanMeta.priceLabel} begins on ${renewLabel || "the end of the trial period"}. Cancel anytime before then at no charge.`
+                    : plan && cancelAtPeriodEnd
                     ? `You keep ${planDisplayLabel(plan)} until ${accessLabel || "the end of this period"}. It will not renew.`
+                    : !plan && pastPlan
+                    ? `Your previous ${planDisplayLabel(pastPlan)} plan ended. You are currently on the Free plan with 100 monthly credits.`
                     : currentPlanMeta.description}
                 </p>
               </div>
@@ -642,7 +659,7 @@ function BillingSection() {
                     disabled={cancelling}
                     className="inline-flex h-8 items-center rounded-lg border border-neutral-200 bg-white px-3 text-[12px] font-medium text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-900 disabled:opacity-50"
                   >
-                    {cancelling ? "Cancelling…" : "Adjust Plan"}
+                    {cancelling ? "Cancelling…" : isTrial ? "Cancel Free Trial" : "Adjust Plan"}
                   </button>
                 ) : !plan ? (
                   <Link
@@ -652,7 +669,7 @@ function BillingSection() {
                     Adjust Plan
                   </Link>
                 ) : (
-                  <span className="inline-flex h-8 items-center rounded-lg border border-neutral-200/70 bg-neutral-50 px-3 text-[12px] font-medium text-neutral-400">
+                  <span className="inline-flex h-8 items-center rounded-lg border border-amber-200 bg-amber-50/70 px-3 text-[12px] font-medium text-amber-800">
                     Cancellation scheduled
                   </span>
                 )}
@@ -671,6 +688,8 @@ function BillingSection() {
                 <p className="text-[12px] leading-relaxed text-neutral-500">
                   {plan && !cancelAtPeriodEnd && renewLabel
                     ? `Renews ${renewLabel} · View your credit breakdown and Water BYOK usage`
+                    : plan && cancelAtPeriodEnd && accessLabel
+                    ? `Active until ${accessLabel} · Will not renew`
                     : "Go beyond or monitor your plan's included quota in the usage dashboard"}
                 </p>
               </div>

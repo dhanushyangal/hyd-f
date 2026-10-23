@@ -1,12 +1,37 @@
 import Link from "next/link";
 import { blogPostPath, fetchBlogCategories, fetchBlogPosts, formatBlogDate } from "@/lib/blog";
 import { blogIndexPath, categoryToSlug, resolveCategorySlug } from "@/lib/blog-routes";
-import { ArticleColumn } from "@/components/layout/ArticlePage";
+import {
+  PickleResearchCard,
+  type PickleThumbVariant,
+} from "@/components/layout/PicklePage";
 
 type BlogIndexGridProps = {
   page?: number;
   categorySlug?: string;
 };
+
+const THUMB_VARIANTS: PickleThumbVariant[] = [
+  "pipeline-arch",
+  "critter-rig",
+  "docs-flow",
+  "compare-tripo",
+  "privacy-enclave",
+  "unity-engine",
+  "api-stream",
+  "unreal-engine",
+];
+
+function pickThumbVariant(slug: string, index: number): PickleThumbVariant {
+  if (slug.includes("bluefox")) return "critter-rig";
+  if (slug.includes("privacy") || slug.includes("security")) return "privacy-enclave";
+  if (slug.includes("export")) return "docs-flow";
+  if (slug.includes("unity")) return "unity-engine";
+  if (slug.includes("unreal")) return "unreal-engine";
+  if (slug.includes("blender")) return "pipeline-arch";
+  if (slug.includes("pricing")) return "api-stream";
+  return THUMB_VARIANTS[index % THUMB_VARIANTS.length];
+}
 
 export async function BlogIndexGrid({ page = 1, categorySlug }: BlogIndexGridProps) {
   let categories: string[] = [];
@@ -28,14 +53,12 @@ export async function BlogIndexGrid({ page = 1, categorySlug }: BlogIndexGridPro
 
   if (categorySlug && !category) {
     return (
-      <ArticleColumn className="article-empty">
-        <p className="article-body">That category is not on the blog.</p>
-        <p className="article-body mt-4">
-          <Link href="/blog" className="article-inline">
-            Back to blog
-          </Link>
+      <div className="pickle-research-container" style={{ marginTop: "48px" }}>
+        <p className="pickle-text">That category is not on the blog.</p>
+        <p className="pickle-text" style={{ marginTop: "16px" }}>
+          <Link href="/blog">Back to blog</Link>
         </p>
-      </ArticleColumn>
+      </div>
     );
   }
 
@@ -72,76 +95,103 @@ function BlogIndexBody({
   return (
     <>
       {categories.length > 0 ? (
-        <ArticleColumn>
-          <nav className="article-cats" aria-label="Blog categories">
-            <Link href="/blog" aria-current={!activeCategory ? "page" : undefined}>
+        <div className="pickle-research-container" style={{ marginTop: "32px" }}>
+          <nav
+            aria-label="Blog categories"
+            className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[16px] font-medium"
+          >
+            <Link
+              href="/blog"
+              aria-current={!activeCategory ? "page" : undefined}
+              className={
+                !activeCategory
+                  ? "text-black underline underline-offset-4"
+                  : "text-black/45 transition-opacity hover:text-black/80"
+              }
+            >
               All
             </Link>
-            {categories.map((cat) => (
-              <Link
-                key={cat}
-                href={`/blog/category/${categoryToSlug(cat)}`}
-                aria-current={activeCategory === cat ? "page" : undefined}
-              >
-                {cat}
-              </Link>
-            ))}
+            {categories.map((cat) => {
+              const active = activeCategory === cat;
+              return (
+                <Link
+                  key={cat}
+                  href={`/blog/category/${categoryToSlug(cat)}`}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    active
+                      ? "text-black underline underline-offset-4"
+                      : "text-black/45 transition-opacity hover:text-black/80"
+                  }
+                >
+                  {cat}
+                </Link>
+              );
+            })}
           </nav>
-        </ArticleColumn>
+        </div>
       ) : null}
 
       {posts.length === 0 ? (
-        <ArticleColumn className="article-empty">
-          <p className="article-body">No posts yet.</p>
-          <p className="article-body mt-4">
+        <div className="pickle-research-container" style={{ marginTop: "48px" }}>
+          <p className="pickle-text">No posts yet.</p>
+          <p className="pickle-text" style={{ marginTop: "16px" }}>
             Check back for notes on BlueFox and production 3D.
           </p>
-        </ArticleColumn>
+        </div>
       ) : (
-        <div className="article-list">
-          {posts.map((post) => {
-            const dateLabel = formatBlogDate(post.publishedAt);
+        <ul className="pickle-research-grid">
+          {posts.map((post, idx) => {
+            const dateLabel = formatBlogDate(post.publishedAt) || "Aug 19, 2026";
             return (
-              <article key={post.slug} className="article-list-item">
-                <Link href={blogPostPath(post.slug)}>
-                  <h2 className="article-h2">{post.title}</h2>
-                  {post.excerpt ? <p className="article-body">{post.excerpt}</p> : null}
-                  <p className="article-meta">
-                    {post.category ? <span>{post.category}</span> : null}
-                    {post.category && dateLabel ? (
-                      <span className="article-meta-divider" aria-hidden />
-                    ) : null}
-                    {dateLabel ? <time dateTime={post.publishedAt ?? undefined}>{dateLabel}</time> : null}
-                  </p>
-                </Link>
-              </article>
+              <PickleResearchCard
+                key={post.slug}
+                item={{
+                  title: post.title,
+                  subtitle: post.excerpt,
+                  href: blogPostPath(post.slug),
+                  date: dateLabel,
+                  author: post.author ? `${post.author} Team` : "Hydrilla Team",
+                  imageSrc: post.coverImage,
+                  thumbVariant: pickThumbVariant(post.slug, idx),
+                }}
+              />
             );
           })}
-        </div>
+        </ul>
       )}
 
       {totalPages > 1 ? (
-        <ArticleColumn>
-          <nav className="article-pager" aria-label="Pagination">
+        <div className="pickle-research-container" style={{ marginTop: "64px" }}>
+          <nav
+            aria-label="Pagination"
+            className="flex items-center justify-between text-[16px] font-medium text-black"
+          >
             {page > 1 ? (
-              <Link href={blogIndexPath({ page: page - 1, category: activeCategory })}>
+              <Link
+                href={blogIndexPath({ page: page - 1, category: activeCategory })}
+                className="underline underline-offset-4 hover:opacity-60"
+              >
                 Previous
               </Link>
             ) : (
               <span />
             )}
-            <span>
+            <span className="text-black/45 tabular-nums">
               {page} / {totalPages}
             </span>
             {page < totalPages ? (
-              <Link href={blogIndexPath({ page: page + 1, category: activeCategory })}>
+              <Link
+                href={blogIndexPath({ page: page + 1, category: activeCategory })}
+                className="underline underline-offset-4 hover:opacity-60"
+              >
                 Next
               </Link>
             ) : (
               <span />
             )}
           </nav>
-        </ArticleColumn>
+        </div>
       ) : null}
     </>
   );

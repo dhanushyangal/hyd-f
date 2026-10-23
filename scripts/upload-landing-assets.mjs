@@ -42,6 +42,13 @@ const assets = [
   ["public/features/3d6.png", "hydrilla-landing/features/3d6"],
   ["public/features/3d7.png", "hydrilla-landing/features/3d7"],
   ["public/features/3d8.png", "hydrilla-landing/features/3d8"],
+  ["public/new-features/3df1.png", "hydrilla-landing/features/3df1"],
+  ["public/new-features/3df2.png", "hydrilla-landing/features/3df2"],
+  ["public/new-features/3df3.png", "hydrilla-landing/features/3df3"],
+  ["public/new-features/3df4.png", "hydrilla-landing/features/3df4"],
+  ["public/new-features/3df5.png", "hydrilla-landing/features/3df5"],
+  ["public/new-features/3df6.png", "hydrilla-landing/features/3df6"],
+  ["public/new-features/3df7.png", "hydrilla-landing/features/3df7"],
   ["public/industrypower/dino.png", "hydrilla-landing/industrypower/dino"],
   ["public/industrypower/films&a.png", "hydrilla-landing/industrypower/films-a"],
   ["public/industrypower/architecture.png", "hydrilla-landing/industrypower/architecture"],
@@ -59,6 +66,10 @@ const assets = [
 
 const videoAssets = [
   ["public/herohydrilla.mp4", "hydrilla-landing/hero/backdrop"],
+  ["public/models-industry-landingpage/sw.webm", "hydrilla-landing/showcase/bluefox-sw"],
+  ["public/models-industry-landingpage/warmachine.webm", "hydrilla-landing/showcase/bluefox-warmachine"],
+  ["public/models-industry-landingpage/spidy.webm", "hydrilla-landing/showcase/bluefox-spidy"],
+  ["public/models-industry-landingpage/arrow.webm", "hydrilla-landing/showcase/bluefox-arrow"],
 ];
 
 const optimizedUrl = (publicId) =>

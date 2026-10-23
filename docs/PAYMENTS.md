@@ -146,6 +146,22 @@ Image, image-to-3D, text-to-image, image edit, Water generate, and Water chat ar
 | `refund.succeeded`, `payment.refunded` | Mark that payment `refunded`. The row stays. |
 | `credit.added` | Add the credit amount onto the existing total. |
 
+## Free Plan Monthly Reset
+
+Free plan accounts (`plan: null` or free tier) receive 100 credits every month.
+1. When a user account is first created, `ensureCreditsRow(userId)` sets `credits_total = 100`, `credits_used = 0`, and `reset_at = now + 1 month`.
+2. When the user loads their credits (`GET /api/payments/credits`) or attempts generation (`deductCredit`), the backend evaluates `applyFreePeriodResetIfDue(userId)`.
+3. If `reset_at <= now` (or was never set), it hard-resets `credits_used: 0`, restores `credits_total: 100`, advances `reset_at` by 1 month (or multiple months if the user was offline), and writes a ledger entry `"Free monthly credit reset"`. Any bonus credits (`credits_bonus`) are preserved.
+
+## 14-Day Free Trial
+
+All paid plans (`starter`, `pro`, `slot`, and `slot_pro`) include a **14-day free trial**.
+- **Dodo Products**: All 4 recurring products in Dodo Payments are configured with `trial_period_days: 14`, `trial_type: "free"`, and `trial_payment_method_optional: false` (card details collected with $0 charge upfront).
+- **Anti-Abuse Gating**: Free trials are limited to **1 per account**. `checkUserTrialUsed(userId, email)` inspects `users.has_used_trial` and previous subscription history. If a user has already consumed a trial, `create-checkout` passes `subscription_data: { trial_period_days: 0 }`, charging them immediately and preventing repeat trial loops.
+- **Credit Grant on Trial**: On `subscription.active`, the full plan allotment (900 credits for Starter/Slot, 3,000 credits for Pro/Slot Pro) is granted for the 14 days, with `reset_at` aligned to `current_period_end` (day 14).
+- **Trial to Paid Conversion**: When day 14 ends, Dodo automatically charges the card and emits `subscription.renewed`. The renewal handler transitions `is_trial` to `false` and grants the fresh allotment for the first paid monthly cycle.
+- **Cancellation During Trial**: If cancelled during the 14 days, access continues until trial end (`trial_ends_at`). When expired, `endPaidAccess` smoothly reverts the account to Free (100 credits) and releases any booked slot hour.
+
 ## Tables
 
 Leave these tables and their existing rows in place.

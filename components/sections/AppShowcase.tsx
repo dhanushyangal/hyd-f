@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import SeeWorkspaceButton from "../SeeWorkspaceButton";
 import { BlurReveal } from "@/components/ui/BlurReveal";
-import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
+import { DESCRIPTION_WEIGHT, GEIST_FONT, SANS_FONT, SECTION_WEIGHT } from "@/lib/fonts";
 
 const CLOUDINARY_WORKFLOW_BASE =
   "https://res.cloudinary.com/dqizbxc9e/image/upload";
@@ -49,8 +49,8 @@ export default function AppShowcase() {
         <div className="text-center mb-12 sm:mb-14 md:mb-16">
           <BlurReveal
             as="h2"
-            className="text-3xl sm:text-4xl md:text-5xl lg:text-[2.75rem] font-bold text-[#111] tracking-tight leading-[1.12]"
-            style={{ fontFamily: SANS_FONT }}
+            className="text-3xl sm:text-4xl md:text-5xl lg:text-[2.75rem] font-medium text-[#111] tracking-tight leading-[1.12]"
+            style={{ fontFamily: SANS_FONT, fontWeight: SECTION_WEIGHT }}
           >
             Workflow for you
           </BlurReveal>
@@ -77,14 +77,14 @@ export default function AppShowcase() {
               className={`absolute z-30 max-w-[150px] sm:max-w-[168px] rounded-xl bg-white/92 backdrop-blur-sm border border-black/[0.06] px-3 py-2.5 sm:px-3.5 sm:py-3 shadow-[0_4px_16px_rgba(0,0,0,0.06)] ${positionClasses[tag.position]}`}
             >
               <h3
-                className="font-semibold text-[#111] text-[12px] sm:text-[13px] leading-tight tracking-[-0.01em]"
-                style={{ fontFamily: SANS_FONT }}
+                className="font-medium text-[#111] text-[12px] sm:text-[13px] leading-tight tracking-[-0.01em]"
+                style={{ fontFamily: SANS_FONT, fontWeight: SECTION_WEIGHT }}
               >
                 {tag.title}
               </h3>
               <p
-                className="mt-1 text-neutral-500 text-[11px] sm:text-[12px] leading-snug"
-                style={{ fontFamily: GEIST_FONT }}
+                className="mt-1 text-neutral-500 text-[11px] sm:text-[12px] leading-[1.5]"
+                style={{ fontFamily: GEIST_FONT, fontWeight: DESCRIPTION_WEIGHT }}
               >
                 {tag.description}
               </p>

@@ -214,6 +214,92 @@ function MegaMenuV2({
   );
 }
 
+function MegaMenuAligned({
+  group,
+  onNavigate,
+}: {
+  group: NavGroup;
+  onNavigate?: () => void;
+}) {
+  if (!group.columns?.length) return null;
+
+  return (
+    <div
+      className="overflow-hidden rounded-[20px] bg-white text-[#000c1f] shadow-[0_28px_70px_-32px_rgba(0,12,31,0.45)]"
+      role="region"
+      aria-label={`${group.label} menu`}
+    >
+      <div className="flex items-baseline justify-between gap-6 px-6 pt-5 pb-1">
+        <p className="text-[20px] font-medium leading-none tracking-[-0.03em]" style={{ fontFamily: DISPLAY }}>
+          {group.label}
+        </p>
+        <Link
+          href={group.href}
+          onClick={onNavigate}
+          className="inline-flex cursor-pointer items-center gap-1.5 text-[14px] font-medium tracking-[-0.01em] text-[#000c1f] underline decoration-[#000c1f]/25 underline-offset-4 transition-colors hover:decoration-[#000c1f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#000c1f]/25"
+          style={{ fontFamily: DISPLAY }}
+        >
+          Overview
+        </Link>
+      </div>
+
+      <div className="flex items-stretch gap-2 px-3 pt-3 pb-3">
+        <div
+          className="grid min-w-0 flex-1 gap-1"
+          style={{
+            gridTemplateColumns: `repeat(${group.columns.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {group.columns.map((column) => (
+            <section key={column.heading} className="min-w-0 px-2 py-2">
+              <p className="px-2 pb-1.5 text-[13px] font-medium tracking-[-0.01em] text-[#000c1f]/55">
+                {column.heading}
+              </p>
+              <ul className="space-y-0.5">
+                {column.items.map((item) => (
+                  <li key={`${column.heading}-${item.href}-${item.label}`}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      className="flex cursor-pointer flex-col rounded-lg px-2 py-2 transition-colors duration-200 hover:bg-[#000c1f]/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#000c1f]/25"
+                    >
+                      <span
+                        className="block text-[15px] font-medium leading-5 tracking-[-0.02em] text-[#000c1f]"
+                        style={{ fontFamily: DISPLAY }}
+                      >
+                        {item.label}
+                      </span>
+                      {item.description ? (
+                        <span className="mt-0.5 block text-pretty text-[13px] leading-5 text-[#000c1f]/65">
+                          {item.description}
+                        </span>
+                      ) : null}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        {group.featured ? (
+          <Link
+            href={group.featured.href}
+            onClick={onNavigate}
+            className="group hidden w-[220px] shrink-0 flex-col justify-between rounded-2xl bg-[#000c1f] p-5 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#000c1f]/30 focus-visible:ring-offset-2 xl:flex"
+          >
+            <p className="text-[15px] font-medium leading-snug tracking-[-0.02em]" style={{ fontFamily: DISPLAY }}>
+              {group.featured.title}
+            </p>
+            <span className="mt-6 text-[14px] text-white/75">
+              {group.featured.eyebrow}
+            </span>
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function MegaMenu({
   group,
   onNavigate,
@@ -221,7 +307,11 @@ export function MegaMenu({
   group: NavGroup;
   onNavigate?: () => void;
 }) {
-  if (NAVBAR === "compact") {
+  if (NAVBAR === "v2") {
+    return <MegaMenuAligned group={group} onNavigate={onNavigate} />;
+  }
+
+  if (NAVBAR !== "wide") {
     return <MegaMenuV2 group={group} onNavigate={onNavigate} />;
   }
 

@@ -40,7 +40,8 @@ function getCtaState(
   userPlan: UserPlan,
   catalogPlan: string | null,
   loading: boolean,
-  signedIn: boolean
+  signedIn: boolean,
+  trialEligible = true
 ): CtaState {
   const holdsSlot = catalogPlan === "slot" || catalogPlan === "slot_pro";
   const current =
@@ -76,6 +77,16 @@ function getCtaState(
 
   if (!loading && userPlan === "pro" && row.id === "starter") {
     return { label: "Included with Pro", disabled: true, current: false };
+  }
+
+  if (signedIn && !trialEligible && row.id !== "free") {
+    const nonTrialLabels: Record<string, string> = {
+      starter: "Choose Starter",
+      pro: "Choose Pro",
+      slot: "Choose Hourly",
+      slot_pro: "Choose Hourly Pro",
+    };
+    return { label: nonTrialLabels[row.id] || "Choose Plan", disabled: false, current: false };
   }
 
   return { label: row.cta, disabled: false, current: false };
@@ -128,12 +139,15 @@ function PlanCta({ row, state }: { row: PricingCatalogRow; state: CtaState }) {
 function PlanCard({
   row,
   state,
+  trialEligible = true,
 }: {
   row: PricingCatalogRow;
   state: CtaState;
+  trialEligible?: boolean;
 }) {
   const popular = row.id === "pro" || row.id === "slot_pro";
   const features = planFeatureLines(row);
+  const showTrialBadge = Boolean(row.trialDays && trialEligible && !state.current);
 
   return (
     <article className="mob-pricing-card">
@@ -146,8 +160,18 @@ function PlanCard({
         <span className="mob-pricing-price-value">${row.monthly}</span>
         <span className="mob-pricing-price-period">per month</span>
       </p>
+      <div className="mob-pricing-trial">
+        {showTrialBadge ? (
+          <span className="mob-pricing-trial-badge">
+            14-day free trial · $0 today
+          </span>
+        ) : row.id === "free" ? (
+          <span className="mob-pricing-trial-free">Always free</span>
+        ) : (
+          <span className="mob-pricing-trial-placeholder" aria-hidden="true" />
+        )}
+      </div>
       <PlanCta row={row} state={state} />
-      <p className="mob-pricing-access">{row.access}</p>
       <ul className="mob-pricing-features">
         {features.map((line) => (
           <li key={line}>
@@ -170,6 +194,7 @@ export default function PricingSection({
   const { getToken, isSignedIn } = useAuth();
   const [userPlan, setUserPlan] = useState<UserPlan>(null);
   const [catalogPlan, setCatalogPlan] = useState<string | null>(null);
+  const [trialEligible, setTrialEligible] = useState(true);
   const [planLoading, setPlanLoading] = useState(true);
   const [slotMode, setSlotMode] = useState(false);
   const [toggleTouched, setToggleTouched] = useState(false);
@@ -179,6 +204,7 @@ export default function PricingSection({
   useEffect(() => {
     if (!isSignedIn) {
       setPlanLoading(false);
+      setTrialEligible(true);
       return;
     }
 
@@ -186,17 +212,25 @@ export default function PricingSection({
       try {
         const token = await getToken();
         const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-        const response = await fetch(
-          `${BACKEND_URL}/api/payments/subscription`,
-          { headers }
-        );
-        if (response.ok) {
-          const { subscription } = await response.json();
+        const [subRes, trialRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/payments/subscription`, { headers }),
+          fetch(`${BACKEND_URL}/api/payments/trial-eligibility`, { headers }),
+        ]);
+
+        if (subRes.ok) {
+          const { subscription } = await subRes.json();
           const raw = typeof subscription?.plan === "string" ? subscription.plan : null;
           setCatalogPlan(raw);
           setUserPlan(
             raw === "slot" || raw === "slot_pro" ? null : raw ? normalizePlanId(raw) : null
           );
+        }
+
+        if (trialRes.ok) {
+          const trialData = await trialRes.json();
+          setTrialEligible(Boolean(trialData?.eligible));
+        } else {
+          setTrialEligible(false);
         }
       } catch {
         // Pricing remains usable when subscription status cannot be loaded.
@@ -219,9 +253,9 @@ export default function PricingSection({
     () =>
       PRICING_CATALOG.map((row) => ({
         row,
-        state: getCtaState(row, userPlan, catalogPlan, planLoading, Boolean(isSignedIn)),
+        state: getCtaState(row, userPlan, catalogPlan, planLoading, Boolean(isSignedIn), trialEligible),
       })),
-    [catalogPlan, isSignedIn, planLoading, userPlan]
+    [catalogPlan, isSignedIn, planLoading, trialEligible, userPlan]
   );
 
   const visible = rows.filter(({ row }) => (slotMode ? row.kind === "slot" : row.kind === "anytime"));
@@ -269,13 +303,13 @@ export default function PricingSection({
             </button>
           </div>
           <p className="mob-pricing-save">
-            <strong>{SLOT_SAVE_PERCENT}% off</strong> on Slot
+            <strong>{SLOT_SAVE_PERCENT}% off</strong> on Hourly
           </p>
         </header>
 
         <div className="mob-pricing-grid" data-count={visible.length}>
           {visible.map(({ row, state }) => (
-            <PlanCard key={row.id} row={row} state={state} />
+            <PlanCard key={row.id} row={row} state={state} trialEligible={trialEligible} />
           ))}
         </div>
 

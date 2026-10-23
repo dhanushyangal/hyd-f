@@ -34,6 +34,7 @@ export type NavLink = {
   href: string;
   description?: string;
   icon?: NavIconName;
+  badge?: string;
 };
 
 export type NavColumn = {
@@ -214,49 +215,104 @@ export const NAV_PRIMARY: NavGroup[] = [
   { label: "Pricing", href: "/pricing" },
 ];
 
-export const FOOTER_NAV: Array<{ heading: string; links: NavLink[] }> = [
+export const FOOTER_NAV: Array<{
+  heading: string;
+  links: NavLink[];
+  row?: 1 | 2;
+  col?: number;
+}> = [
   {
-    heading: "Product",
-    links: [
-      { label: "How It Works", href: "/features" },
-      { label: "Features", href: "/features" },
-      { label: "Pricing", href: "/pricing" },
-      { label: "BlueFox 3D", href: "/bluefox3d" },
-      { label: "API", href: "/api" },
-      { label: "Integrations", href: "/integrations" },
-      { label: "Enterprise", href: "/enterprise" },
-    ],
-  },
-  {
-    heading: "Solutions",
+    heading: "Use Cases",
+    row: 1,
+    col: 1,
     links: [
       { label: "Game Development", href: "/usecase/gamedev" },
       { label: "Film & Animation", href: "/usecase/filmproduction" },
       { label: "Architecture & Interiors", href: "/usecase/architecture" },
       { label: "AR / VR & XR", href: "/usecase/arvr" },
       { label: "Product Visualization", href: "/usecase/productdesign" },
+      { label: "All Use Cases", href: "/usecase" },
+    ],
+  },
+  {
+    heading: "Product",
+    row: 1,
+    col: 2,
+    links: [
+      { label: "BlueFox 3D", href: "/bluefox3d" },
+      { label: "Text to 3D", href: "/docs#text-to-3d" },
+      { label: "Image to 3D", href: "/docs#image-to-3d" },
+      { label: "Auto-Rigging", href: "/rigging" },
+      { label: "3D Preview & Viewer", href: "/docs#preview" },
+      { label: "Multi-format Exports", href: "/docs#export" },
+      { label: "Features", href: "/features" },
+      { label: "How It Works", href: "/features" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Changelog", href: "/changelog" },
+    ],
+  },
+  {
+    heading: "Compare",
+    row: 1,
+    col: 3,
+    links: [
+      { label: "Hydrilla vs Meshy", href: "/compare/hydrilla-vs-meshy" },
+      { label: "Hydrilla vs Tripo", href: "/compare/hydrilla-vs-tripo" },
+      { label: "Hydrilla vs Luma", href: "/compare/hydrilla-vs-luma" },
+      { label: "Best AI 3D Generators", href: "/compare/best-ai-3d-generators" },
+      { label: "All Comparisons", href: "/compare" },
     ],
   },
   {
     heading: "Resources",
+    row: 1,
+    col: 4,
     links: [
       { label: "Documentation", href: "/docs" },
+      { label: "REST API", href: "/api" },
       { label: "Integrations", href: "/integrations" },
-      { label: "FAQ", href: "/faq" },
+      { label: "3D Asset Library", href: "/library" },
       { label: "Blog", href: "/blog" },
-      { label: "Changelog", href: "/changelog" },
-      { label: "Compare", href: "/compare" },
+      { label: "FAQ", href: "/faq" },
     ],
   },
   {
     heading: "Company",
+    row: 1,
+    col: 5,
     links: [
+      { label: "Contact Us", href: "/contact" },
       { label: "About", href: "/about" },
       { label: "Research", href: "/research" },
       { label: "Team", href: "/team" },
-      { label: "Careers", href: "/careers" },
-      { label: "Contact", href: "/contact" },
+      { label: "Careers", href: "/careers", badge: "We are hiring!" },
+      { label: "Enterprise", href: "/enterprise" },
       { label: "Security", href: "/security" },
+      { label: "Brand", href: "/brand" },
+    ],
+  },
+  {
+    heading: "Integrations",
+    row: 2,
+    col: 1,
+    links: [
+      { label: "Blender Add-on", href: "/integrations/blender" },
+      { label: "Unity Engine", href: "/integrations/unity" },
+      { label: "Unreal Engine", href: "/integrations/unreal" },
+      { label: "Godot 4", href: "/integrations/godot" },
+      { label: "MCP Server", href: "/integrations/mcp" },
+      { label: "Studio Bridge", href: "/integrations/connect" },
+    ],
+  },
+  {
+    heading: "Legal",
+    row: 2,
+    col: 5,
+    links: [
+      { label: "Privacy Policy", href: "/privacy-policy" },
+      { label: "Terms of Service", href: "/terms-and-conditions" },
+      { label: "Cookie Policy", href: "/cookie-policy" },
+      { label: "Security & Trust", href: "/security" },
     ],
   },
 ];

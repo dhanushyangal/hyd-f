@@ -31,6 +31,14 @@ export function cloudinaryRaw(publicId: string): string {
 export const HERO_STAGE_MODELS = [
   cloudinaryRaw("v1791059174/hydrilla-landing/hero/stage-a.glb"),
   cloudinaryRaw("v1791059175/hydrilla-landing/hero/stage-b.glb"),
+  cloudinaryRaw("v1792555678/hydrilla-landing/hero/stage-c.glb"),
+  cloudinaryRaw("v1792555680/hydrilla-landing/hero/stage-d.glb"),
+  cloudinaryRaw("v1792555680/hydrilla-landing/hero/stage-e.glb"),
+  cloudinaryRaw("v1792555681/hydrilla-landing/hero/stage-f.glb"),
+  cloudinaryRaw("v1792555682/hydrilla-landing/hero/stage-g.glb"),
+  cloudinaryRaw("v1792555683/hydrilla-landing/hero/stage-h.glb"),
+  cloudinaryRaw("v1792555684/hydrilla-landing/hero/stage-i.glb"),
+  cloudinaryRaw("v1792555685/hydrilla-landing/hero/stage-j.glb"),
 ] as const;
 
 /** 404 grass field. Served from the original uncompressed model in /public. */
@@ -147,6 +155,41 @@ export const WHY_HYDRILLA_MEDIA = {
   fish: whyHydrillaImage("fish-why", "f_webp,q_auto,c_fill,w_1000"),
   cta: whyHydrillaImage("cta-photo", "f_webp,q_auto,c_fill,w_1000"),
 } as const;
+
+/**
+ * BlueFox showcase reel. One 720px MP4 plays at a time.
+ * Posters are a single WebP frame so the card paints before any video bytes.
+ */
+const SHOWCASE_FOLDER = "hydrilla-landing/showcase";
+
+export function showcaseClip(id: string): string {
+  return cloudinaryVideo(
+    `${SHOWCASE_FOLDER}/${id}`,
+    "c_limit,w_720,q_auto,vc_auto,f_mp4"
+  );
+}
+
+export function showcasePoster(id: string): string {
+  return `${CLOUDINARY_VIDEO_BASE}/so_0,f_webp,q_auto,c_fill,w_760,h_1014/${VERSION}/${SHOWCASE_FOLDER}/${id}`;
+}
+
+const BLUEFOX_CLIPS = ["bluefox-sw", "bluefox-warmachine", "bluefox-spidy", "bluefox-arrow"] as const;
+
+export const BLUEFOX_SHOWCASE = {
+  poster: showcasePoster(BLUEFOX_CLIPS[0]),
+  clips: BLUEFOX_CLIPS.map((id) => showcaseClip(id)),
+} as const;
+
+/**
+ * Feature row art. Width stays at the source size (about 1600px) so the
+ * picture is not scaled down. Format and quality are chosen per browser.
+ */
+export function featureImage(id: string): string {
+  return cloudinaryImage(
+    `hydrilla-landing/features/${id}`,
+    "c_limit,w_1600,f_auto,q_auto:best"
+  );
+}
 
 /** Pricing plan card images (WebP). */
 export function pricingPlanImage(

@@ -1,72 +1,96 @@
-import Image from "next/image";
 import Link from "next/link";
-import { MarketingPage } from "@/components/layout/MarketingPage";
-import { MarketingArticle, ProseHeading } from "@/components/content/MarkdownBody";
-import { BLUEFOX_LEDE } from "@/lib/brand";
+import {
+  PickleArticlePage,
+  PickleVisualThumb,
+  type PickleRelatedItem,
+} from "@/components/layout/PicklePage";
+import { BLUEFOX_LEDE, MODEL_NAME, RESEARCH_LAB } from "@/lib/brand";
 import { WHY_HYDRILLA_MEDIA } from "@/lib/cloudinary";
+
+const RELATED: PickleRelatedItem[] = [
+  {
+    title: "Hawan Research Labs",
+    subtitle: "The research lab that builds the generative 3D models behind Hydrilla.",
+    href: "/research",
+    date: "Aug 19, 2026",
+    author: "Hawan Research Labs",
+    thumbVariant: "pipeline-arch",
+  },
+  {
+    title: "Compare AI 3D Generators",
+    subtitle: "How BlueFox 1 and Hydrilla compare to Meshy, Tripo, and Luma.",
+    href: "/compare",
+    date: "Aug 19, 2026",
+    author: "Hydrilla Team",
+    thumbVariant: "compare-tripo",
+  },
+];
 
 export default function BlueFoxPage() {
   return (
-    <MarketingPage
-      eyebrow="Model"
+    <PickleArticlePage
+      kicker="Model"
+      kickerHref="/research"
       title="BlueFox 3D"
-      description={BLUEFOX_LEDE}
-      related={[
-        { label: "Research", href: "/research", hint: "Hawan Research Labs" },
-        { label: "Features", href: "/features", hint: "Preview and export" },
-        { label: "How BlueFox works", href: "/blog/how-bluefox-works", hint: "The generation loop" },
-      ]}
+      subtitle={BLUEFOX_LEDE}
+      date="Aug 19, 2026"
+      author={RESEARCH_LAB}
+      heroVideoSrc={WHY_HYDRILLA_MEDIA.bluefox.video}
+      heroPosterSrc={WHY_HYDRILLA_MEDIA.bluefox.poster}
+      ctaLabel="Start on Hydrilla"
+      ctaHref="/app/studio"
+      footnote={
+        <>
+          {MODEL_NAME} is built by <Link href="/research">{RESEARCH_LAB}</Link>{" "}
+          and runs inside <Link href="/">Hydrilla</Link>.
+        </>
+      }
+      relatedItems={RELATED}
     >
-      <MarketingArticle>
-        <div className="relative aspect-[16/9] overflow-hidden border border-neutral-200 bg-neutral-950">
-          <Image
-            src={WHY_HYDRILLA_MEDIA.bluefox.poster}
-            alt="BlueFox 1 generating a production-ready 3D asset"
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 768px"
-            priority
-          />
+      <div className="pickle-text">
+        <p>{BLUEFOX_LEDE}</p>
+        <p>
+          BlueFox 1 generates production-oriented meshes from a text prompt or a
+          reference image. Meshes arrive segmented into logical parts, with PBR
+          maps (base color, metalness, roughness, normals) you can preview in
+          Hydrilla and export as GLB, FBX, OBJ, or USDZ.
+        </p>
+        <p>
+          Use it for game props and environments, film and animation concept
+          assets, architectural visualization, XR objects, and product
+          visualization. Then refine in Unity, Unreal, Blender, Maya, or your
+          DCC.
+        </p>
+      </div>
+
+      <section className="pickle-section">
+        <div className="pickle-head-block">
+          <h2 className="pickle-h2">Why segmented geometry + PBR</h2>
+          <div className="pickle-text">
+            <p>
+              BlueFox 1 is not a CAD system and not a replacement for a
+              hero-asset artist. It is the fast path to a clean, editable 3D
+              base where parts are separated and materials respond to scene
+              lighting.
+            </p>
+            <p>
+              Hydrilla is how you run BlueFox 1: workspaces, credits, preview,
+              team delivery, and multi-format export.
+            </p>
+          </div>
         </div>
 
-        <section className="mt-12 space-y-5 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          <p>{BLUEFOX_LEDE}</p>
-          <p>
-            BlueFox 1 generates production-oriented meshes from a text prompt or
-            a reference image. Meshes arrive segmented into logical parts, with
-            PBR maps (base color, metalness, roughness, normals) you can preview
-            in Hydrilla and export as GLB, FBX, OBJ, or USDZ.
-          </p>
-          <p>
-            Use it for game props and environments, film and animation concept
-            assets, architectural visualization, XR objects, and product viz.
-            Then refine in Unity, Unreal, Blender, Maya, or your DCC.
-          </p>
-          <p>
-            BlueFox 1 is not a CAD system and not a replacement for a hero-asset
-            artist. It is the fast path to a clean, editable 3D base.
-          </p>
-          <p>
-            Hydrilla is how you run BlueFox 1: workspaces, credits, preview, team
-            delivery, and export.
-          </p>
-        </section>
-
-        <ProseHeading>Next</ProseHeading>
-        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          <Link href="/" className="font-semibold text-neutral-950 underline underline-offset-2">
-            Start on Hydrilla
-          </Link>
-          {" · "}
-          <Link href="/research" className="font-semibold text-neutral-950 underline underline-offset-2">
-            Hawan Research Labs
-          </Link>
-          {" · "}
-          <Link href="/features" className="font-semibold text-neutral-950 underline underline-offset-2">
-            Features
-          </Link>
-        </p>
-      </MarketingArticle>
-    </MarketingPage>
+        <figure className="pickle-figure">
+          <div className="pickle-player-frame" data-variant="light">
+            <div className="pickle-player-media">
+              <PickleVisualThumb variant="pipeline-arch" />
+            </div>
+          </div>
+          <figcaption className="pickle-caption">
+            From text prompt or reference frame to segmented mesh and four PBR channels.
+          </figcaption>
+        </figure>
+      </section>
+    </PickleArticlePage>
   );
 }

@@ -41,6 +41,7 @@ public/3d-models/
 public/3dheroimages/
 public/reference/
 # Local source media (served via Cloudinary)
+public/landing-3d-assets/
 public/why-hydrilla/
 public/pricing/
 # clerk configuration (can include secrets)

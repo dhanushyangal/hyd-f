@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion, useReducedMotion } from "motion/react";
 import { BlurReveal } from "@/components/ui/BlurReveal";
 import { WHY_HYDRILLA_MEDIA } from "@/lib/cloudinary";
-import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
+import { DESCRIPTION_WEIGHT, GEIST_FONT, SANS_FONT, SECTION_WEIGHT } from "@/lib/fonts";
 import { cn } from "@/lib/utils";
 
 const RADIUS = "rounded-[28px] sm:rounded-[32px]";
@@ -138,7 +138,7 @@ function BigTitle({
   return (
     <h3
       className={cn(
-        "w-full text-center font-bold leading-[1.05] tracking-[-0.04em] text-balance antialiased",
+        "w-full text-center font-medium leading-[1.05] tracking-[-0.04em] text-balance antialiased",
         size === "sm" && "text-[clamp(1.15rem,5.2vw,1.65rem)] md:text-[clamp(1.35rem,2.5vw,1.85rem)]",
         size === "md" && "text-[clamp(1.3rem,5.8vw,1.9rem)] md:text-[clamp(1.6rem,3vw,2.25rem)]",
         size === "lg" && "text-[clamp(1.55rem,6.5vw,2.35rem)] md:text-[clamp(1.95rem,3.6vw,2.85rem)]",
@@ -148,7 +148,7 @@ function BigTitle({
       )}
       style={{
         fontFamily: SANS_FONT,
-        fontWeight: 700,
+        fontWeight: SECTION_WEIGHT,
         textShadow: tone === "light" ? TITLE_SHADOW : undefined,
         WebkitFontSmoothing: "antialiased",
       }}
@@ -232,9 +232,10 @@ function BlueFoxHero({ className }: { className?: string }) {
           </BigTitle>
         </div>
         <p
-          className="w-full shrink-0 pt-3 text-center text-[13px] font-semibold tracking-[-0.01em] text-white sm:text-sm"
+          className="w-full shrink-0 pt-3 text-center text-[13px] font-normal leading-[1.5] tracking-[-0.01em] text-white sm:text-sm"
           style={{
             fontFamily: GEIST_FONT,
+            fontWeight: DESCRIPTION_WEIGHT,
             textShadow: TITLE_SHADOW,
           }}
         >
@@ -260,14 +261,14 @@ export default function WhyHydrilla() {
 
       <div className="relative w-full">
         <header className="mb-8 max-w-2xl sm:mb-10">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400">
             Why Hydrilla
           </p>
           <BlurReveal
             as="h2"
             id="why-hydrilla-heading"
-            className="mt-3 text-[clamp(1.75rem,4vw,2.75rem)] font-bold leading-[1.08] tracking-[-0.035em] text-[#111]"
-            style={{ fontFamily: SANS_FONT }}
+            className="mt-3 text-[clamp(1.75rem,4vw,2.75rem)] font-medium leading-[1.08] tracking-[-0.035em] text-[#111]"
+            style={{ fontFamily: SANS_FONT, fontWeight: SECTION_WEIGHT }}
           >
             Production-ready assets.
           </BlurReveal>

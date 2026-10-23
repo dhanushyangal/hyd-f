@@ -31,6 +31,12 @@
       "skillPath": "skills/copywriting/SKILL.md",
       "computedHash": "6341d240554cb1bcdcce414e9024af9a45f2606bd15493fb6c9a170945a0a0e9"
     },
+    "design-taste-frontend": {
+      "source": "Leonxlnx/taste-skill",
+      "sourceType": "github",
+      "skillPath": "skills/taste-skill/SKILL.md",
+      "computedHash": "69021ac7e671c0c0d85d65b570003cef360b1c296323fa28c042884e146478ca"
+    },
     "diagnosing-bugs": {
       "source": "mattpocock/skills",
       "sourceType": "github",

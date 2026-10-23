@@ -51,7 +51,7 @@ function MobileSection({
   onNavigate: () => void;
   onDark: boolean;
 }) {
-  const v2 = NAVBAR === "compact";
+  const v2 = NAVBAR !== "wide";
   const hover = v2
     ? "hover:bg-black/[0.04]"
     : onDark
@@ -143,7 +143,7 @@ function MobileSection({
                         }
                         style={{ fontFamily: DISPLAY }}
                       >
-                        {child.icon ? (
+                        {child.icon && NAVBAR !== "v2" ? (
                           <NavIcon name={child.icon} className={`${v2 ? "mt-0.5 h-5 w-5" : "h-6 w-6"} shrink-0`} />
                         ) : null}
                         {v2 ? (
@@ -185,7 +185,7 @@ export function MobileNav({
   onClose: () => void;
 }) {
   const [openLabel, setOpenLabel] = useState<string | null>(null);
-  const v2 = NAVBAR === "compact";
+  const v2 = NAVBAR !== "wide";
   const sheetDark = onDark && !v2;
 
   useEffect(() => {

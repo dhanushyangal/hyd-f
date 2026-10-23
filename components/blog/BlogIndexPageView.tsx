@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import Footer from "@/components/layout/Footer";
-import { ArticleColumn, ArticlePage } from "@/components/layout/ArticlePage";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { BlogContinueSection } from "@/components/blog/BlogContinueSection";
 import { BlogIndexGrid } from "@/components/blog/BlogIndexGrid";
@@ -16,30 +15,33 @@ export const blogIndexMetadata = createPageMetadata({
 
 function BlogListSkeleton() {
   return (
-    <ArticleColumn className="article-empty" aria-hidden>
-      <div className="space-y-8">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="space-y-3 border-b border-black/10 pb-8">
-            <div className="h-7 w-3/4 rounded bg-[#eff4fb]" />
-            <div className="h-4 w-full rounded bg-[#eff4fb]" />
-            <div className="h-4 w-1/3 rounded bg-[#eff4fb]" />
-          </div>
-        ))}
-      </div>
-    </ArticleColumn>
+    <ul className="pickle-research-grid" aria-hidden>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <li key={i} className="pickle-research-card">
+          <div className="pickle-research-thumbnail animate-pulse bg-[#f5f5f7]" />
+          <div className="mt-5 h-7 w-3/4 animate-pulse rounded-lg bg-[#f5f5f7]" />
+          <div className="mt-2.5 h-5 w-full animate-pulse rounded-lg bg-[#f5f5f7]" />
+          <div className="mt-3.5 h-4 w-1/3 animate-pulse rounded-lg bg-[#f5f5f7]" />
+        </li>
+      ))}
+    </ul>
   );
 }
 
 export function BlogGridSkeleton() {
   return (
     <>
-      <ArticlePage
-        headingId="blog-heading"
-        title="Blog"
-        subtitle="Notes on BlueFox, exports, and production 3D."
-      >
+      <div className="pickle-research-page">
+        <header className="pickle-research-hero">
+          <h1 id="blog-heading" className="pickle-research-title">
+            Blog
+          </h1>
+          <p className="pickle-research-description">
+            Notes from the Hydrilla team on BlueFox 1, production exports, and 3D pipelines.
+          </p>
+        </header>
         <BlogListSkeleton />
-      </ArticlePage>
+      </div>
       <Footer />
     </>
   );
@@ -60,18 +62,22 @@ export function BlogIndexPageView({ page = 1, categorySlug }: BlogIndexPageViewP
           path: "/blog",
         })}
       />
-      <ArticlePage
-        headingId="blog-heading"
-        title="Blog"
-        subtitle="Notes on BlueFox, exports, and production 3D."
-      >
+      <div className="pickle-research-page">
+        <header className="pickle-research-hero">
+          <h1 id="blog-heading" className="pickle-research-title">
+            Blog
+          </h1>
+          <p className="pickle-research-description">
+            Notes from the Hydrilla team on BlueFox 1, production exports, and 3D pipelines.
+          </p>
+        </header>
         <Suspense fallback={<BlogListSkeleton />}>
           <BlogIndexGrid page={page} categorySlug={categorySlug} />
         </Suspense>
         <Suspense fallback={null}>
           <BlogContinueSection />
         </Suspense>
-      </ArticlePage>
+      </div>
       <Footer />
     </>
   );

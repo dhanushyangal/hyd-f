@@ -2,7 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { MarketingPage } from "@/components/layout/MarketingPage";
+import {
+  PickleArticlePage,
+  type PickleRelatedItem,
+  type PickleThumbVariant,
+} from "@/components/layout/PicklePage";
 import { getIntegration, INTEGRATIONS } from "@/lib/integrations";
 import { createPageMetadata, getWebPageJsonLd } from "@/lib/seo";
 
@@ -10,8 +14,14 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
-const DISPLAY =
-  "'RoobertVF', 'Roobert', var(--font-dm-sans), 'DM Sans', sans-serif";
+const THUMB_BY_SLUG: Record<string, PickleThumbVariant> = {
+  blender: "pipeline-arch",
+  unity: "unity-engine",
+  unreal: "unreal-engine",
+  godot: "godot-engine",
+  mcp: "privacy-enclave",
+  api: "api-stream",
+};
 
 export function generateStaticParams() {
   return INTEGRATIONS.map((item) => ({ slug: item.slug }));
@@ -46,6 +56,18 @@ export default async function IntegrationDetailPage({ params }: Props) {
       : "Get API key";
   const guideSteps = item.guideSteps || [];
 
+  const related: PickleRelatedItem[] = INTEGRATIONS.filter((i) => i.slug !== item.slug)
+    .slice(0, 2)
+    .map((rel) => ({
+      title: rel.name,
+      subtitle: rel.summary,
+      href: `/integrations/${rel.slug}`,
+      date: "Available",
+      author: "Hydrilla Integrations",
+      imageSrc: rel.guideSteps?.[0]?.imageSrc || null,
+      thumbVariant: THUMB_BY_SLUG[rel.slug] || "pipeline-arch",
+    }));
+
   return (
     <>
       <JsonLd
@@ -55,165 +77,129 @@ export default async function IntegrationDetailPage({ params }: Props) {
           path: `/integrations/${item.slug}`,
         })}
       />
-      <MarketingPage
-        eyebrow="Integrations"
-        eyebrowHref="/integrations"
+      <PickleArticlePage
+        kicker="Integrations"
+        kickerHref="/integrations"
         title={item.name}
-        description={item.summary}
-        formats={false}
-        heroRule={false}
-        related={[
-          { label: "All integrations", href: "/integrations", hint: "Plugins and Bridge" },
-          { label: "API keys", href: "/app/api-keys", hint: "hyd_live_ keys" },
-          { label: "API", href: "/api", hint: "REST overview" },
-        ]}
+        subtitle={item.summary}
+        date="Available"
+        author="Hydrilla Team"
+        heroPosterSrc={guideSteps[0]?.imageSrc}
+        heroThumbVariant={!guideSteps[0]?.imageSrc ? (THUMB_BY_SLUG[item.slug] || "pipeline-arch") : undefined}
+        relatedItems={related}
+        relatedHeading="Other integrations"
       >
-        <article className="mx-auto max-w-[42rem] px-5 pb-16 sm:px-6">
-          <p className="text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-            {item.description}
-          </p>
-
-          <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href={primaryHref}
-              className="inline-flex items-center rounded-xl bg-[#111] px-5 py-3 text-[15px] font-semibold text-white hover:bg-neutral-800"
-            >
+        <div className="pickle-head-block">
+          <div className="pickle-text">
+            <p>{item.description}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <a href={primaryHref} className="pickle-pill-solid">
               {primaryLabel}
             </a>
             {item.downloadPath ? (
               <Link
                 href={`/integrations/connect?app=${encodeURIComponent(item.bridgeTarget)}`}
-                className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
+                className="pickle-glass-pill"
+                style={{ height: "48px", fontSize: "17px", padding: "0 22px" }}
               >
                 Sign in for plugins
               </Link>
             ) : (
               <Link
                 href="/app/api-keys"
-                className="inline-flex items-center rounded-xl border border-neutral-300 px-5 py-3 text-[15px] font-semibold text-neutral-950 hover:bg-neutral-50"
+                className="pickle-glass-pill"
+                style={{ height: "48px", fontSize: "17px", padding: "0 22px" }}
               >
                 API keys
               </Link>
             )}
           </div>
+        </div>
 
-          {guideSteps.length > 0 ? (
-            <section className="mt-14">
-              <h2
-                className="text-[22px] font-semibold tracking-[-0.03em] text-neutral-950"
-                style={{ fontFamily: DISPLAY }}
-              >
-                Setup guide
-              </h2>
-              <p className="mt-2 text-[15px] leading-6 text-neutral-600">
-                Follow these steps after downloading the plugin zip.
-              </p>
-              <ol className="mt-8 space-y-12">
-                {guideSteps.map((step, index) => (
-                  <li key={step.title} className="list-none">
-                    <div className="flex items-start gap-3">
-                      <span
-                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[13px] font-semibold text-neutral-950"
-                        aria-hidden
-                      >
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <h3
-                          className="text-[18px] font-semibold tracking-[-0.02em] text-neutral-950"
-                          style={{ fontFamily: DISPLAY }}
-                        >
-                          {step.title}
-                        </h3>
-                        <p className="mt-2 text-[15px] leading-6 text-neutral-700">
-                          {step.body}
-                        </p>
-                        {step.imageSrc ? (
-                          <figure className="mt-5 overflow-hidden rounded-2xl border border-neutral-200/80 bg-neutral-50 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.35)]">
-                            <Image
-                              src={step.imageSrc}
-                              alt={step.imageAlt || step.title}
-                              width={1024}
-                              height={886}
-                              className="h-auto w-full"
-                              sizes="(max-width: 672px) 100vw, 42rem"
-                              priority={index === 0}
-                            />
-                          </figure>
-                        ) : null}
-                      </div>
+        {guideSteps.length > 0 ? (
+          <section className="pickle-section-wide">
+            <div className="pickle-head-block">
+              <h2 className="pickle-h2">Setup guide</h2>
+              <div className="pickle-text">
+                <p>Follow these steps after downloading the plugin package.</p>
+              </div>
+            </div>
+
+            <div className="pickle-subsections">
+              {guideSteps.map((step, index) => (
+                <div key={step.title} className="pickle-subsection">
+                  <h3 className="pickle-h3">
+                    {index + 1}. {step.title}
+                  </h3>
+                  <div className="pickle-sub-body">
+                    <div className="pickle-text">
+                      <p>{step.body}</p>
                     </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ) : (
-            <>
-              <h2
-                className="mt-12 text-[22px] font-semibold tracking-[-0.03em] text-neutral-950"
-                style={{ fontFamily: DISPLAY }}
-              >
-                Install
-              </h2>
-              <ol className="mt-4 list-decimal space-y-3 pl-5 text-[16px] leading-7 text-neutral-700">
+                    {step.imageSrc ? (
+                      <figure className="pickle-figure">
+                        <div
+                          className="overflow-hidden bg-[#f5f5f7]"
+                          style={{
+                            borderRadius: "36px",
+                            boxShadow:
+                              "0 1px 1.5px rgba(0,0,0,0.05), 0 6px 3px rgba(0,0,0,0.04), 0 13px 4px rgba(0,0,0,0.03)",
+                          }}
+                        >
+                          <Image
+                            src={step.imageSrc}
+                            alt={step.imageAlt || step.title}
+                            width={1024}
+                            height={886}
+                            className="block h-auto w-full"
+                            sizes="(max-width: 700px) 100vw, 980px"
+                            priority={index === 0}
+                          />
+                        </div>
+                        <figcaption className="pickle-caption">
+                          {step.imageAlt || step.title}
+                        </figcaption>
+                      </figure>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="pickle-head-block">
+            <h2 className="pickle-h2">Install</h2>
+            <div className="pickle-text">
+              <ol>
                 {item.installSteps.map((step) => (
                   <li key={step}>{step}</li>
                 ))}
               </ol>
-            </>
-          )}
+            </div>
+          </section>
+        )}
 
-          {item.slug === "blender" ? (
-            <section className="mt-14">
-              <h2
-                className="text-[22px] font-semibold tracking-[-0.03em] text-neutral-950"
-                style={{ fontFamily: DISPLAY }}
-              >
-                After install
-              </h2>
-              <ol className="mt-5 space-y-4 text-[15px] leading-6 text-neutral-700">
-                <li className="flex gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[12px] font-semibold text-neutral-950">
-                    1
-                  </span>
-                  <span>
-                    Click <span className="font-semibold text-neutral-950">Run Bridge</span> in
-                    the Hydrilla panel.
-                  </span>
+        {item.slug === "blender" ? (
+          <section className="pickle-head-block">
+            <h2 className="pickle-h2">After install</h2>
+            <div className="pickle-text">
+              <ol>
+                <li>
+                  Click <strong>Run Bridge</strong> in the Hydrilla panel.
                 </li>
-                <li className="flex gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[12px] font-semibold text-neutral-950">
-                    2
-                  </span>
-                  <span>
-                    Click <span className="font-semibold text-neutral-950">Sign in</span>, finish
-                    login in the browser, then{" "}
-                    <span className="font-semibold text-neutral-950">Sync</span>. Keep the Connect
-                    tab open while generating.
-                  </span>
+                <li>
+                  Click <strong>Sign in</strong>, finish login in the browser, then{" "}
+                  <strong>Sync</strong>. Keep the Connect tab open while generating.
                 </li>
-                <li className="flex gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[12px] font-semibold text-neutral-950">
-                    3
-                  </span>
-                  <span>
-                    Generate from text or image — or use{" "}
-                    <span className="font-semibold text-neutral-950">Send to DCC</span> from
-                    Studio.
-                  </span>
+                <li>
+                  Generate from text or image — or use <strong>Send to DCC</strong>{" "}
+                  from Studio.
                 </li>
               </ol>
-            </section>
-          ) : null}
-
-          {item.status === "coming_soon" ? (
-            <p className="mt-8 rounded-2xl border border-neutral-200 bg-neutral-50 px-5 py-4 text-[15px] leading-6 text-neutral-700">
-              This connector is on the roadmap. Use GLB export or the REST API today, then check
-              back for a native package.
-            </p>
-          ) : null}
-        </article>
-      </MarketingPage>
+            </div>
+          </section>
+        ) : null}
+      </PickleArticlePage>
     </>
   );
 }

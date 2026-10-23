@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import { SignUpButton } from "@clerk/nextjs";
 import { BlurReveal } from "@/components/ui/BlurReveal";
-import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
+import { DESCRIPTION_WEIGHT, GEIST_FONT, SANS_FONT, SECTION_WEIGHT } from "@/lib/fonts";
 
 /**
  * Below-the-fold homepage sections.
@@ -41,15 +41,15 @@ const FAQSection = dynamic(() => import("@/components/sections/FAQSection"), {
 
 function MissionSection() {
   return (
-    <section className="relative w-full bg-gradient-to-b from-white to-neutral-100 px-4 pt-6 pb-16 sm:px-6 sm:pt-8 sm:pb-20 md:px-8 md:pt-14 md:pb-24">
+    <section className="relative w-full bg-white px-4 pt-6 pb-16 sm:px-6 sm:pt-8 sm:pb-20 md:px-8 md:pt-14 md:pb-24">
       <div className="max-w-6xl mx-auto">
         <BlurReveal
           as="p"
           stagger={0.09}
           duration={0.8}
           blurPx={14}
-          className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight tracking-tight text-[#111]"
-          style={{ fontFamily: SANS_FONT }}
+          className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-medium leading-tight tracking-tight text-[#111]"
+          style={{ fontFamily: SANS_FONT, fontWeight: SECTION_WEIGHT }}
         >
           Our mission is to build intelligent workflows that accelerate animation and 3D production.
         </BlurReveal>
@@ -106,8 +106,8 @@ export default function HomeBelowFold() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 text-center">
           <BlurReveal
             as="h2"
-            className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#111] tracking-tight leading-tight mb-6"
-            style={{ fontFamily: SANS_FONT }}
+            className="text-3xl sm:text-4xl md:text-5xl font-medium text-[#111] tracking-tight leading-tight mb-6"
+            style={{ fontFamily: SANS_FONT, fontWeight: SECTION_WEIGHT }}
           >
             Ready to raise your 3D game?
           </BlurReveal>
@@ -116,8 +116,8 @@ export default function HomeBelowFold() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-40px" }}
             transition={{ duration: 0.5, delay: 0.08 }}
-            className="text-base sm:text-lg text-neutral-600 mb-10 max-w-2xl mx-auto"
-            style={{ fontFamily: GEIST_FONT }}
+            className="text-base sm:text-lg leading-[1.5] text-neutral-600 mb-10 max-w-2xl mx-auto"
+            style={{ fontFamily: GEIST_FONT, fontWeight: DESCRIPTION_WEIGHT }}
           >
             Start creating production-ready 3D assets, or book a demo with our team.
           </motion.p>

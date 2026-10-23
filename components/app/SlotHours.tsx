@@ -191,7 +191,7 @@ export function SlotHours({
 
   if (!active) return null;
 
-  const planLabel = state?.plan ? SLOT_PRICING[state.plan].label : "Slot";
+  const planLabel = state?.plan ? SLOT_PRICING[state.plan].label : "Hourly";
   const timezone = state?.timezone;
   const firstChoice = !state?.window;
   const selectedHour = state?.hours.find((hour) => hour.hour === selected) ?? null;

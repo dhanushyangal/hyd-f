@@ -1,51 +1,55 @@
-import { MarketingPage } from "@/components/layout/MarketingPage";
-import { MarketingArticle } from "@/components/content/MarkdownBody";
+import {
+  PickleResearchPage,
+  type PickleRelatedItem,
+} from "@/components/layout/PicklePage";
+import { WHY_HYDRILLA_MEDIA } from "@/lib/cloudinary";
 
-const ENTRIES = [
+const ENTRIES: PickleRelatedItem[] = [
   {
-    date: "2026-08",
     title: "BlueFox 1 in the studio",
-    body: "Text to 3D and image to 3D with segmented meshes, PBR maps, in-browser preview, and GLB, FBX, OBJ, and USDZ export. Free, Starter, and Pro plans.",
+    subtitle:
+      "Text-to-3D and image-to-3D with segmented meshes, PBR maps, in-browser preview, and GLB, FBX, OBJ, and USDZ export across Free, Starter, and Pro plans.",
+    href: "/bluefox3d",
+    date: "Aug 19, 2026",
+    author: "Hydrilla Team",
+    videoSrc: WHY_HYDRILLA_MEDIA.bluefox.video,
+    imageSrc: WHY_HYDRILLA_MEDIA.bluefox.poster,
   },
   {
-    date: "2026-08",
-    title: "Studio API (partner access)",
-    body: "Job-based generation for studios that already have a pipeline. Submit a prompt or reference, poll status, then download the same production formats as the studio.",
+    title: "Blender, Unity, Unreal & Godot Bridge",
+    subtitle:
+      "Local Bridge on 127.0.0.1:7345 and native add-ons for one-click Send to DCC from Studio, plus MCP Server for AI coding agents.",
+    href: "/integrations",
+    date: "Aug 24, 2026",
+    author: "Hydrilla Team",
+    thumbVariant: "pipeline-arch",
   },
   {
-    date: "2026-08",
+    title: "Studio REST API",
+    subtitle:
+      "Job-based generation for studios with an existing pipeline. Submit a prompt or reference image, poll status, and download production formats.",
+    href: "/api",
+    date: "Aug 19, 2026",
+    author: "Hydrilla Team",
+    thumbVariant: "api-stream",
+  },
+  {
     title: "Docs, FAQ, and pipeline notes",
-    body: "Public getting-started docs, buyer FAQ, research model card, and comparison notes versus Meshy, Luma, and Tripo.",
+    subtitle:
+      "Public getting-started docs, buyer FAQ, Hawan Research Labs model card, and comparison notes versus Meshy, Luma, and Tripo.",
+    href: "/docs",
+    date: "Aug 19, 2026",
+    author: "Hydrilla Team",
+    thumbVariant: "critter-rig",
   },
 ];
 
 export default function ChangelogPage() {
   return (
-    <MarketingPage
-      eyebrow="Product"
+    <PickleResearchPage
       title="Changelog"
-      description="What shipped in Hydrilla and BlueFox 1: generation, exports, studio, and API."
-      related={[
-        { label: "Docs", href: "/docs", hint: "First prompt to export" },
-        { label: "BlueFox 3D", href: "/bluefox3d", hint: "What the model produces" },
-        { label: "Blog", href: "/blog", hint: "Pipeline notes" },
-      ]}
-    >
-      <MarketingArticle>
-        <ol className="space-y-8">
-          {ENTRIES.map((entry) => (
-            <li key={entry.title} className="border-b border-neutral-200 pb-8 last:border-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                {entry.date}
-              </p>
-              <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.03em] text-neutral-950">
-                {entry.title}
-              </h2>
-              <p className="mt-3 text-[16px] leading-7 text-neutral-700">{entry.body}</p>
-            </li>
-          ))}
-        </ol>
-      </MarketingArticle>
-    </MarketingPage>
+      description="Notes from the Hydrilla team on what shipped across BlueFox 1, Studio, DCC integrations, and the REST API."
+      items={ENTRIES}
+    />
   );
 }

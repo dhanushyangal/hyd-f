@@ -25,17 +25,17 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Can I change or cancel my plan anytime?",
     answer:
-      "Yes. Hydrilla plans are monthly. Manage changes and cancellation from account settings. Switching to or from a Slot plan requires cancelling the current paid plan first.",
+      "Yes. All paid plans start with a 14-day free trial and are billed monthly afterward. Manage changes and cancellation anytime from account settings.",
   },
   {
     question: "How many 3D models can I generate each month?",
     answer:
-      "At default quality, Free covers about 2 models from text or 3 from uploaded images. Starter and Slot cover about 20 from text or 30 from images. Pro and Slot Pro cover about 66 from text or 100 from images. Actual usage depends on the generation steps and quality you choose.",
+      "Free covers 3 model generations each month (100 credits). Starter and Hourly include 30 model generations each month (900 credits). Pro and Hourly Pro include 100 model generations per month (3,000 credits).",
   },
   {
-    question: "What are Slot and Slot Pro?",
+    question: "What are Hourly and Hourly Pro?",
     answer:
-      `Slot uses the Starter credit budget at $${SLOT_PRICING.slot.monthly}/month for one generation hour a day. Slot Pro uses the Pro credit budget at $${SLOT_PRICING.slot_pro.monthly}/month for two hours a day. You choose the window in Billing and see it in local time.`,
+      `Hourly includes 30 monthly model generations and premium plugins at $${SLOT_PRICING.slot.monthly}/month with a 1-hour daily generation window. Hourly Pro includes 100 monthly model generations and the full plugin suite at $${SLOT_PRICING.slot_pro.monthly}/month with a 2-hour daily window. Both start with a 14-day free trial.`,
   },
   {
     question: "Is Hydrilla difficult to learn?",
@@ -70,7 +70,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "What formats does Hydrilla export?",
     answer:
-      "GLB, FBX, OBJ, and USDZ. Free exports GLB. Starter, Pro, Slot, and Slot Pro export all four.",
+      "GLB, FBX, OBJ, and USDZ. Free exports GLB. Starter, Pro, Hourly, and Hourly Pro export all four.",
   },
   {
     question: "Which engines and tools?",

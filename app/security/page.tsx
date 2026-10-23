@@ -1,74 +1,150 @@
 import Link from "next/link";
-import { MarketingPage } from "@/components/layout/MarketingPage";
-import { MarketingArticle, ProseHeading } from "@/components/content/MarkdownBody";
+import {
+  PickleArticlePage,
+  PickleVisualThumb,
+  type PickleRelatedItem,
+} from "@/components/layout/PicklePage";
 import { CONTACT_EMAIL } from "@/lib/brand";
+
+const RELATED: PickleRelatedItem[] = [
+  {
+    title: "Enterprise",
+    subtitle: "BlueFox 1 at studio volume: seats, API concurrency, and custom pipelines.",
+    href: "/enterprise",
+    date: "Oct 2026",
+    author: "Hydrilla Team",
+    thumbVariant: "critter-rig",
+  },
+  {
+    title: "Privacy Policy",
+    subtitle: "How Hydrilla collects, uses, and protects account and service data.",
+    href: "/privacy-policy",
+    date: "Jul 14, 2026",
+    author: "Hydrilla Legal",
+    thumbVariant: "docs-flow",
+  },
+];
 
 export default function SecurityPage() {
   return (
-    <MarketingPage
-      eyebrow="Trust"
-      title="Security"
-      description="How Hydrilla handles accounts, generated assets, and exports for studio pipelines."
-      formats={false}
-      related={[
-        { label: "Enterprise", href: "/enterprise", hint: "Volume, seats, API" },
-        { label: "Privacy", href: "/privacy-policy", hint: "What we collect" },
-        { label: "Contact", href: "/contact", hint: "Questionnaires and reviews" },
-      ]}
+    <PickleArticlePage
+      kicker="Trust"
+      kickerHref="/about"
+      title="How Hydrilla protects your studio assets"
+      subtitle="The keys to your account, how generated meshes stay scoped to your workspace, and how files enter your pipeline."
+      date="Oct 1, 2026"
+      author="Hydrilla Team"
+      heroThumbVariant="privacy-enclave"
+      ctaLabel="Contact Security"
+      ctaHref={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Security Review / Hydrilla")}`}
+      footnote={
+        <>
+          Need a vendor security review or questionnaire completed? Email{" "}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> or read our{" "}
+          <Link href="/privacy-policy">Privacy Policy</Link>.
+        </>
+      }
+      relatedItems={RELATED}
     >
-      <MarketingArticle>
-        <p className="text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+      <div className="pickle-text">
+        <p>
           Hydrilla is a web studio. You sign in, generate with BlueFox 1, and
-          download files you own under the Terms of Service. This page is the
-          public trust summary, not a substitute for a signed DPA.
+          download files you own under the{" "}
+          <Link href="/terms-and-conditions">Terms of Service</Link>. This page
+          is the public trust and architecture summary for creators and studios.
         </p>
+      </div>
 
-        <ProseHeading>Accounts</ProseHeading>
-        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          Authentication is handled by Clerk. Sessions are user-specific.
-          Workspace, generation, and library routes are authenticated and not
-          indexed.
-        </p>
+      <section className="pickle-head-block">
+        <h2 className="pickle-h2">Accounts &amp; session isolation</h2>
+        <div className="pickle-text">
+          <p>
+            Authentication is handled by Clerk. Every session is user-specific
+            and scoped by short-lived cryptographic tokens. Workspace,
+            generation, and library routes are authenticated and never indexed
+            by search engines.
+          </p>
+          <p>
+            When you connect a local DCC plugin (Blender, Unity, Unreal, or
+            Godot) via the Studio Bridge, tokens are pushed locally over{" "}
+            <code>127.0.0.1:7345</code> or authenticated via a revocable{" "}
+            <code>hyd_live_</code> API key that you control in Settings.
+          </p>
+        </div>
+      </section>
 
-        <ProseHeading>Assets</ProseHeading>
-        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          Generated meshes and maps are stored for your account so you can
-          preview, iterate, and export. Starter and Pro keep generated
-          assets and exports private to your account or workspace, as stated
-          on Pricing. We do not sell customer assets as a dataset.
-        </p>
+      <section className="pickle-section">
+        <div className="pickle-head-block">
+          <h2 className="pickle-h2">Generated assets &amp; storage</h2>
+          <div className="pickle-text">
+            <p>
+              Generated meshes and PBR maps are stored for your account so you
+              can preview, iterate, and export. Starter and Pro keep generated
+              assets and exports private to your account or workspace, as stated
+              on <Link href="/pricing">Pricing</Link>. We do not sell customer
+              assets as a dataset.
+            </p>
+          </div>
+        </div>
 
-        <ProseHeading>Exports</ProseHeading>
-        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          Downloads are GLB, FBX, OBJ, and USDZ files you take into Unity,
-          Unreal, Blender, or AR viewers. Once exported, those files live in
-          your pipeline.
-        </p>
+        <figure className="pickle-figure">
+          <div className="pickle-card-surface">
+            <table className="pickle-table">
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>Mechanism</th>
+                  <th>Guarantee</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>Authentication</th>
+                  <td>Clerk JWT + revocable <code>hyd_live_</code> API keys</td>
+                  <td>No plaintext passwords or payment cards stored on Hydrilla servers</td>
+                </tr>
+                <tr>
+                  <th>Workspace storage</th>
+                  <td>Account-scoped cloud object storage</td>
+                  <td>Starter &amp; Pro assets remain private to your workspace</td>
+                </tr>
+                <tr>
+                  <th>Payments</th>
+                  <td>Merchant-of-record third-party processor</td>
+                  <td>PCI-compliant checkout; card details never touch Hydrilla</td>
+                </tr>
+                <tr>
+                  <th>Local DCC Bridge</th>
+                  <td>Loopback <code>127.0.0.1:7345</code></td>
+                  <td>Meshes transfer directly into your open Blender or engine session</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <figcaption className="pickle-caption">
+            How authentication, storage, billing, and DCC transfers are isolated across Hydrilla.
+          </figcaption>
+        </figure>
+      </section>
 
-        <ProseHeading>Reviews</ProseHeading>
-        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          Studios that need a questionnaire, vendor review, or a named contact
-          should email us. We answer from the facts on this page and the
-          privacy policy rather than a marketing PDF.
-        </p>
-        <p className="mt-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-          Security questionnaires and enterprise reviews:{" "}
-          <a
-            href={`mailto:${CONTACT_EMAIL}`}
-            className="font-semibold text-neutral-950 underline underline-offset-2"
-          >
-            {CONTACT_EMAIL}
-          </a>
-          {" · "}
-          <Link href="/enterprise" className="font-semibold text-neutral-950 underline underline-offset-2">
-            Enterprise
-          </Link>
-          {" · "}
-          <Link href="/privacy-policy" className="font-semibold text-neutral-950 underline underline-offset-2">
-            Privacy
-          </Link>
-        </p>
-      </MarketingArticle>
-    </MarketingPage>
+      <section className="pickle-head-block">
+        <h2 className="pickle-h2">Exports &amp; vendor reviews</h2>
+        <div className="pickle-text">
+          <p>
+            Downloads are standard GLB, FBX, OBJ, and USDZ files you take into
+            Unity, Unreal, Blender, or AR viewers. Once exported, those files
+            live entirely in your own pipeline and version control.
+          </p>
+          <p>
+            Studios that need a security questionnaire, vendor review, or a
+            named contact should email{" "}
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. We answer
+            from the architecture facts on this page and the{" "}
+            <Link href="/privacy-policy">Privacy Policy</Link> rather than a
+            generic marketing PDF.
+          </p>
+        </div>
+      </section>
+    </PickleArticlePage>
   );
 }

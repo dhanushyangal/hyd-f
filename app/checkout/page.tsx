@@ -59,11 +59,35 @@ function CheckoutContent() {
 
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [trialEligible, setTrialEligible] = useState<boolean | null>(null);
 
   const userEmail =
     user?.emailAddresses?.[0]?.emailAddress ||
     user?.primaryEmailAddress?.emailAddress ||
     null;
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getToken();
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${BACKEND_URL}/api/payments/trial-eligibility`, { headers });
+        if (!cancelled && res.ok) {
+          const json = await res.json();
+          setTrialEligible(Boolean(json.eligible));
+        } else if (!cancelled) {
+          setTrialEligible(false);
+        }
+      } catch {
+        if (!cancelled) setTrialEligible(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, getToken]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -112,7 +136,7 @@ function CheckoutContent() {
         body: JSON.stringify({ plan: plan ?? planParam, email: userEmail }),
       });
 
-      let data: { error?: string; checkoutUrl?: string };
+      let data: { error?: string; checkoutUrl?: string; applyTrial?: boolean };
       try {
         data = await response.json();
       } catch {
@@ -121,6 +145,10 @@ function CheckoutContent() {
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to create checkout session");
+      }
+
+      if (typeof data.applyTrial === "boolean") {
+        setTrialEligible(data.applyTrial);
       }
 
       if (!data.checkoutUrl) {
@@ -213,8 +241,34 @@ function CheckoutContent() {
               <p className="text-sm text-gray-400">{planInfo.credits}</p>
             )}
 
+            {trialEligible === true ? (
+              <div className="my-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-left">
+                <div className="flex items-center justify-between text-xs font-semibold text-emerald-900">
+                  <span>14-Day Free Trial</span>
+                  <span className="text-emerald-700 font-bold">$0.00 today</span>
+                </div>
+                <p className="mt-1 text-[11px] text-emerald-700 leading-normal">
+                  Full plan access for 14 days. Cancel anytime before the trial ends without being charged.
+                </p>
+              </div>
+            ) : trialEligible === false ? (
+              <div className="my-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-3 text-left">
+                <div className="flex items-center justify-between text-xs font-semibold text-neutral-900">
+                  <span>Monthly Subscription</span>
+                  <span className="text-neutral-700 font-bold">{priceLabel}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-neutral-500 leading-normal">
+                  Billed monthly. Cancel anytime in your billing settings.
+                </p>
+              </div>
+            ) : null}
+
             <p className="mt-6 text-xs text-gray-400">
-              You will continue to Dodo Payments to pay.
+              {trialEligible === true
+                ? "You will continue to Dodo Payments to start your 14-day trial."
+                : trialEligible === false
+                ? "You will continue to Dodo Payments to complete your subscription."
+                : "Preparing checkout with Dodo Payments…"}
             </p>
           </div>
         )}

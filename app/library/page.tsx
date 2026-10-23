@@ -1,26 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth, SignInButton } from "@clerk/nextjs";
 import {
   AlertCircle,
-  ArrowRight,
-  Box,
   Download,
   Eye,
-  ImageIcon,
-  LibraryBig,
   LoaderCircle,
   Plus,
   RefreshCw,
-  Sparkles,
   Trash2,
-  type LucideIcon,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import Footer from "@/components/layout/Footer";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { JobStatusBadge } from "@/components/JobStatusBadge";
 import {
@@ -46,7 +39,7 @@ function convertBackendStatus(status: BackendJob["status"]): JobStatus {
 }
 
 function formatCreatedAt(createdAt: string): string {
-  return new Date(createdAt).toLocaleDateString(undefined, {
+  return new Date(createdAt).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -73,120 +66,87 @@ function LibraryCard({
   const isProcessing = job.status === "RUN" || job.status === "WAIT";
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden rounded-[22px] border-neutral-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
-      <div className="relative m-2 aspect-[4/3] overflow-hidden rounded-[17px] border border-neutral-100 bg-neutral-100">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={job.prompt || "Generated asset preview"}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_40%,#ffffff_0%,#f3f4f6_70%)]">
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-neutral-200 bg-white text-neutral-400 shadow-sm">
-              <Box className="h-7 w-7" strokeWidth={1.6} />
-            </span>
-          </div>
-        )}
+    <li className="pickle-research-card">
+      <div className="pickle-research-thumbnail relative">
+        <Link href={viewHref} className="block h-full w-full">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={job.prompt || "Generated asset preview"}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-[#f5f5f7] text-[14px] text-black/45">
+              3D Asset
+            </div>
+          )}
+        </Link>
 
-        <div className="absolute left-3 top-3">
+        <div className="absolute left-3.5 top-3.5">
           <JobStatusBadge status={convertBackendStatus(job.status)} />
         </div>
 
         {isProcessing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/25 backdrop-blur-[1px]">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
             <LoaderCircle className="h-7 w-7 animate-spin text-white" />
           </div>
         )}
       </div>
 
-      <CardContent className="flex-1 px-5 pb-4 pt-3">
-        <p className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-neutral-900">
+      <Link href={viewHref} className="no-underline">
+        <h2 className="pickle-research-card-title line-clamp-1">
           {job.prompt || "Image to 3D"}
-        </p>
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">
-          <span className="text-xs font-medium text-neutral-400">
-            {formatCreatedAt(job.createdAt)}
-          </span>
-          <span className="rounded-md bg-neutral-100 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-[0.08em] text-neutral-500">
-            {job.resultGlbUrl ? "3D asset" : "Image"}
-          </span>
-        </div>
-      </CardContent>
+        </h2>
+      </Link>
+      <p className="pickle-research-card-subtitle">
+        {job.resultGlbUrl
+          ? "Segmented 3D mesh with PBR maps ready for studio inspection and export."
+          : "Generated reference frame ready for 3D synthesis."}
+      </p>
 
-      <CardFooter className="gap-2 px-5 pb-5">
-        <Button asChild variant="outline" className="flex-1 rounded-xl">
-          <Link href={viewHref}>
-            <Eye className="mr-2 h-4 w-4" />
+      <div className="pickle-research-card-meta justify-between">
+        <div className="flex items-center gap-3.5">
+          <span>{formatCreatedAt(job.createdAt)}</span>
+          <span className="pickle-research-card-divider" aria-hidden="true" />
+          <span>{job.resultGlbUrl ? "3D Asset" : "Reference Image"}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href={viewHref}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-black/15 px-3 text-[13px] font-medium text-black no-underline hover:bg-black/5"
+          >
+            <Eye className="h-3.5 w-3.5" />
             View
           </Link>
-        </Button>
-
-        {showDownloadGlb && job.resultGlbUrl && (
-          <Button
-            asChild
-            variant="outline"
-            className="h-11 w-11 rounded-xl p-0"
-          >
+          {showDownloadGlb && job.resultGlbUrl && (
             <a
               href={job.resultGlbUrl}
               download
               title="Download GLB file"
               aria-label="Download GLB file"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/15 text-black hover:bg-black/5"
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-3.5 w-3.5" />
             </a>
-          </Button>
-        )}
-
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => onDelete(job.id)}
-          disabled={deleting}
-          className="h-11 w-11 rounded-xl p-0 text-neutral-400 hover:bg-red-50 hover:text-red-600"
-          aria-label="Delete generation"
-          title="Delete"
-        >
-          {deleting ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-          ) : (
-            <Trash2 className="h-4 w-4" />
           )}
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function LibrarySection({
-  title,
-  count,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  count: number;
-  icon: LucideIcon;
-  children: ReactNode;
-}) {
-  return (
-    <section>
-      <div className="mb-5 flex items-center gap-3">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700">
-          <Icon className="h-5 w-5" strokeWidth={1.9} />
-        </span>
-        <div>
-          <h2 className="text-lg font-semibold tracking-[-0.02em] text-neutral-950">
-            {title}
-          </h2>
-          <p className="text-xs font-medium text-neutral-400">
-            {count} {count === 1 ? "asset" : "assets"}
-          </p>
+          <button
+            type="button"
+            onClick={() => onDelete(job.id)}
+            disabled={deleting}
+            aria-label="Delete generation"
+            title="Delete"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/10 text-black/50 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          >
+            {deleting ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+          </button>
         </div>
       </div>
-      {children}
-    </section>
+    </li>
   );
 }
 
@@ -312,173 +272,164 @@ export default function LibraryPage() {
     setJobToDelete(null);
   };
 
-  if (!isLoaded && !isMounted) {
-    return (
-      <div className="flex min-h-[70vh] items-center justify-center bg-white px-6">
-        <div className="text-center">
-          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-neutral-500" />
-          <p className="mt-3 text-sm font-medium text-neutral-500">
-            Loading library…
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoaded && userIsSignedIn === false) {
-    return (
-      <div className="flex min-h-[75vh] items-center justify-center bg-white px-4 py-24">
-        <Card className="w-full max-w-md rounded-[24px] border-neutral-200 bg-white text-center shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-          <CardContent className="p-8">
-            <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-700">
-              <LibraryBig className="h-7 w-7" strokeWidth={1.8} />
-            </span>
-            <h2 className="mt-6 text-2xl font-semibold tracking-[-0.03em] text-neutral-950">
-              Your library, in one place.
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-neutral-500">
-              Sign in to access your generated images and production-ready 3D
-              assets.
-            </p>
-            <SignInButton mode="modal">
-              <Button size="lg" className="mt-7 w-full rounded-xl">
-                Sign in to continue
-                <ArrowRight className="ml-1 h-4 w-4" />
-              </Button>
-            </SignInButton>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-white">
-      <div className="mx-auto max-w-7xl px-4 pb-24 pt-24 sm:px-6 sm:pt-28 lg:px-8">
-        <header className="flex flex-col gap-6 border-b border-neutral-200 pb-8 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">
-              Asset library
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-neutral-950 sm:text-4xl">
-              Your creative archive.
-            </h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-500 sm:text-base">
-              Review, download, and manage every image and 3D asset generated
-              with Hydrilla.
-            </p>
-          </div>
+    <>
+      <div className="pickle-research-page">
+        <header className="pickle-research-hero">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <div>
+              <h1 className="pickle-research-title">3D Asset Library</h1>
+              <p className="pickle-research-description">
+                Review, inspect, and download every reference image and 3D mesh generated with BlueFox 1.
+              </p>
+            </div>
 
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void loadJobs(false)}
-              disabled={refreshing}
-              className="rounded-xl"
-            >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </Button>
-            <Button asChild className="flex-1 rounded-xl sm:flex-none">
-              <Link href="/generate">
-                <Plus className="mr-2 h-4 w-4" />
-                New generation
-              </Link>
-            </Button>
+            {userIsSignedIn ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void loadJobs(false)}
+                  disabled={refreshing}
+                  className="pickle-glass-pill"
+                  style={{ height: "48px", fontSize: "16px", padding: "0 20px", cursor: "pointer" }}
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+                  />
+                  {refreshing ? "Refreshing…" : "Refresh"}
+                </button>
+                <Link href="/generate" className="pickle-pill-solid">
+                  <Plus className="h-4 w-4" />
+                  New generation
+                </Link>
+              </div>
+            ) : null}
           </div>
         </header>
 
-        {error && (
-          <div
-            role="alert"
-            className="mt-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-          >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="flex min-h-[360px] items-center justify-center">
-            <LoaderCircle className="h-8 w-8 animate-spin text-neutral-400" />
-          </div>
-        ) : jobs.length === 0 ? (
-          <Card className="mt-10 rounded-[24px] border-dashed border-neutral-300 bg-neutral-50/70 text-center">
-            <CardContent className="px-6 py-16 sm:py-20">
-              <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-neutral-200 bg-white text-neutral-500 shadow-sm">
-                <Sparkles className="h-6 w-6" strokeWidth={1.8} />
-              </span>
-              <h2 className="mt-6 text-xl font-semibold tracking-[-0.025em] text-neutral-950">
-                Your first asset starts here.
+        <div className="pickle-research-container" style={{ marginTop: "56px" }}>
+          {!isLoaded && !isMounted ? (
+            <div className="flex min-h-[280px] items-center justify-center">
+              <LoaderCircle className="h-7 w-7 animate-spin text-black/40" />
+            </div>
+          ) : isLoaded && userIsSignedIn === false ? (
+            <div
+              className="pickle-card-surface"
+              style={{ maxWidth: "600px", padding: "40px 36px" }}
+            >
+              <h2 className="pickle-h3" style={{ width: "100%" }}>
+                Sign in to view your library
               </h2>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral-500">
-                Generate a 3D model or image and it will appear in your library
-                automatically.
+              <p className="pickle-text" style={{ width: "100%", marginTop: "12px" }}>
+                Your generated meshes, PBR maps, and reference images are stored privately in your Hydrilla account.
               </p>
-              <Button asChild size="lg" className="mt-7 rounded-xl">
-                <Link href="/generate">
-                  Create your first asset
-                  <ArrowRight className="ml-1 h-4 w-4" />
+              <div className="mt-7 flex flex-wrap gap-3">
+                <SignInButton mode="modal">
+                  <button type="button" className="pickle-pill-solid">
+                    Sign in to continue
+                  </button>
+                </SignInButton>
+                <Link
+                  href="/docs"
+                  className="pickle-glass-pill"
+                  style={{ height: "48px", fontSize: "16px", padding: "0 22px" }}
+                >
+                  Read documentation
                 </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="mt-12 space-y-14">
-            {objects3d.length > 0 && (
-              <LibrarySection
-                title="3D assets"
-                count={objects3d.length}
-                icon={Box}
-              >
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {objects3d.map((job) => (
-                    <LibraryCard
-                      key={job.id}
-                      job={job}
-                      viewHref={`/viewer?jobId=${job.id}`}
-                      onDelete={handleDeleteClick}
-                      deletingId={deletingId}
-                      showDownloadGlb
-                    />
-                  ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {error && (
+                <div
+                  role="alert"
+                  className="mb-8 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[15px] text-red-700"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {error}
                 </div>
-              </LibrarySection>
-            )}
+              )}
 
-            {images.length > 0 && (
-              <LibrarySection title="Images" count={images.length} icon={ImageIcon}>
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {images.map((job) => (
-                    <LibraryCard
-                      key={job.id}
-                      job={job}
-                      viewHref={`/viewer?jobId=${job.id}&mode=image`}
-                      onDelete={handleDeleteClick}
-                      deletingId={deletingId}
-                      showDownloadGlb={false}
-                    />
-                  ))}
+              {loading ? (
+                <div className="flex min-h-[280px] items-center justify-center">
+                  <LoaderCircle className="h-7 w-7 animate-spin text-black/40" />
                 </div>
-              </LibrarySection>
-            )}
-          </div>
-        )}
+              ) : jobs.length === 0 ? (
+                <div
+                  className="pickle-card-surface"
+                  style={{ maxWidth: "600px", padding: "40px 36px" }}
+                >
+                  <h2 className="pickle-h3" style={{ width: "100%" }}>
+                    Your archive is empty
+                  </h2>
+                  <p className="pickle-text" style={{ width: "100%", marginTop: "12px" }}>
+                    Generate a 3D model from text or a reference image and it will appear here automatically.
+                  </p>
+                  <div className="mt-7">
+                    <Link href="/generate" className="pickle-pill-solid">
+                      Create your first asset
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-20">
+                  {objects3d.length > 0 && (
+                    <section>
+                      <h2 className="pickle-h2" style={{ width: "100%", marginBottom: "28px" }}>
+                        3D Assets ({objects3d.length})
+                      </h2>
+                      <ul className="pickle-research-grid" style={{ width: "100%", marginTop: 0 }}>
+                        {objects3d.map((job) => (
+                          <LibraryCard
+                            key={job.id}
+                            job={job}
+                            viewHref={`/viewer?jobId=${job.id}`}
+                            onDelete={handleDeleteClick}
+                            deletingId={deletingId}
+                            showDownloadGlb
+                          />
+                        ))}
+                      </ul>
+                    </section>
+                  )}
 
-        <ConfirmModal
-          isOpen={showDeleteConfirm}
-          title="Delete Job"
-          message="Are you sure you want to delete this job? This action cannot be undone."
-          confirmText="Delete"
-          cancelText="Cancel"
-          onConfirm={handleDeleteConfirm}
-          onCancel={handleDeleteCancel}
-          variant="danger"
-        />
+                  {images.length > 0 && (
+                    <section>
+                      <h2 className="pickle-h2" style={{ width: "100%", marginBottom: "28px" }}>
+                        Reference Images ({images.length})
+                      </h2>
+                      <ul className="pickle-research-grid" style={{ width: "100%", marginTop: 0 }}>
+                        {images.map((job) => (
+                          <LibraryCard
+                            key={job.id}
+                            job={job}
+                            viewHref={`/viewer?jobId=${job.id}&mode=image`}
+                            onDelete={handleDeleteClick}
+                            deletingId={deletingId}
+                            showDownloadGlb={false}
+                          />
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          <ConfirmModal
+            isOpen={showDeleteConfirm}
+            title="Delete Job"
+            message="Are you sure you want to delete this job? This action cannot be undone."
+            confirmText="Delete"
+            cancelText="Cancel"
+            onConfirm={handleDeleteConfirm}
+            onCancel={handleDeleteCancel}
+            variant="danger"
+          />
+        </div>
       </div>
-    </div>
+      <Footer />
+    </>
   );
 }

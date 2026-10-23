@@ -5,7 +5,7 @@ import { createPageMetadata, getPricingJsonLd } from "@/lib/seo";
 import { PRICING_META_DESCRIPTION } from "@/lib/pricing";
 
 export const metadata = createPageMetadata({
-  title: "Pricing: Free, Starter, Pro, and Slot Plans",
+  title: "Pricing: Free, Starter, Pro, and Hourly Plans",
   description: PRICING_META_DESCRIPTION,
   path: "/pricing",
   keywords: [

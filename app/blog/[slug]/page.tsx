@@ -1,19 +1,26 @@
 import { Suspense } from "react";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import Footer from "@/components/layout/Footer";
-import { ArticlePage } from "@/components/layout/ArticlePage";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { ArticleBody } from "@/components/content/ArticleBody";
 import { BlogContinueSection } from "@/components/blog/BlogContinueSection";
+import {
+  PickleArticlePage,
+  type PickleThumbVariant,
+} from "@/components/layout/PicklePage";
 import { blogPostPath, fetchBlogPost, fetchBlogPosts, formatBlogDate } from "@/lib/blog";
 import { createPageMetadata, DEFAULT_OG_IMAGE, getArticleJsonLd } from "@/lib/seo";
+import { WHY_HYDRILLA_MEDIA } from "@/lib/cloudinary";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
 
 type Props = { params: Promise<{ slug: string }> };
+
+function pickHeroVariant(slug: string): PickleThumbVariant {
+  if (slug.includes("bluefox")) return "critter-rig";
+  if (slug.includes("export")) return "docs-flow";
+  if (slug.includes("pricing")) return "api-stream";
+  return "pipeline-arch";
+}
 
 export async function generateStaticParams() {
   try {
@@ -42,8 +49,9 @@ export default async function BlogArticlePage({ params }: Props) {
   const post = await fetchBlogPost(slug);
   if (!post) notFound();
 
-  const dateLabel = formatBlogDate(post.publishedAt);
+  const dateLabel = formatBlogDate(post.publishedAt) || "Aug 19, 2026";
   const title = post.headline || post.title;
+  const useVideoHero = slug === "how-bluefox-works" || slug === "text-to-3d";
 
   return (
     <>
@@ -56,44 +64,35 @@ export default async function BlogArticlePage({ params }: Props) {
           dateModified: post.updatedAt,
         })}
       />
-      <ArticlePage
-        headingId="article-heading"
+      <PickleArticlePage
+        kicker={post.category || "Blog"}
+        kickerHref="/blog"
         title={title}
         subtitle={post.excerpt || undefined}
+        date={dateLabel}
+        author={post.author ? `${post.author} Team` : "Hydrilla Team"}
         wideTitle
-        kicker={<Link href="/blog">Blog</Link>}
-        meta={
-          <div className="article-meta">
-            {post.category ? <span>{post.category}</span> : null}
-            {post.category && dateLabel ? <span className="article-meta-divider" aria-hidden /> : null}
-            {dateLabel ? <time dateTime={post.publishedAt ?? undefined}>{dateLabel}</time> : null}
-            {post.author ? (
-              <>
-                <span className="article-meta-divider" aria-hidden />
-                <span>{post.author}</span>
-              </>
-            ) : null}
-          </div>
+        heroVideoSrc={useVideoHero ? WHY_HYDRILLA_MEDIA.bluefox.video : undefined}
+        heroPosterSrc={
+          post.coverImage ||
+          (useVideoHero ? WHY_HYDRILLA_MEDIA.bluefox.poster : undefined)
         }
+        heroThumbVariant={
+          !post.coverImage && !useVideoHero ? pickHeroVariant(slug) : undefined
+        }
+        ctaLabel="Open Studio"
+        ctaHref="/app/studio"
       >
-        {post.coverImage ? (
-          <div className="article-cover">
-            <Image
-              src={post.coverImage}
-              alt=""
-              fill
-              className="object-cover"
-              sizes="(max-width: 900px) 100vw, 900px"
-              priority
-            />
-          </div>
-        ) : null}
-        <ArticleBody html={post.content} />
+        <div
+          className="pickle-prose"
+          dangerouslySetInnerHTML={{ __html: post.content }}
+        />
         <Suspense fallback={null}>
-          <BlogContinueSection excludeSlug={slug} />
+          <div style={{ width: "100%" }}>
+            <BlogContinueSection excludeSlug={slug} />
+          </div>
         </Suspense>
-      </ArticlePage>
-      <Footer />
+      </PickleArticlePage>
     </>
   );
 }

@@ -48,29 +48,29 @@ export const PRICING = {
   },
 } as const;
 
-/** Slot plans grant the same monthly credits as Starter and Pro, plus a time limit. */
+/** Hourly plans grant the same monthly credits as Starter and Pro within a daily generation window. */
 export const SLOT_PRICING = {
   slot: {
     id: "slot" as const,
-    label: "Slot",
+    label: "Hourly",
     monthly: 3,
     hours: 1,
     credits: 900,
-    detail: "1 hour a day",
+    detail: "Billed for 1 hr / day",
     audience: "Focused daily production",
     exports: "GLB, FBX, OBJ, USDZ",
-    summary: "900 credits each month. Generate for 1 hour a day. Two people can book the same hour.",
+    summary: "30 model generations each month (900 credits) · 1 hour daily window · 14-day free trial.",
   },
   slot_pro: {
     id: "slot_pro" as const,
-    label: "Slot Pro",
+    label: "Hourly Pro",
     monthly: 8,
     hours: 2,
     credits: 3000,
-    detail: "2 hours a day",
-    audience: "Higher-volume scheduled work",
+    detail: "Billed for 2 hrs / day",
+    audience: "High-volume hourly production",
     exports: "GLB, FBX, OBJ, USDZ",
-    summary: "3,000 credits each month. Generate for 2 hours a day. Four people can book the same hours.",
+    summary: "100 model generations per month (3,000 credits) · Full plugin suite · 2 hours daily.",
   },
 } as const;
 
@@ -94,6 +94,7 @@ export type PricingCatalogRow = {
   audience: string;
   kind: PricingCatalogKind;
   cta: string;
+  trialDays?: number;
 };
 
 export const PRICING_CATALOG: PricingCatalogRow[] = [
@@ -106,7 +107,7 @@ export const PRICING_CATALOG: PricingCatalogRow[] = [
     exports: PRICING.free.exports,
     audience: PRICING.free.audience,
     kind: "anytime",
-    cta: "Create your first model",
+    cta: "Start for free",
   },
   {
     id: PRICING.starter.id,
@@ -117,7 +118,8 @@ export const PRICING_CATALOG: PricingCatalogRow[] = [
     exports: PRICING.starter.exports,
     audience: PRICING.starter.audience,
     kind: "anytime",
-    cta: "Choose Starter",
+    cta: "Get started",
+    trialDays: 14,
   },
   {
     id: PRICING.pro.id,
@@ -128,7 +130,8 @@ export const PRICING_CATALOG: PricingCatalogRow[] = [
     exports: PRICING.pro.exports,
     audience: PRICING.pro.audience,
     kind: "anytime",
-    cta: "Choose Pro",
+    cta: "Get started",
+    trialDays: 14,
   },
   {
     id: SLOT_PRICING.slot.id,
@@ -139,7 +142,8 @@ export const PRICING_CATALOG: PricingCatalogRow[] = [
     exports: SLOT_PRICING.slot.exports,
     audience: SLOT_PRICING.slot.audience,
     kind: "slot",
-    cta: "Choose Slot",
+    cta: "Get started",
+    trialDays: 14,
   },
   {
     id: SLOT_PRICING.slot_pro.id,
@@ -150,11 +154,12 @@ export const PRICING_CATALOG: PricingCatalogRow[] = [
     exports: SLOT_PRICING.slot_pro.exports,
     audience: SLOT_PRICING.slot_pro.audience,
     kind: "slot",
-    cta: "Choose Slot Pro",
+    cta: "Get started",
+    trialDays: 14,
   },
 ];
 
-/** Slot vs Starter: $3 vs $5 is 40% off. */
+/** Hourly vs Starter: $3 vs $5 is 40% off. */
 export const SLOT_SAVE_PERCENT = Math.round(
   (1 - SLOT_PRICING.slot.monthly / PRICING.starter.monthly) * 100
 );
@@ -162,10 +167,10 @@ export const SLOT_SAVE_PERCENT = Math.round(
 export const PRICING_PAGE = {
   title: "Pricing",
   subtitle:
-    "Monthly credits for BlueFox generation. Slot cuts the Starter price if you generate inside a daily hour.",
+    "Monthly credits for 3D generation. Save 40% when you generate in a daily selected hour.",
   toggleMonthly: "Monthly",
-  toggleSlot: "Slot",
-  toggleSave: `${SLOT_SAVE_PERCENT}% off on Slot`,
+  toggleSlot: "Hourly",
+  toggleSave: `${SLOT_SAVE_PERCENT}% off on Hourly`,
   tableCaption: "Default quality. Text is 45 credits per model. An uploaded image is 30.",
   enterpriseHint: "Volume, seats, and API",
 } as const;
@@ -173,13 +178,13 @@ export const PRICING_PAGE = {
 export const PRICING_FAQ_QUESTIONS = [
   "Is there a free plan available?",
   "How many 3D models can I generate each month?",
-  "What are Slot and Slot Pro?",
+  "What are Hourly and Hourly Pro?",
   "Can I change or cancel my plan anytime?",
   "What formats does Hydrilla export?",
 ] as const;
 
 export const PRICING_META_DESCRIPTION =
-  "Hydrilla pricing: Free $0 with 100 credits, Starter $5, Pro $12, Slot $3, Slot Pro $8. Monthly credits, export formats, and scheduled generation windows.";
+  "Hydrilla pricing: Free $0, Starter $5, Pro $12, Hourly $3, Hourly Pro $8. Includes a 14-day free trial, monthly model generations, and full plugin suite.";
 
 export function estimateMonthlyModels(
   credits: number,
@@ -219,6 +224,9 @@ export function isPaidPlan(plan: string | null | undefined): boolean {
     raw === "slot" ||
     raw === "slot_pro" ||
     raw === "slot-pro" ||
+    raw === "hourly" ||
+    raw === "hourly_pro" ||
+    raw === "hourly-pro" ||
     raw === "creator" ||
     raw === "studio"
   );
@@ -233,14 +241,14 @@ export function parsePaidPlanParam(plan: string | null | undefined): PaidPlanId 
 
 export function parseCheckoutPlanParam(plan: string | null | undefined): CheckoutPlanId | null {
   const raw = (plan ?? "").toLowerCase();
-  if (raw === "slot") return "slot";
-  if (raw === "slot_pro" || raw === "slot-pro") return "slot_pro";
+  if (raw === "slot" || raw === "hourly") return "slot";
+  if (raw === "slot_pro" || raw === "slot-pro" || raw === "hourly_pro" || raw === "hourly-pro") return "slot_pro";
   return parsePaidPlanParam(raw);
 }
 
 export function planDisplayLabel(plan: string | null | undefined): string {
-  if (plan === "slot") return SLOT_PRICING.slot.label;
-  if (plan === "slot_pro") return SLOT_PRICING.slot_pro.label;
+  if (plan === "slot" || plan === "hourly") return SLOT_PRICING.slot.label;
+  if (plan === "slot_pro" || plan === "hourly_pro") return SLOT_PRICING.slot_pro.label;
   return PRICING[normalizePlanId(plan)].label;
 }
 
@@ -255,35 +263,13 @@ export function checkoutHref(planId: CheckoutPlanId): string {
 
 export function planFeatureLines(row: PricingCatalogRow): string[] {
   const credits = `${row.credits.toLocaleString("en-US")} credits / month`;
-  const fromText = `About ${estimateMonthlyModels(row.credits, "text")} models from text`;
-  const fromImage = `About ${estimateMonthlyModels(row.credits, "image")} from an uploaded image`;
+  const generations = `≈ ${estimateMonthlyModels(row.credits, "image")} generations / month`;
+  const access = row.kind === "slot" ? "Generate in select hour" : "Generate any time";
 
-  if (row.id === "pro") {
-    return [
-      "Everything in Starter",
-      credits,
-      "Seats and REST API (10,000 calls / month)",
-      row.exports,
-      fromText,
-    ];
-  }
-  if (row.id === "slot") {
-    return [
-      credits,
-      "1 hour a day",
-      "Two people can book the same hour",
-      row.exports,
-      fromText,
-    ];
-  }
-  if (row.id === "slot_pro") {
-    return [
-      "Everything in Slot",
-      credits,
-      "2 hours a day",
-      "Four people can book the same hours",
-      row.exports,
-    ];
-  }
-  return [credits, row.access, row.exports === "GLB" ? "GLB export" : row.exports, fromText, fromImage];
+  return [
+    credits,
+    generations,
+    "Commercial use",
+    access,
+  ];
 }

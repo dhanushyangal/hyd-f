@@ -5,7 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { SignInButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { BlurReveal } from "@/components/ui/BlurReveal";
-import { GEIST_FONT, SANS_FONT } from "@/lib/fonts";
+import { BLUEFOX_SHOWCASE } from "@/lib/cloudinary";
+import { DESCRIPTION_WEIGHT, GEIST_FONT, SANS_FONT, SECTION_WEIGHT } from "@/lib/fonts";
 
 interface ShowcaseItem {
   id: string;
@@ -13,6 +14,11 @@ interface ShowcaseItem {
   description: string;
   image?: string;
   video?: string;
+  /** Sequential clips. Only the visible clip is fetched. */
+  clips?: readonly string[];
+  poster?: string;
+  /** Small label above the quote. Defaults to "Create". */
+  kicker?: string;
   images?: string[]; // For looping images
   iconType?: 'tencent' | 'ms';
   /** Custom mark next to the title (same layout as Tencent on Hunyuan3D-2.1) */
@@ -21,6 +27,16 @@ interface ShowcaseItem {
 }
 
 const showcaseItems: ShowcaseItem[] = [
+  {
+    id: "bluefox-1",
+    name: "BlueFox 1",
+    kicker: "In-house",
+    description: "BlueFox turns a prompt or image into a 3D model.",
+    clips: BLUEFOX_SHOWCASE.clips,
+    poster: BLUEFOX_SHOWCASE.poster,
+    logoSrc: "/hyd01.png",
+    logoAlt: "Hydrilla",
+  },
   {
     id: "hunyuan-2.1",
     name: "Hunyuan3D-2.1",
@@ -31,7 +47,7 @@ const showcaseItems: ShowcaseItem[] = [
   {
     id: "meshy",
     name: "Meshy",
-    description: "AI 3D models from text and images—mesh generation built for creators",
+    description: "AI 3D models from text and images, with mesh generation built for creators",
     image: "/meshy.jpg",
     logoSrc: "/meshy-logo.png",
     logoAlt: "Meshy",
@@ -66,6 +82,96 @@ const showcaseItems: ShowcaseItem[] = [
     logoAlt: "Meta",
   },
 ];
+
+/**
+ * One in-view clip at a time. The poster paints first; the next file
+ * is requested only after the current clip ends.
+ */
+function BlueFoxReel({
+  clips,
+  poster,
+}: {
+  clips: readonly string[];
+  poster: string;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [clip, setClip] = useState(0);
+  const [ready, setReady] = useState(false);
+  const [motionOk, setMotionOk] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    const slow =
+      connection?.saveData === true ||
+      connection?.effectiveType === "slow-2g" ||
+      connection?.effectiveType === "2g";
+    const apply = () => setMotionOk(!media.matches && !slow);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setVisible(entry.isIntersecting),
+      { rootMargin: "120px 0px", threshold: 0.4 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const play = visible && motionOk;
+
+  useEffect(() => {
+    setReady(false);
+  }, [clip, play]);
+
+  return (
+    <div ref={rootRef} className="absolute inset-0 bg-black">
+      <Image
+        src={poster}
+        alt=""
+        fill
+        sizes="(max-width: 640px) 85vw, 380px"
+        className="object-cover"
+        priority
+      />
+      {play ? (
+        <video
+          key={clips[clip]}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ opacity: ready ? 1 : 0 }}
+          muted
+          playsInline
+          autoPlay
+          preload="metadata"
+          poster={poster}
+          onCanPlay={() => setReady(true)}
+          onEnded={() => {
+            setReady(false);
+            setClip((index) => (index + 1) % clips.length);
+          }}
+          onError={() => {
+            setReady(false);
+            setClip((index) => {
+              const next = index + 1;
+              if (next >= clips.length) return index;
+              return next;
+            });
+          }}
+        >
+          <source src={clips[clip]} type="video/mp4" />
+        </video>
+      ) : null}
+    </div>
+  );
+}
 
 export default function Showcase() {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -338,8 +444,8 @@ export default function Showcase() {
         <div className="text-center mb-10 sm:mb-12 md:mb-14">
           <BlurReveal
             as="h2"
-            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-[#111] leading-tight tracking-tight"
-            style={{ fontFamily: SANS_FONT }}
+            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-medium text-[#111] leading-tight tracking-tight"
+            style={{ fontFamily: SANS_FONT, fontWeight: SECTION_WEIGHT }}
           >
             The Industry&apos;s Best Generative 3D Models
           </BlurReveal>
@@ -376,14 +482,16 @@ export default function Showcase() {
                 <div className="relative aspect-[3/4] w-full overflow-hidden bg-black">
                   {/* Background Media Layer - Video, Image, or Looping Images */}
                   <div className="absolute inset-0 transform scale-100 group-hover:scale-[1.05] transition-transform duration-700 ease-out">
-                    {item.video ? (
+                    {item.clips && item.poster ? (
+                      <BlueFoxReel clips={item.clips} poster={item.poster} />
+                    ) : item.video ? (
                       <div 
-                        ref={index === 0 ? videoContainerRef : null}
+                        ref={item.id === "hunyuan-2.1" ? videoContainerRef : null}
                         className="absolute inset-0 w-full h-full"
                       >
                         {/* Poster Image - Shown immediately, prevents layout shift */}
                         <div
-                          ref={index === 0 ? posterImageRef : null}
+                          ref={item.id === "hunyuan-2.1" ? posterImageRef : null}
                           className="absolute inset-0 w-full h-full"
                           style={{
                             opacity: isVideoReady ? 0 : 1,
@@ -406,7 +514,7 @@ export default function Showcase() {
                         {/* Video - Lazy loaded after page render and when in view */}
                         {shouldLoadVideo && (
                           <video
-                            ref={index === 0 ? videoRef : null}
+                            ref={item.id === "hunyuan-2.1" ? videoRef : null}
                             className="absolute inset-0 w-full h-full object-cover"
                             poster="/hallowhydrilla_001.jpg"
                             loop
@@ -502,7 +610,7 @@ export default function Showcase() {
                               alt={item.logoAlt || item.name}
                               width={20}
                               height={20}
-                              className="w-5 h-5 object-contain"
+                              className={`w-5 h-5 object-contain${item.id === "bluefox-1" ? " drop-shadow-[0_0_1px_rgba(255,255,255,0.9)]" : ""}`}
                             />
                           ) : item.iconType === "tencent" ? (
                             <Image
@@ -523,9 +631,14 @@ export default function Showcase() {
                           ) : null}
                         </div>
                       )}
-                      <span 
-                        className="text-base sm:text-lg font-semibold text-white"
-                        style={{ fontFamily: SANS_FONT }}
+                      <span
+                        className="text-base sm:text-lg font-medium text-white"
+                        style={{
+                          fontFamily: SANS_FONT,
+                          fontWeight: SECTION_WEIGHT,
+                          color: "#ffffff",
+                          textShadow: "0 1px 2px rgba(0,0,0,0.9)",
+                        }}
                       >
                         {item.name}
                       </span>
@@ -540,17 +653,22 @@ export default function Showcase() {
                     {/* Create Label */}
                     <div className="mb-3 sm:mb-4">
                       <span 
-                        className="text-xs sm:text-sm font-medium text-white/95 uppercase tracking-widest"
-                        style={{ fontFamily: SANS_FONT }}
+                        className="text-xs sm:text-sm font-medium text-white uppercase tracking-widest"
+                        style={{ fontFamily: SANS_FONT, color: "#ffffff", textShadow: "0 1px 2px rgba(0,0,0,0.9)" }}
                       >
-                        Create
+                        {item.kicker ?? "Create"}
                       </span>
                     </div>
                     
                     {/* Description Text - Adjusted size */}
                     <p 
-                      className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white leading-[1.1]"
-                      style={{ fontFamily: GEIST_FONT }}
+                      className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-normal text-white leading-[1.25]"
+                      style={{
+                        fontFamily: GEIST_FONT,
+                        fontWeight: DESCRIPTION_WEIGHT,
+                        color: "#ffffff",
+                        textShadow: "0 1px 2px rgba(0,0,0,0.9)",
+                      }}
                     >
                       &ldquo;{item.description}&rdquo;
                     </p>
@@ -561,8 +679,8 @@ export default function Showcase() {
                     <SignedIn>
                       <Link
                         href="/app/studio"
-                        className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit no-underline text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out"
-                        style={{ fontFamily: SANS_FONT, lineHeight: '100%' }}
+                        className="inline-flex items-center justify-center transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-transform duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium w-fit no-underline text-base md:text-[0.8125rem] hover:bg-[#404040]"
+                        style={{ fontFamily: SANS_FONT, lineHeight: 1.2, color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
                       >
                         Create 3D
                       </Link>
@@ -571,8 +689,8 @@ export default function Showcase() {
                       <SignInButton mode="modal" forceRedirectUrl="/app/studio">
                         <button
                           type="button"
-                          className="inline-block transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-all duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium font-dm-sans flex items-center justify-center gap-2 w-fit text-base md:text-[0.8125rem] md:py-[calc(0.25rem*3)] md:px-[calc(0.25rem*5)] hover:bg-[#404040] will-change-transform md:transition-[transform,translate] md:duration-500 md:ease-out cursor-pointer"
-                          style={{ fontFamily: SANS_FONT, lineHeight: '100%' }}
+                          className="inline-flex items-center justify-center transform translate-y-0 md:translate-y-[calc(100%+16px)] md:group-hover:translate-y-0 transition-transform duration-500 ease-out bg-[#262626] text-white py-3 px-5 rounded-md font-medium w-fit cursor-pointer text-base md:text-[0.8125rem] hover:bg-[#404040]"
+                          style={{ fontFamily: SANS_FONT, lineHeight: 1.2, color: "#ffffff", WebkitTextFillColor: "#ffffff" }}
                         >
                           Create 3D
                         </button>
