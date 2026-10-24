@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { type BackendJob, unwrapProxiedImageUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { displayImageUrl, EASE, FOCUS } from "../composer-parts";
+import { libraryCardPreview } from "./cardPreview";
 
 type Filter = "all" | "3d" | "image";
 type Kind = "3d" | "image";
@@ -59,7 +60,7 @@ function libraryItems(images: BackendJob[], assets3D: BackendJob[], filter: Filt
   return picked;
 }
 
-export function LibraryOptionsBar({
+export const LibraryOptionsBar = memo(function LibraryOptionsBar({
   images,
   assets3D,
   loading,
@@ -111,7 +112,7 @@ export function LibraryOptionsBar({
           <p className="px-1 py-6 text-center text-[12px] leading-5 text-neutral-600">{emptyLabel}</p>
         ) : (
           items.map(({ job, kind }) => {
-            const previewUrl = job.previewImageUrl || job.imageUrl;
+            const previewUrl = libraryCardPreview(job, kind);
             const active = activeJobId === job.id;
             const label = kind === "3d" ? "3D" : "Image";
             const running = job.status === "RUN" || job.status === "WAIT" || job.id.startsWith("pending-");
@@ -160,6 +161,10 @@ export function LibraryOptionsBar({
                       }
                     }}
                   />
+                ) : kind === "3d" ? (
+                  <span className="flex h-full w-full items-center justify-center text-neutral-300">
+                    <span className="h-5 w-5 animate-pulse rounded-md bg-neutral-200" />
+                  </span>
                 ) : null}
                 {running ? (
                   <span className="absolute inset-0 flex items-center justify-center bg-black/35">
@@ -176,4 +181,4 @@ export function LibraryOptionsBar({
       </div>
     </nav>
   );
-}
+});

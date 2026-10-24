@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ModelMeshStats } from "@/lib/viewer/meshStats";
@@ -30,7 +30,7 @@ type Props = {
   account?: ReactNode;
 };
 
-export function InspectorPanel({ onClose, overlay, kind, stats = null, badge = null, account = null, ...inspector }: Props) {
+export const InspectorPanel = memo(function InspectorPanel({ onClose, overlay, kind, stats = null, badge = null, account = null, ...inspector }: Props) {
   const panel = (
     <aside
       aria-label="Adjust"
@@ -48,7 +48,7 @@ export function InspectorPanel({ onClose, overlay, kind, stats = null, badge = n
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="px-3 pb-5">
-          <AssetInspector kind={kind} hideViewToggles={kind === "3d"} stats={stats} badge={badge} {...inspector} />
+          <AssetInspector kind={kind} hideViewToggles={kind === "3d" && !overlay} stats={stats} badge={badge} {...inspector} />
         </div>
       </ScrollArea>
     </aside>
@@ -62,4 +62,4 @@ export function InspectorPanel({ onClose, overlay, kind, stats = null, badge = n
       <div className="relative h-full">{panel}</div>
     </div>
   );
-}
+});

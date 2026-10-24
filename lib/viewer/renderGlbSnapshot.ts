@@ -47,7 +47,11 @@ function disposeScene(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void {
   });
 }
 
-async function loadModel(url: string, isObj: boolean): Promise<THREE.Group | THREE.Object3D> {
+async function loadModel(
+  url: string,
+  isObj: boolean,
+  headers?: Record<string, string>
+): Promise<THREE.Group | THREE.Object3D> {
   if (isObj) {
     const objLoader = new OBJLoader();
     return new Promise((resolve, reject) => {
@@ -56,6 +60,7 @@ async function loadModel(url: string, isObj: boolean): Promise<THREE.Group | THR
   }
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
+  if (headers) loader.setRequestHeader(headers);
   const gltf = await new Promise<any>((resolve, reject) => {
     loader.load(url, resolve, undefined, reject);
   });
@@ -223,7 +228,8 @@ export async function renderGlbMultiViewSnapshots(
 export async function renderGlbSnapshot(
   fileOrUrl: File | string,
   width = 768,
-  height = 768
+  height = 768,
+  options?: { headers?: Record<string, string>; format?: "image/png" | "image/jpeg"; quality?: number }
 ): Promise<GlbSnapshotResult> {
   if (typeof window === "undefined") {
     throw new Error("renderGlbSnapshot can only run in a browser environment");
@@ -271,7 +277,7 @@ export async function renderGlbSnapshot(
     renderer.toneMappingExposure = 1.0;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    const model = await loadModel(url, isObj);
+    const model = await loadModel(url, isObj, options?.headers);
     scene.add(model);
 
     // Normalize and center the model
@@ -292,7 +298,9 @@ export async function renderGlbSnapshot(
 
     renderer.render(scene, camera);
 
-    const dataUrl = canvas.toDataURL("image/png");
+    const format = options?.format ?? "image/png";
+    const quality = options?.quality ?? 0.86;
+    const dataUrl = canvas.toDataURL(format, quality);
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((b) => {
         if (b) {
@@ -300,10 +308,11 @@ export async function renderGlbSnapshot(
         } else {
           reject(new Error("Failed to create snapshot blob from canvas"));
         }
-      }, "image/png");
+      }, format, quality);
     });
 
-    const file = new File([blob], `${baseName}-render.png`, { type: "image/png" });
+    const ext = format === "image/jpeg" ? "jpg" : "png";
+    const file = new File([blob], `${baseName}-render.${ext}`, { type: format });
     disposeScene(scene, renderer);
 
     return { blob, dataUrl, file };
@@ -311,5 +320,85 @@ export async function renderGlbSnapshot(
     if (isFile) {
       URL.revokeObjectURL(url);
     }
+  }
+}
+
+/**
+ * Library card only. A close, straight-on front of the mesh, fitted to the frame.
+ * Does not share a camera with the Edit Studio snapshot or the four-angle set.
+ */
+export async function renderLibraryMeshSnapshot(
+  url: string,
+  size = 384,
+  options?: { headers?: Record<string, string> }
+): Promise<GlbSnapshotResult> {
+  if (typeof window === "undefined") {
+    throw new Error("renderLibraryMeshSnapshot can only run in a browser environment");
+  }
+
+  const isObj = url.split("?")[0].toLowerCase().endsWith(".obj");
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color("#f4f4f5");
+
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.15));
+  const key = new THREE.DirectionalLight(0xffffff, 2.1);
+  key.position.set(2.2, 4.5, 6);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xe8eef8, 0.9);
+  fill.position.set(-4, 2, 3);
+  scene.add(fill);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    preserveDrawingBuffer: true,
+    alpha: false,
+  });
+  renderer.setSize(size, size);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  try {
+    const model = await loadModel(url, isObj, options?.headers);
+    scene.add(model);
+
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const dims = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(dims.x, dims.y, dims.z);
+    const scale = maxDim > 0 ? 2 / maxDim : 1;
+    model.scale.multiplyScalar(scale);
+    model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+
+    const fitted = new THREE.Box3().setFromObject(model);
+    const fittedSize = fitted.getSize(new THREE.Vector3());
+    const fittedCenter = fitted.getCenter(new THREE.Vector3());
+    const fov = (camera.fov * Math.PI) / 180;
+    const halfY = Math.max(fittedSize.y, 0.001) / 2;
+    const halfX = Math.max(fittedSize.x, 0.001) / 2;
+    const distForHeight = halfY / Math.tan(fov / 2);
+    const distForWidth = halfX / Math.tan(fov / 2);
+    // 8% margin. The previous card sat the whole figure in the middle of a wide frame.
+    const dist = Math.max(distForHeight, distForWidth) * 1.08;
+    camera.position.set(fittedCenter.x, fittedCenter.y, fittedCenter.z + dist);
+    camera.near = Math.max(0.01, dist / 80);
+    camera.far = dist * 12;
+    camera.lookAt(fittedCenter);
+    camera.updateProjectionMatrix();
+
+    renderer.render(scene, camera);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to create library thumbnail"))), "image/jpeg", 0.88);
+    });
+    const file = new File([blob], "library-mesh.jpg", { type: "image/jpeg" });
+    disposeScene(scene, renderer);
+    return { blob, dataUrl, file };
+  } catch (err) {
+    disposeScene(scene, renderer);
+    throw err;
   }
 }

@@ -59,58 +59,58 @@ const ACCEPT = {
 const METRICS = {
   small: {
     width: "max-w-[620px]",
-    radius: "rounded-2xl",
+    radius: "rounded-[20px] sm:rounded-2xl",
     segment: "sm" as const,
     bar: "gap-1.5 px-2.5 pt-2",
     dropWrap: "px-2.5 pt-2 pb-2",
-    drop: "h-16 gap-1 rounded-xl",
+    drop: "h-14 sm:h-16 gap-1 rounded-xl px-3",
     dropLabel: "text-[13px]",
     dropHint: "text-[11px]",
-    prompt: "gap-2 px-3 pt-2 pb-2",
-    type: "py-1.5 text-[14px] leading-5",
-    minWithSlot: "min-h-10",
-    minAlone: "min-h-8",
-    tile: "h-12 w-12",
+    prompt: "gap-2 px-3 pt-2 pb-1.5 sm:pb-2",
+    type: "py-1.5 text-[16px] sm:text-[14px] leading-5",
+    minWithSlot: "min-h-11 sm:min-h-10",
+    minAlone: "min-h-9 sm:min-h-8",
+    tile: "h-11 w-11 sm:h-12 sm:w-12",
     foot: "px-2.5 pb-2 pt-1.5",
-    cost: "h-7 px-2 text-[11px]",
-    submit: "h-8 w-8",
+    cost: "h-7 sm:h-7 px-2 text-[11px]",
+    submit: "h-9 w-9 sm:h-8 sm:w-8",
     promptMax: 112,
   },
   medium: {
     width: "max-w-[680px]",
-    radius: "rounded-2xl",
+    radius: "rounded-[20px] sm:rounded-2xl",
     segment: "md" as const,
-    bar: "gap-2 px-3 pt-2.5",
-    dropWrap: "px-3 pt-2.5 pb-2.5",
-    drop: "h-20 gap-1 rounded-xl",
+    bar: "gap-1.5 sm:gap-2 px-2.5 sm:px-3 pt-2 sm:pt-2.5",
+    dropWrap: "px-2.5 sm:px-3 pt-2 sm:pt-2.5 pb-2 sm:pb-2.5",
+    drop: "h-16 sm:h-20 gap-1 rounded-xl px-3",
     dropLabel: "text-[13px]",
-    dropHint: "text-[12px]",
-    prompt: "gap-2.5 px-3.5 pt-2.5 pb-2.5",
-    type: "py-1.5 text-[14px] leading-5",
-    minWithSlot: "min-h-12",
-    minAlone: "min-h-10",
-    tile: "h-14 w-14",
-    foot: "px-3 pb-2.5 pt-2",
-    cost: "h-8 px-2.5 text-[12px]",
-    submit: "h-8 w-8",
+    dropHint: "text-[11px] sm:text-[12px]",
+    prompt: "gap-2 sm:gap-2.5 px-3 sm:px-3.5 pt-2 sm:pt-2.5 pb-2 sm:pb-2.5",
+    type: "py-1 sm:py-1.5 text-[16px] sm:text-[14px] leading-5",
+    minWithSlot: "min-h-11 sm:min-h-12",
+    minAlone: "min-h-9 sm:min-h-10",
+    tile: "h-12 w-12 sm:h-14 sm:w-14",
+    foot: "px-2.5 sm:px-3 pb-2 sm:pb-2.5 pt-1.5 sm:pt-2",
+    cost: "h-7 sm:h-8 px-2 sm:px-2.5 text-[11px] sm:text-[12px]",
+    submit: "h-9 w-9 sm:h-8 sm:w-8",
     promptMax: 136,
   },
   large: {
     width: "max-w-[760px]",
-    radius: "rounded-[24px]",
+    radius: "rounded-[22px] sm:rounded-[24px]",
     segment: "md" as const,
-    bar: "gap-2 px-3 pt-3",
-    dropWrap: "px-3 pt-3 pb-2.5",
-    drop: "h-24 gap-1.5 rounded-2xl",
-    dropLabel: "text-[14px]",
-    dropHint: "text-[12px]",
-    prompt: "gap-3 px-4 pt-3 pb-2",
-    type: "py-2 text-[15px] leading-6",
-    minWithSlot: "min-h-16",
-    minAlone: "min-h-12",
-    tile: "",
-    foot: "px-3 pb-3 pt-2",
-    cost: "h-8 px-2.5 text-[12px]",
+    bar: "gap-1.5 sm:gap-2 px-2.5 sm:px-3 pt-2.5 sm:pt-3",
+    dropWrap: "px-2.5 sm:px-3 pt-2.5 sm:pt-3 pb-2 sm:pb-2.5",
+    drop: "h-16 sm:h-24 gap-1 sm:gap-1.5 rounded-xl sm:rounded-2xl px-3",
+    dropLabel: "text-[13px] sm:text-[14px]",
+    dropHint: "text-[11px] sm:text-[12px]",
+    prompt: "gap-2.5 sm:gap-3 px-3 sm:px-4 pt-2 sm:pt-3 pb-2",
+    type: "py-1.5 sm:py-2 text-[16px] sm:text-[15px] leading-6",
+    minWithSlot: "min-h-12 sm:min-h-16",
+    minAlone: "min-h-10 sm:min-h-12",
+    tile: "h-12 w-12 sm:h-16 sm:w-16",
+    foot: "px-2.5 sm:px-3 pb-2 sm:pb-3 pt-1.5 sm:pt-2",
+    cost: "h-7 sm:h-8 px-2 sm:px-2.5 text-[11px] sm:text-[12px]",
     submit: "h-9 w-9",
     promptMax: 160,
   },
@@ -198,8 +198,10 @@ function Segmented<T extends string>({
             if (!off) onChange(id);
           }}
           className={cn(
-            "relative inline-flex items-center gap-1.5 overflow-hidden font-medium",
-            size === "md" ? "h-8 rounded-md px-2.5 text-[13px]" : "h-7 rounded-md px-2 text-[12px]",
+            "relative inline-flex shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap font-medium sm:gap-1.5",
+            size === "md"
+              ? "h-8 rounded-md px-2 text-[12px] sm:px-2.5 sm:text-[13px]"
+              : "h-7 rounded-md px-1.5 text-[11px] sm:px-2 sm:text-[12px]",
             EASE,
             FOCUS,
             value === id
@@ -209,8 +211,8 @@ function Segmented<T extends string>({
                 : "text-neutral-500 hover:text-neutral-900"
           )}
         >
-          <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-          <span className="max-sm:sr-only">{itemLabel}</span>
+          <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+          <span className={cn(value !== id && "max-[360px]:sr-only")}>{itemLabel}</span>
           {attention?.id === id && value !== id && !off ? (
             <span key={attention.key} aria-hidden className="segment-shine" />
           ) : null}
@@ -330,11 +332,11 @@ export function Composer({
           </div>
         ) : null}
 
-        <div className={cn("flex items-center", metrics.bar)}>
+        <div className={cn("flex items-center overflow-x-auto no-scrollbar", metrics.bar)}>
           <Segmented label="Create" items={MODES} value={mode} onChange={onModeChange} size={metrics.segment} />
           {inputSwitch ? (
             <>
-              <span className="h-4 w-px bg-neutral-300" aria-hidden />
+              <span className="h-4 w-px shrink-0 bg-neutral-300" aria-hidden />
               <Segmented
                 label={inputSwitch.set === "3d" ? "Generate from" : "Image action"}
                 items={INPUTS[inputSwitch.set]}
@@ -346,7 +348,7 @@ export function Composer({
               />
             </>
           ) : null}
-          <div className="ml-auto">
+          <div className="ml-auto shrink-0 pl-1">
             {promptHistory.length > 0 && showPrompt ? (
               <PromptHistoryDropdown
                 promptHistory={promptHistory}
@@ -359,7 +361,7 @@ export function Composer({
           </div>
         </div>
 
-        {thread ? <div className="mt-2.5 border-t border-neutral-100">{thread}</div> : null}
+        {thread ? <div className="mt-2 sm:mt-2.5 border-t border-neutral-100">{thread}</div> : null}
 
         {slot && !slot.attachment && !showPrompt ? (
           <div className={metrics.dropWrap}>
@@ -367,7 +369,7 @@ export function Composer({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className={cn(
-                "flex w-full flex-col items-center justify-center border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500 hover:border-neutral-900 hover:bg-white hover:text-neutral-900",
+                "flex w-full flex-col items-center justify-center border border-dashed border-neutral-300 bg-neutral-50 text-center text-neutral-500 hover:border-neutral-900 hover:bg-white hover:text-neutral-900 active:scale-[0.99]",
                 metrics.drop,
                 dragOver && "border-neutral-900 bg-white",
                 EASE,
@@ -375,10 +377,17 @@ export function Composer({
               )}
             >
               <span className={cn("flex items-center gap-1.5 font-medium text-neutral-900", metrics.dropLabel)}>
-                <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+                <Upload className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                 {slot.label}
               </span>
-              {slot.hint ? <span className={cn("text-neutral-400", metrics.dropHint)}>{slot.hint}</span> : null}
+              {slot.hint ? (
+                <span className={cn("max-w-full truncate text-neutral-400 max-sm:hidden", metrics.dropHint)}>
+                  {slot.hint}
+                </span>
+              ) : null}
+              <span className={cn("text-neutral-400 sm:hidden", metrics.dropHint)}>
+                {slot.kind === "model" ? "Tap to upload a GLB file" : "Tap to choose an image"}
+              </span>
             </button>
           </div>
         ) : (
@@ -430,7 +439,7 @@ export function Composer({
         {blockedNote ? (
           <p className="px-3 pt-2 text-[12px] leading-5 text-neutral-600">{blockedNote}</p>
         ) : null}
-        <div className={cn("flex items-center gap-1 border-t border-neutral-200", metrics.foot)}>
+        <div className={cn("flex items-center gap-1.5 sm:gap-1 border-t border-neutral-200", metrics.foot)}>
           <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto no-scrollbar">{settings}</div>
 
           {cost != null ? (
@@ -441,7 +450,7 @@ export function Composer({
               )}
               title={`${cost} credits`}
             >
-              <Coins className="h-3.5 w-3.5 text-neutral-400" strokeWidth={1.9} />
+              <Coins className="h-3.5 w-3.5 shrink-0 text-neutral-400" strokeWidth={1.9} />
               {cost}
             </span>
           ) : null}
@@ -452,7 +461,7 @@ export function Composer({
             aria-label={blockedNote && !ready ? blockedNote : submitLabel}
             title={blockedNote && !ready ? blockedNote : submitLabel}
             className={cn(
-              "ml-1 flex shrink-0 items-center justify-center rounded-full",
+              "ml-0.5 sm:ml-1 flex shrink-0 items-center justify-center rounded-full",
               metrics.submit,
               EASE,
               FOCUS,

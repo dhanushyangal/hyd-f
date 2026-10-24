@@ -51,7 +51,7 @@ export const EASE =
   "transition-[background-color,border-color,color,transform] duration-150 ease-out";
 export const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-neutral-300";
 export const GHOST = cn(
-  "group inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium text-neutral-600",
+  "group inline-flex h-8 shrink-0 items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 text-[12px] sm:text-[13px] font-medium text-neutral-600",
   "hover:bg-neutral-100 hover:text-neutral-950 active:scale-[0.97] data-[state=open]:bg-neutral-100 data-[state=open]:text-neutral-950",
   EASE,
   FOCUS
@@ -91,20 +91,20 @@ export function ChatRefTile({
         type="button"
         onClick={onPick}
         className={cn(
-          "flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500 hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-900",
+          "flex h-12 w-12 sm:h-16 sm:w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500 hover:border-neutral-400 hover:bg-neutral-100 hover:text-neutral-900",
           EASE,
           FOCUS,
           className
         )}
       >
-        <Icon className="h-4 w-4" strokeWidth={1.85} />
-        <span className="text-[11px] font-medium leading-none">{label}</span>
+        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.85} />
+        <span className="max-w-full truncate px-1 text-[10px] sm:text-[11px] font-medium leading-none">{label}</span>
       </button>
     );
   }
   return (
     <div
-      className={cn("relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100", className)}
+      className={cn("relative h-12 w-12 sm:h-16 sm:w-16 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100", className)}
       title={label}
     >
       {preview ? (
@@ -157,7 +157,7 @@ export function PromptHistoryDropdown({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        side="bottom"
+        side="top"
         sideOffset={8}
         className="w-[min(340px,calc(100vw-2rem))] max-h-[min(340px,50vh)] overflow-y-auto p-0"
       >
@@ -232,7 +232,7 @@ export function WaterQualityDropdown({
           <ChevronDown className={CHEVRON} strokeWidth={2} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="bottom" sideOffset={8} className="min-w-[180px] p-1">
+      <DropdownMenuContent align="start" side="top" sideOffset={8} className="min-w-[180px] p-1">
         <DropdownMenuLabel>Quality tier</DropdownMenuLabel>
         {QUALITY_TIERS.map((tier) => {
           const selected = qualityTier === tier.id;
@@ -279,7 +279,7 @@ export function WaterSkillDropdown({
           <ChevronDown className={CHEVRON} strokeWidth={2} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="bottom" sideOffset={8} className="min-w-[220px] p-1">
+      <DropdownMenuContent align="start" side="top" sideOffset={8} className="min-w-[220px] p-1">
         <DropdownMenuLabel>Skill pack</DropdownMenuLabel>
         {WATER_SKILLS.map((skill) => {
           const selected = skillId === skill.id;
@@ -340,7 +340,7 @@ export function ImageOptionsDropdown({
           <ChevronDown className={CHEVRON} strokeWidth={2} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="bottom" sideOffset={8} className="min-w-[220px] p-1">
+      <DropdownMenuContent align="start" side="top" sideOffset={8} className="min-w-[220px] p-1">
         <DropdownMenuLabel>Model</DropdownMenuLabel>
         {IMAGE_PROVIDER_OPTIONS.map((option) => {
           const selected = imageOptions.provider === option.id;

@@ -40,7 +40,7 @@ import {
 import { ViewerToolbar } from "../../components/workspace/canvas/ViewerToolbar";
 import { CompactGeneratedToast } from "../../components/workspace/shell/CompactOverlays";
 import { NewWorkspaceDialog } from "../../components/workspace/shell/NewWorkspaceDialog";
-import { renderGlbSnapshot, renderGlbMultiViewSnapshots } from "../../lib/viewer/renderGlbSnapshot";
+import { renderGlbSnapshot, renderGlbMultiViewSnapshots, renderLibraryMeshSnapshot } from "../../lib/viewer/renderGlbSnapshot";
 import {
   GHOST,
   ImageOptionsDropdown,
@@ -149,6 +149,35 @@ import {
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://hydrilla-backend.vercel.app";
 const WATER_POLL_INTERVAL_MS = 2_000;
 const WATER_POLL_MAX_MS = 18 * 60 * 1000;
+const MESH_THUMB_STORAGE = "hydrilla.meshThumbs.front";
+const MESH_THUMB_LIMIT = 24;
+
+function readMeshThumbs(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.sessionStorage.getItem(MESH_THUMB_STORAGE);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function writeMeshThumb(jobId: string, url: string) {
+  if (typeof window === "undefined" || !url) return;
+  try {
+    const map = readMeshThumbs();
+    map[jobId] = url;
+    const ids = Object.keys(map);
+    if (ids.length > MESH_THUMB_LIMIT) {
+      for (const id of ids.slice(0, ids.length - MESH_THUMB_LIMIT)) delete map[id];
+    }
+    window.sessionStorage.setItem(MESH_THUMB_STORAGE, JSON.stringify(map));
+  } catch {
+    /* quota — the in-memory cache still covers this session */
+  }
+}
 
 
 const sculptPassLabel = (pass?: string | null): string => waterPassLabel(pass);
@@ -466,22 +495,65 @@ function WorkspacePage() {
   const [libraryImages, setLibraryImages] = useState<BackendJob[]>([]);
   const [library3DAssets, setLibrary3DAssets] = useState<BackendJob[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
-  // Client-captured Water thumbnails (instant left-card preview before S3 round-trip).
-  // Survives refreshLibrary overwrites until the server returns a real preview URL.
-  const codeThumbCacheRef = useRef<Record<string, string>>({});
+  // Mesh renders for library cards. The server preview on a cloud job is the
+  // input photo, so a captured render must keep winning after refreshLibrary.
+  const codeThumbCacheRef = useRef<Record<string, string>>(readMeshThumbs());
+
+  const rememberMeshThumb = useCallback((jobId: string, url: string) => {
+    codeThumbCacheRef.current[jobId] = url;
+    writeMeshThumb(jobId, url);
+    setLibrary3DAssets((prev) => prev.map((j) => (j.id === jobId ? { ...j, previewImageUrl: url } : j)));
+  }, []);
 
   const applyCodeThumbs = useCallback((jobs: BackendJob[]): BackendJob[] => {
     const cache = codeThumbCacheRef.current;
     return jobs.map((j) => {
       const cached = cache[j.id];
       if (!cached) return j;
-      if (j.previewImageUrl && !j.previewImageUrl.startsWith("data:")) {
-        delete cache[j.id];
-        return j;
-      }
-      return { ...j, previewImageUrl: j.previewImageUrl || cached };
+      return { ...j, previewImageUrl: cached };
     });
   }, []);
+
+  const meshThumbFailedRef = useRef(new Set<string>());
+  const meshThumbBusyRef = useRef(false);
+  const [meshThumbTick, setMeshThumbTick] = useState(0);
+
+  // A finished cloud mesh keeps the input photo as its server preview.
+  // Render the GLB once and use that picture on the library card instead.
+  useEffect(() => {
+    if (meshThumbBusyRef.current) return;
+    const job = library3DAssets.find((item) => {
+      if (!item.resultGlbUrl || item.status !== "DONE") return false;
+      if (item.id.startsWith("pending-") || item.id === "uploaded-3d-model") return false;
+      if (meshThumbFailedRef.current.has(item.id)) return false;
+      if (codeThumbCacheRef.current[item.id]?.startsWith("data:")) return false;
+      if (item.previewImageUrl?.startsWith("data:")) return false;
+      return true;
+    });
+    if (!job) return;
+    const jobId = job.id;
+    meshThumbBusyRef.current = true;
+    void (async () => {
+      try {
+        const token = (await getToken()) ?? null;
+        const glbUrl = getProxyGlbUrl(jobId);
+        if (!glbUrl) {
+          meshThumbFailedRef.current.add(jobId);
+          return;
+        }
+        const shot = await renderLibraryMeshSnapshot(glbUrl, 384, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        rememberMeshThumb(jobId, shot.dataUrl);
+      } catch (err) {
+        console.warn("Could not render library thumbnail:", err);
+        meshThumbFailedRef.current.add(jobId);
+      } finally {
+        meshThumbBusyRef.current = false;
+        setMeshThumbTick((n) => n + 1);
+      }
+    })();
+  }, [library3DAssets, getToken, rememberMeshThumb, meshThumbTick]);
 
   // Optimistic pending entries for immediate loader feedback in the left library.
   // Each pending has an id like `pending-<ts>-<rand>` and status "WAIT".
@@ -544,6 +616,7 @@ function WorkspacePage() {
   const rememberCodeThumb = useCallback(
     (jobId: string, dataUrl: string, prompt?: string | null) => {
       codeThumbCacheRef.current[jobId] = dataUrl;
+      writeMeshThumb(jobId, dataUrl);
       setLibrary3DAssets((prev) => {
         const exists = prev.some((j) => j.id === jobId);
         if (exists) {
@@ -2878,7 +2951,7 @@ function WorkspacePage() {
   }, [jobId1, library3DAssets]);
 
   // ──────────── Library click handlers ────────────
-  const handleImageClick = (job: BackendJob) => {
+  const handleImageClick = useCallback((job: BackendJob) => {
     if (job.status === "FAIL") {
       setLeftLibraryTab("images");
       refreshCredits();
@@ -2967,9 +3040,9 @@ function WorkspacePage() {
     }));
     // Load generation info for this job
     loadJobInfo(job);
-  };
+  }, [refreshCredits, loadJobInfo, is3DGenerationType, inputMode]);
 
-  const handle3DClick = (job: BackendJob) => {
+  const handle3DClick = useCallback((job: BackendJob) => {
     void requestNotificationPermission();
 
     // Prefer Water path for wt_/cs_ even if list payload omitted engine fields.
@@ -3198,7 +3271,7 @@ function WorkspacePage() {
       // Load generation info for this 3D job
       loadJobInfo(job);
     }
-  };
+  }, [isWaterJobFn, loadJobInfo, getToken, refreshCredits]);
 
   /** Set Water Edit parent from library drag/click — opens 3D in center + updates right-panel thumb. */
   const applyWaterEditParent = useCallback(
@@ -3219,15 +3292,21 @@ function WorkspacePage() {
   // Merge optimistic pending entries with server jobs. Pendings appear first so the
   // loader shows immediately on user action, and stay visible until the server returns
   // the real RUN/WAIT job (at which point refreshLibrary prunes the pending).
-  const pendingImageJobs = pendingJobs.filter((p) => !is3DGenerationType(p.generateType));
-  const pending3DJobs = pendingJobs.filter((p) => is3DGenerationType(p.generateType));
-  const mergedLibraryImages = [...pendingImageJobs, ...libraryImages];
-  const mergedLibrary3DAssets = [...pending3DJobs, ...library3DAssets];
-  const filteredImages = mergedLibraryImages.filter((a) =>
-    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
+  const mergedLibraryImages = useMemo(
+    () => [...pendingJobs.filter((p) => !is3DGenerationType(p.generateType)), ...libraryImages],
+    [pendingJobs, libraryImages, is3DGenerationType]
   );
-  const filtered3DAssets = mergedLibrary3DAssets.filter((a) =>
-    (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())
+  const mergedLibrary3DAssets = useMemo(
+    () => [...pendingJobs.filter((p) => is3DGenerationType(p.generateType)), ...library3DAssets],
+    [pendingJobs, library3DAssets, is3DGenerationType]
+  );
+  const filteredImages = useMemo(
+    () => mergedLibraryImages.filter((a) => (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())),
+    [mergedLibraryImages, searchQuery]
+  );
+  const filtered3DAssets = useMemo(
+    () => mergedLibrary3DAssets.filter((a) => (a.prompt || "").toLowerCase().includes(searchQuery.toLowerCase())),
+    [mergedLibrary3DAssets, searchQuery]
   );
 
   const handleSelectModel = (id: ModelId, option: CatalogModel) => {
@@ -3340,17 +3419,17 @@ function WorkspacePage() {
   const generatingProgress =
     centerView.type === "generating" ? centerView.progress : (currentGenerating?.progress ?? 0);
 
-  const handleToggleFullView = () => {
+  const handleToggleFullView = useCallback(() => {
     setFullView((v) => {
       if (!v) setInspectorOpen(false);
       return !v;
     });
-  };
-  const handleToggleInspector = () => {
+  }, []);
+  const handleToggleInspector = useCallback(() => {
     setInspectorOpen((v) => !v);
-  };
+  }, []);
 
-  const handleExportViewer = () => {
+  const handleExportViewer = useCallback(() => {
     if (centerView.type === "3d") {
       track("model_downloaded", { format: "glb" });
       void downloadGlbWithAuth(
@@ -3366,7 +3445,7 @@ function WorkspacePage() {
     void waterViewerRef.current?.exportFormat("glb").then((result) => {
       if (result?.ok) track("model_downloaded", { format: "glb", engine: "water" });
     });
-  };
+  }, [centerView, getToken]);
 
   const handleCancelGeneration = async () => {
     if (!currentGenerating?.jobId) {
@@ -3828,10 +3907,30 @@ function WorkspacePage() {
     !selectedIsCode &&
     !/refund/i.test(toUserFacingGpuError(centerView.message));
 
-  const openLibraryItem = (open: () => void) => {
+  const openLibraryItem = useCallback((open: () => void) => {
     open();
     if (isCompact) setLibraryOpen(false);
-  };
+  }, [isCompact]);
+
+  const handleLibraryImageClick = useCallback(
+    (job: BackendJob) => openLibraryItem(() => handleImageClick(job)),
+    [openLibraryItem, handleImageClick]
+  );
+  const handleLibrary3DClick = useCallback(
+    (job: BackendJob) => openLibraryItem(() => handle3DClick(job)),
+    [openLibraryItem, handle3DClick]
+  );
+  const handleExpandLibrary = useCallback(() => {
+    setFullView(false);
+    setLibraryOpen(true);
+  }, []);
+  const handleCloseLibrary = useCallback(() => setLibraryOpen(false), []);
+  const handleCloseInspector = useCallback(() => setInspectorOpen(false), []);
+  const openNewWorkspace = useCallback(() => {
+    setForcedWorkspaceModal(false);
+    setNewWorkspaceName("");
+    setShowNewWorkspaceModal(true);
+  }, []);
 
   // Mobile: open 3D from /generations via ?open3d=jobId — show in canvas and switch to Canvas tab
   useEffect(() => {
@@ -3903,7 +4002,7 @@ function WorkspacePage() {
   }
 
   const expandableLibrary = LIBRARY_BAR === "expandable";
-  const libraryVisible = expandableLibrary && libraryOpen && !fullView && !hideSidebars;
+  const libraryVisible = (expandableLibrary || isCompact) && libraryOpen && !fullView && (!hideSidebars || isCompact);
   const inspectorKind = centerView.type === "3d" || centerView.type === "code" ? centerView.type : null;
   const inspectorVisible = inspectorOpen && inspectorKind !== null;
   const library = (
@@ -3912,28 +4011,28 @@ function WorkspacePage() {
       assets3D={mergedLibrary3DAssets}
       loading={libraryLoading}
       activeJobId={canvasJobId}
-      onImageClick={(job) => openLibraryItem(() => handleImageClick(job))}
-      on3DClick={(job) => openLibraryItem(() => handle3DClick(job))}
+      onImageClick={handleLibraryImageClick}
+      on3DClick={handleLibrary3DClick}
       isWaterJobFn={isWaterJobFn}
-      onClose={() => setLibraryOpen(false)}
+      onClose={handleCloseLibrary}
       className="min-h-0 w-full flex-1 border-r-0"
     />
   );
   const libraryFloat = !libraryVisible;
-  const showLeftRail = libraryFloat && !fullView && !hideSidebars;
+  const showLeftRail = !isCompact && libraryFloat && !fullView && !hideSidebars;
   const accountFloat = !(inspectorVisible && isCompact);
-  const openNewWorkspace = () => {
-    setForcedWorkspaceModal(false);
-    setNewWorkspaceName("");
-    setShowNewWorkspaceModal(true);
-  };
   const libraryBar = (floating: boolean) => (
     <WorkspaceLibraryBar
       workspaceName={workspaceName}
       onWorkspaceNameChange={handleWorkspaceNameChange}
-      libraryOpen={expandableLibrary ? !floating : !hideSidebars && !fullView}
+      libraryOpen={isCompact ? libraryOpen : expandableLibrary ? !floating : !hideSidebars && !fullView}
       floating={floating}
       onToggleLibrary={() => {
+        if (isCompact) {
+          setFullView(false);
+          setLibraryOpen((v) => !v);
+          return;
+        }
         if (expandableLibrary) {
           setFullView(false);
           setLibraryOpen(floating);
@@ -3959,13 +4058,15 @@ function WorkspacePage() {
     />
   );
   const frameLift = fullView ? 0 : COMPOSER_SIZE === "large" ? 0.16 : COMPOSER_SIZE === "medium" ? 0.12 : 0.1;
-  const statsClassName = showLeftRail
-    ? expandableLibrary
-      ? "top-14"
-      : "left-[15.5rem] top-3"
-    : libraryFloat
-      ? "top-14"
-      : undefined;
+  const statsClassName = isCompact
+    ? "hidden sm:flex top-14"
+    : showLeftRail
+      ? expandableLibrary
+        ? "top-14"
+        : "left-[15.5rem] top-3"
+      : libraryFloat
+        ? "top-14"
+        : undefined;
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-white text-neutral-950 font-dm-sans">
@@ -4012,13 +4113,10 @@ function WorkspacePage() {
                 assets3D={mergedLibrary3DAssets}
                 loading={libraryLoading}
                 activeJobId={canvasJobId}
-                onImageClick={(job) => openLibraryItem(() => handleImageClick(job))}
-                on3DClick={(job) => openLibraryItem(() => handle3DClick(job))}
+                onImageClick={handleLibraryImageClick}
+                on3DClick={handleLibrary3DClick}
                 isWaterJobFn={isWaterJobFn}
-                onExpand={() => {
-                  setFullView(false);
-                  setLibraryOpen(true);
-                }}
+                onExpand={handleExpandLibrary}
               />
             </div>
           ) : null}
@@ -4029,8 +4127,8 @@ function WorkspacePage() {
                 assets3D={mergedLibrary3DAssets}
                 loading={libraryLoading}
                 activeJobId={canvasJobId}
-                onImageClick={(job) => openLibraryItem(() => handleImageClick(job))}
-                on3DClick={(job) => openLibraryItem(() => handle3DClick(job))}
+                onImageClick={handleLibraryImageClick}
+                on3DClick={handleLibrary3DClick}
                 isWaterJobFn={isWaterJobFn}
               />
             </div>
@@ -4038,7 +4136,7 @@ function WorkspacePage() {
           {accountFloat ? (
             <div
               className={cn(
-                "pointer-events-none absolute right-3 top-3 z-30 flex items-center gap-2 transition-transform duration-[320ms] ease-out motion-reduce:transition-none",
+                "pointer-events-none absolute right-3 top-3 z-30 flex items-center gap-1.5 sm:gap-2 transition-transform duration-[320ms] ease-out motion-reduce:transition-none",
                 inspectorVisible && !isCompact && "-translate-x-[288px]"
               )}
             >
@@ -4057,7 +4155,7 @@ function WorkspacePage() {
                   jobId={centerView.type === "3d" ? centerView.jobId : null}
                 />
               )}
-              <div className="pointer-events-auto flex items-center rounded-full border border-neutral-200/80 bg-white py-1 pl-1 pr-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
+              <div className="pointer-events-auto flex items-center rounded-full border border-neutral-200/80 bg-white p-1 sm:py-1 sm:pl-1 sm:pr-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]">
                 {accountBar}
               </div>
             </div>
@@ -4173,6 +4271,7 @@ function WorkspacePage() {
                       const saved = await saveWaterThumbnail(jobId, dataUrl, tokenGetter);
                       if (saved && !saved.startsWith("data:")) {
                         codeThumbCacheRef.current[jobId] = saved;
+                        writeMeshThumb(jobId, saved);
                       }
                       setLibrary3DAssets((prev) =>
                         prev.map((j) =>
@@ -4305,7 +4404,7 @@ function WorkspacePage() {
                 onCameraView={requestCameraView}
                 stats={reportedStats && reportedStats.id === canvasJobId ? reportedStats.stats : null}
                 badge={inspectorKind === "code" ? { label: ENGINE.water.label, icon: "water" } : canvasModelBadge}
-                onClose={() => setInspectorOpen(false)}
+                onClose={handleCloseInspector}
                 overlay={isCompact}
                 account={isCompact ? accountBar : null}
               />

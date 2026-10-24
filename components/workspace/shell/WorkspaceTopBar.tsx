@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, Coins, FolderOpen, HelpCircle, PanelLeft, Plus, User } from "lucide-react";
@@ -29,7 +30,7 @@ type LibraryProps = {
 };
 
 /** Logo, library toggle, and workspace name. Only as wide as the library column. */
-export function WorkspaceLibraryBar({
+export const WorkspaceLibraryBar = memo(function WorkspaceLibraryBar({
   workspaceName,
   onWorkspaceNameChange,
   libraryOpen,
@@ -43,7 +44,7 @@ export function WorkspaceLibraryBar({
       className={cn(
         "flex shrink-0 items-center bg-white",
         floating
-          ? "pointer-events-auto h-10 w-[220px] gap-0.5 rounded-full border border-neutral-200/80 px-1 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]"
+          ? "pointer-events-auto h-10 w-[138px] gap-0.5 rounded-full border border-neutral-200/80 px-1 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)] sm:w-[220px]"
           : "h-12 gap-1 border-b border-neutral-200/80 px-2"
       )}
     >
@@ -82,13 +83,13 @@ export function WorkspaceLibraryBar({
           placeholder="Untitled"
           aria-label="Workspace name"
           className={cn(
-            "h-8 min-w-0 flex-1 rounded-lg bg-transparent px-1.5 font-semibold text-neutral-900 outline-none placeholder:text-neutral-400 hover:bg-neutral-50 focus:bg-neutral-100",
+            "h-8 min-w-0 flex-1 truncate rounded-lg bg-transparent px-1 font-semibold text-neutral-900 outline-none placeholder:text-neutral-400 hover:bg-neutral-50 focus:bg-neutral-100 sm:px-1.5",
             floating ? "text-[13px]" : "text-[14px]"
           )}
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className={cn(ICON_BUTTON, "h-7 w-7 rounded-full")} aria-label="Workspace menu">
+            <button type="button" className={cn(ICON_BUTTON, "h-7 w-7 shrink-0 rounded-full")} aria-label="Workspace menu">
               <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
             </button>
           </DropdownMenuTrigger>
@@ -109,7 +110,7 @@ export function WorkspaceLibraryBar({
       </div>
     </div>
   );
-}
+});
 
 type AccountProps = {
   creditsRemaining: number;
@@ -119,16 +120,16 @@ type AccountProps = {
 };
 
 /** Credits, theme, and profile. Sits in the inspector column, or as a corner pill. */
-export function WorkspaceAccountBar({ creditsRemaining, creditsLoading, clientMounted, className }: AccountProps) {
+export const WorkspaceAccountBar = memo(function WorkspaceAccountBar({ creditsRemaining, creditsLoading, clientMounted, className }: AccountProps) {
   const { openSupport } = useSupport();
 
   return (
-    <div className={cn("flex items-center gap-1 [&_button]:h-8 [&_button]:w-8", className)}>
+    <div className={cn("flex items-center gap-0.5 sm:gap-1 [&_button]:h-8 [&_button]:w-8", className)}>
       <Link
         href="/pricing"
         title={creditsLoading ? "Credits" : `${creditsRemaining} credits`}
         className={cn(
-          "inline-flex h-8 items-center gap-1 rounded-full px-2 text-[12px] text-neutral-500 hover:bg-neutral-100",
+          "hidden sm:inline-flex h-8 items-center gap-1 rounded-full px-2 text-[12px] text-neutral-500 hover:bg-neutral-100",
           EASE,
           FOCUS
         )}
@@ -141,11 +142,13 @@ export function WorkspaceAccountBar({ creditsRemaining, creditsLoading, clientMo
         onClick={() => openSupport("issue")}
         title="Support & Feedback"
         aria-label="Support & Feedback"
-        className={cn(ICON_BUTTON, "rounded-full")}
+        className={cn(ICON_BUTTON, "hidden rounded-full sm:flex")}
       >
         <HelpCircle className="h-4 w-4" strokeWidth={1.85} />
       </button>
-      <ModeToggle />
+      <div className="hidden sm:block">
+        <ModeToggle />
+      </div>
       <div className="flex h-8 w-8 items-center justify-center [&_.cl-userButtonBox]:!flex [&_.cl-userButtonTrigger]:!rounded-full">
         {clientMounted ? (
           <UserButtonWithHelp afterSignOutUrl="/" />
@@ -157,4 +160,4 @@ export function WorkspaceAccountBar({ creditsRemaining, creditsLoading, clientMo
       </div>
     </div>
   );
-}
+});

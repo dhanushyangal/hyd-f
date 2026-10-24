@@ -34,18 +34,18 @@ const EXAMPLES: Record<ComposerMode, string[]> = {
 
 export function CanvasEmptyState({ mode, onExample }: { mode: ComposerMode; onExample: (text: string) => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 pb-56 text-center">
-      <h2 className="mx-auto max-w-md text-balance text-[22px] font-semibold tracking-[-0.02em] text-neutral-900 sm:text-[26px]">
+    <div className="flex flex-1 flex-col items-center justify-center px-4 pt-14 pb-44 sm:px-6 sm:pt-0 sm:pb-56 text-center">
+      <h2 className="mx-auto max-w-md text-balance text-[20px] font-semibold tracking-[-0.02em] text-neutral-900 sm:text-[26px]">
         {HEADLINES[mode]}
       </h2>
-      <div className="mt-5 flex max-w-xl flex-wrap justify-center gap-2">
+      <div className="mt-4 sm:mt-5 flex max-w-xl flex-wrap justify-center gap-2">
         {EXAMPLES[mode].map((example) => (
           <button
             key={example}
             type="button"
             onClick={() => onExample(example)}
             className={cn(
-              "rounded-full border border-neutral-200 bg-white px-3.5 py-2 text-[13px] text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 active:scale-[0.98]",
+              "rounded-full border border-neutral-200 bg-white px-3 py-1.5 sm:px-3.5 sm:py-2 text-[12px] sm:text-[13px] text-neutral-600 hover:border-neutral-300 hover:text-neutral-900 active:scale-[0.98]",
               EASE,
               FOCUS
             )}
@@ -60,8 +60,8 @@ export function CanvasEmptyState({ mode, onExample }: { mode: ComposerMode; onEx
 
 export function CanvasPreview({ imageUrl }: { imageUrl: string }) {
   return (
-    <div className="flex flex-1 min-h-0 items-center justify-center p-5 pb-56">
-      <div className="relative flex h-full max-h-full w-full max-w-full items-center justify-center overflow-hidden rounded-[24px] border border-neutral-200/70 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.14)]">
+    <div className="flex flex-1 min-h-0 items-center justify-center p-4 pt-16 pb-48 sm:p-5 sm:pt-5 sm:pb-56">
+      <div className="relative flex h-full max-h-full w-full max-w-full items-center justify-center overflow-hidden rounded-[20px] sm:rounded-[24px] border border-neutral-200/70 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_16px_40px_-16px_rgba(0,0,0,0.14)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={displayImageUrl(imageUrl)} alt="Preview" className="h-auto max-h-full w-auto max-w-full object-contain" />
       </div>

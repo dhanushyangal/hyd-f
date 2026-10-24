@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import Link from "next/link";
 import { Box, Image as ImageIcon, PanelLeftClose, Search, X } from "lucide-react";
 import { type BackendJob, unwrapProxiedImageUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { displayImageUrl, EASE, FOCUS, ICON_BUTTON } from "../composer-parts";
+import { libraryCardPreview } from "./cardPreview";
 
 type Filter = "all" | "3d" | "images";
 
@@ -32,7 +33,7 @@ const timestamp = (job: BackendJob): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export function LibraryPanel({
+export const LibraryPanel = memo(function LibraryPanel({
   images,
   assets3D,
   loading,
@@ -142,7 +143,7 @@ export function LibraryPanel({
               const isWater = isWaterJobFn(job);
               const isRunning = job.status === "RUN" || job.status === "WAIT" || job.id.startsWith("pending-");
               const isFailed = job.status === "FAIL";
-              const previewUrl = job.previewImageUrl || job.imageUrl;
+              const previewUrl = libraryCardPreview(job, type);
               const kindLabel = isWater ? "Water" : type === "3d" ? "3D" : "Image";
               const active = activeJobId === job.id;
 
@@ -223,4 +224,4 @@ export function LibraryPanel({
       </div>
     </aside>
   );
-}
+});

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { Box, Image as ImageIcon, PanelLeftOpen } from "lucide-react";
 import { type BackendJob, unwrapProxiedImageUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { displayImageUrl, EASE, FOCUS } from "../composer-parts";
+import { libraryCardPreview } from "./cardPreview";
 
 type Kind = "3d" | "image";
 
@@ -45,7 +46,7 @@ function pickRailItems(images: BackendJob[], assets3D: BackendJob[]) {
   return picked;
 }
 
-export function LibraryRail({
+export const LibraryRail = memo(function LibraryRail({
   images,
   assets3D,
   loading,
@@ -55,7 +56,7 @@ export function LibraryRail({
   isWaterJobFn,
   onExpand,
 }: Props) {
-  const items = pickRailItems(images, assets3D);
+  const items = useMemo(() => pickRailItems(images, assets3D), [images, assets3D]);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -109,7 +110,7 @@ export function LibraryRail({
           : items.map(({ job, kind }) => {
               const meta = KIND[kind];
               const Icon = meta.icon;
-              const previewUrl = job.previewImageUrl || job.imageUrl;
+              const previewUrl = libraryCardPreview(job, kind);
               const active = activeJobId === job.id;
               const open = () => (kind === "image" ? onImageClick(job) : on3DClick(job));
               const water = isWaterJobFn(job);
@@ -201,4 +202,4 @@ export function LibraryRail({
         : null}
     </>
   );
-}
+});

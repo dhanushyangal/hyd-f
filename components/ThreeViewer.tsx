@@ -564,6 +564,7 @@ export function ThreeViewer({
     highlightMatsRef.current = highlightMats;
 
     renderer.setAnimationLoop((time) => {
+      if (document.hidden) return;
       const fly = flyRef.current;
       const flyCam = cameraRef.current;
       if (fly && flyCam && controlsRef.current) {
